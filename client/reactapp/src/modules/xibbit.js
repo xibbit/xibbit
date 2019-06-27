@@ -197,21 +197,17 @@ var xibbit = function() {
     }).fail(function(jqXHR) {
       var responseText = jqXHR.responseText;
       if (pollEvent) {
-        console.log('%c{"type":"_poll","i":"'+jqXHR.status+':'+jqXHR.statusText+'"}', 'color:green');
+        self.log('{"type":"_poll","i":"'+jqXHR.status+':'+jqXHR.statusText+'"}', self.logColors.response);
         poll(self, {type: '_poll'});
       } else {
         // clean up error data and write to the console
         if (responseText) {
-          responseText = responseText.replace(/(<([^>]+)>)/ig, ''); // HTML tags
-          responseText = responseText.replace(/\n+/g, ' '); // newline -> space
-          responseText = responseText.replace(/\:\s+/g, ': '); // extra spaces
-          responseText = responseText.replace(/\#/g, '\n#'); // PHP stack trace
-          responseText = responseText.replace(/&quot;/g, '"'); // real quotes
-          console.log('%c'+jqXHR.status+' '+jqXHR.statusText+' '+responseText, 'color:deeppink');
+          responseText = self.getStringFromDirtyHtml(responseText);
+          self.log(''+jqXHR.status+' '+jqXHR.statusText+' '+responseText, self.logColors.outofband_error);
         } else if (jqXHR.responseText === '') {
-          console.log('%c'+jqXHR.status+' '+jqXHR.statusText+': server returned empty string', 'color:deeppink');
+          self.log(''+jqXHR.status+' '+jqXHR.statusText+': server returned empty string', self.logColors.outofband_error);
         } else {
-          console.log('%c'+jqXHR.status+' '+jqXHR.statusText+': unknown client or server error', 'color:deeppink');
+          self.log(''+jqXHR.status+' '+jqXHR.statusText+': unknown client or server error', self.logColors.outofband_error);
         }
         // send disconnected event, if needed
         if (self.connected && !self.socket) {
@@ -430,7 +426,7 @@ var xibbit = function() {
     } else {
       event._id = this.eventId++;
       if (self.config.log || event._log) {
-        console.log('%c'+JSON.stringify(event), 'color:lightgreen');
+        self.log(JSON.stringify(event), self.logColors.request);
       }
       if (callback) {
         var evt = $.extend({}, event);
@@ -469,7 +465,11 @@ var xibbit = function() {
       var params = (self.config.socketio.transports === 'polling')? {
         path: self.config.poll.url,
         query: query,
-        transports: ['polling']
+        transports: ['polling'],
+        outOfBand: function(data) {
+          data = self.getStringFromDirtyHtml(data);
+          self.log(data, self.logColors.outofband_error);
+        }
       }: self.config.socketio.host+'/';
       // try to connect to Socket.IO
       setTimeout(function() {
@@ -551,23 +551,8 @@ var xibbit = function() {
    * @author Daniel Howard
    **/
   xibbit.prototype.dispatchEvent = function(event) {
-    var stacktrace = event && event.e_stacktrace;
     if (event && (event._id || event.type)) {
-      if ((this.config.log) || event._log) {
-        // notifications are in blue; response events are in green
-        if (event.e) {
-          if (stacktrace) {
-            delete event.e_stacktrace;
-            console.log('%c'+stacktrace, 'color:' + (event._id? 'deeppink': 'darkgoldenrod'));
-          }
-          console.log('%c'+JSON.stringify(event), 'color:' + (event._id? 'darkorange': 'darkgoldenrod'));
-          if (stacktrace) {
-            event.e_stacktrace = stacktrace;
-          }
-        } else {
-          console.log('%c'+JSON.stringify(event), 'color:' + (event._id? 'green': 'blue'));
-        }
-      }
+      this.log(event);
       if (event._id) {
         if (this.requestEvents[event._id]) {
           var callback = this.requestEvents[event._id]._response.callback;
@@ -583,7 +568,94 @@ var xibbit = function() {
         $(this).trigger(event.type, event);
       }
     } else {
-      console.log('%cmalformed event -- '+JSON.stringify(event), 'color:red');
+      this.log('malformed event -- '+JSON.stringify(event), this.logColors.malformed);
+    }
+  };
+
+  /**
+   * Return a file upload structure.
+   * @author Daniel Howard
+   **/
+  xibbit.prototype.createUploadFormData = function(event) {
+    var fd = new FormData();
+    fd.append('sid', this.socket.io.engine.id);
+    fd.append('instance', this.instance);
+    for (var k in event) {
+      if ((k !== 'type') && event.hasOwnProperty(k)) {
+        if (event[k] && event[k].constructor && event[k].constructor.name === 'File') {
+          fd.append(event.type+'_'+k, event[k]);
+        } else {
+          fd.append(k, event[k]);
+        }
+      }
+    }
+    return fd;
+  };
+
+  /**
+   * Return a string with HTML tags turned into string characters.
+   * @author Daniel Howard
+   **/
+  xibbit.prototype.getStringFromDirtyHtml = function(data) {
+    data = data.replace(/(<([^>]+)>)/ig, ''); // HTML tags
+    data = data.replace(/\n+/g, ' '); // newline -> space
+    data = data.replace(/\:\s+/g, ': '); // extra spaces
+    data = data.replace(/\#/g, '\n#'); // PHP stack trace
+    data = data.replace(/&quot;/g, '"'); // real quotes
+    return data;
+  };
+
+  /**
+   * Logging colors.
+   * @author Daniel Howard
+   */
+  xibbit.prototype.logColors = {
+    request: 'lightgreen',
+    malformed: 'red',
+    response: 'green',
+    notification: 'blue',
+    app_error: 'deeppink',
+    response_error: 'deeppink',
+    outofband_error: 'darkorange',
+    notification_error: 'darkgoldenrod'
+  };
+
+  /**
+   * Log string or event to the console.
+   * @author Daniel Howard
+   **/
+  xibbit.prototype.log = function(event, color) {
+    var msg = event;
+    var stacktrace = event && event.e_stacktrace;
+    // use color enum or standard color name
+    color = this.logColors[color]? this.logColors[color]: color;
+    if (this.config.log || event._log) {
+      if (typeof event === 'string') {
+        // log colored text to the console
+         console.log('%c'+msg, 'color:'+color);
+      } else {
+        if (event.e) {
+          // response errors are pink; notification errors are brown
+          color = event._id? this.logColors.response_error: this.logColors.notification_error;
+          // log the stack trace separately
+          if (stacktrace) {
+            delete event.e_stacktrace;
+            this.log(stacktrace, color);
+          }
+          // log the event without the stack trace
+          msg = JSON.stringify(event);
+          this.log(msg, color);
+          // restore the stack trace
+          if (stacktrace) {
+            event.e_stacktrace = stacktrace;
+          }
+        } else {
+          // response events are in green; notifications are in blue
+          color = event._id? this.logColors.response: this.logColors.notification;
+          msg = JSON.stringify(event);
+          this.log(msg, color);
+        }
+      }
     }
   };
   return xibbit;
