@@ -16,269 +16,6 @@ var _$ = $;
  **/
 var xibbit = function() {
   var $ = _$;
-  /**
-   * A simple cookie class.
-   * @author Daniel Howard
-   **/
-  var cookies = {
-    /**
-     * Get a cookie value.
-     * @author Daniel Howard
-     **/
-    get: function(name) {
-      var ca = (document && document.cookie)? document.cookie.split(';'): [];
-      for (var c=0; c < ca.length; ++c) {
-        var cookie = ca[c];
-        while (cookie.charAt(0) === ' ') {
-          cookie = cookie.substring(1, cookie.length);
-        }
-        if (cookie.indexOf(name+'=') === 0) {
-          var value = cookie.substring((name+'=').length);
-          value = decodeURIComponent(value);
-          try {
-            return JSON.parse(value);
-          } catch (e) {
-            return value;
-          }
-        }
-      }
-      return null;
-    },
-
-    /**
-     * Store a cookie value.
-     * @author Daniel Howard
-     **/
-    put: function(name, value) {
-      try {
-        document.cookie = name+"="+JSON.stringify(value)+"; path=/";
-      } catch (e) {
-        // suppress any cookie setting errors
-      }
-    }
-  };
-
-  /**
-   * Save a session instance.
-   * @author Daniel Howard
-   **/
-  function preserveSession(self) {
-    if ((typeof self.config.preserveSession === 'undefined') || (self.config.preserveSession !== false)) {
-      if (typeof Storage === 'undefined') {
-        cookies.put('xibbit', {
-          instance: self.instance
-        });
-      } else {
-        try {
-          sessionStorage.setItem('xibbit', JSON.stringify({
-            instance: self.instance
-          }));
-        } catch (e) {
-          // only store session values in JavaScript
-        }
-      }
-    }
-  }
-
-  /**
-   * Do a long or short poll.
-   * @author Daniel Howard
-   **/
-  function poll(self, events) {
-    var query = '';
-    if (self.instance === null) {
-      // send _instance event
-      var instanceEvent = {
-        type: '_instance'
-      };
-      query += '_event=' + encodeURIComponent(JSON.stringify(instanceEvent));
-      if (self.config.log) {
-        console.log('%c'+JSON.stringify(instanceEvent), 'color:lightgreen');
-      }
-    } else {
-      query += 'instance='+self.instance;
-      query += '&_event=' + encodeURIComponent(events? JSON.stringify(events): '{}');
-    }
-
-    var url = $.isFunction(self.config.poll.url)? self.config.poll.url(): self.config.poll.url;
-    var type = 'GET';
-    var data = query;
-    var jsonp = false;
-    var success = false;
-    self._pollStarted = $.now();
-    var pollEvent = events && (events.type === '_poll');
-    var pollParsed = 0;
-    $.ajax({
-      url: url,
-      type: type,
-      data: data,
-      dataType: jsonp? 'jsonp': 'json',
-      cache: false,
-      timeout: self.config.poll.max,
-      xhr: function() {
-        var xhr = new window.XMLHttpRequest();
-        if (pollEvent) {
-          xhr.addEventListener('progress', function(evt) {
-            var newEvts = evt.currentTarget.response.substring(pollParsed);
-            var n = 0;
-            pollParsed = evt.currentTarget.response.length;
-            try {
-              newEvts = JSON.parse(newEvts);
-              for (n=0; n < newEvts.length; ++n) {
-                self.dispatchEvent(newEvts[n]);
-              }
-            } catch (e) {
-              newEvts = ('[' + newEvts + ']').split('][').join('],[');
-              try {
-                newEvts = JSON.parse(newEvts);
-                for (n=0; n < newEvts.length; ++n) {
-                  for (var n2=0; n2 < newEvts[n].length; ++n2) {
-                    self.dispatchEvent(newEvts[n][n2]);
-                  }
-                }
-              } catch (e) {
-                // the server is spewing nonsense
-              }
-            }
-          }, false);
-        }
-        return xhr;
-      }
-    }).done(function(event) {
-      success = true;
-      // pre-process _instance event
-      if ($.isArray(event)) {
-        $.each(event, function(key, event) {
-          if ((event.type === '_instance') && event.instance && !self.instance) {
-            self.instance = event.instance;
-            preserveSession(self);
-          }
-        });
-      } else if($.isPlainObject(event)) {
-        if ((event.type === '_instance') && event.instance && !self.instance) {
-          self.instance = event.instance;
-          preserveSession(self);
-        }
-      }
-      // send connected event, if needed
-      if (!self.connected) {
-        self.connected = true;
-        var evt = {
-          'type': 'connection',
-          'on': 'poll'
-        };
-        $(self).trigger(evt.type, evt);
-        // send any waiting events
-        $.each(self.waitingEvents, function(index, event) {
-          self.send(event.event, event.callback);
-        });
-        self.waitingEvents = [];
-      }
-      // send events to listeners
-      if ($.isArray(event)) {
-        $.each(event, function(key, event) {
-          self.dispatchEvent(event);
-        });
-      } else if($.isPlainObject(event)) {
-        self.dispatchEvent(event);
-      }
-      // restart the poll
-      if (self.config.poll.start && !self.socket && !events) {
-        var delay = self._pollStarted + self.config.poll.min - $.now();
-        delay = (self.config.poll.strategy === 'long')? 0: delay;
-        setTimeout(function() {
-          if (self.config.poll.strategy === 'long') {
-            poll(self, {type: '_poll'});
-          } else {
-            poll(self);
-          }
-        }, (delay < 0)? 0: delay);
-      }
-    }).fail(function(jqXHR) {
-      var responseText = jqXHR.responseText;
-      if (pollEvent) {
-        self.log('{"type":"_poll","i":"'+jqXHR.status+':'+jqXHR.statusText+'"}', self.logColors.response);
-        poll(self, {type: '_poll'});
-      } else {
-        // clean up error data and write to the console
-        if (responseText) {
-          responseText = self.getStringFromDirtyHtml(responseText);
-          self.log(''+jqXHR.status+' '+jqXHR.statusText+' '+responseText, self.logColors.outofband_error);
-        } else if (jqXHR.responseText === '') {
-          self.log(''+jqXHR.status+' '+jqXHR.statusText+': server returned empty string', self.logColors.outofband_error);
-        } else {
-          self.log(''+jqXHR.status+' '+jqXHR.statusText+': unknown client or server error', self.logColors.outofband_error);
-        }
-        // send disconnected event, if needed
-        if (self.connected && !self.socket) {
-          self.connected = false;
-          var evt = {
-            'type': 'connection',
-            'on': false
-          };
-          $(self).trigger(evt.type, evt);
-        }
-        // try reconnecting in n*2 seconds (max 16)
-        self._reconnectIn = (self._lastReconnect < $.now() - 60000)? 1000: Math.min(self._reconnectIn * 2, 16000);
-        self._lastReconnect = $.now();
-        // restart the poll
-        if (self.config.poll.start && !self.socket) {
-          setTimeout(function() {
-            poll(self);
-          }, self._reconnectIn);
-        }
-      }
-    });
-
-    // doing JSONP and a long poll, test to see that the server is still alive
-    if (jsonp) {
-      // test to see if the server is still alive
-      setTimeout(function() {
-        var failfn = function() {
-          if (!success) {
-            var textStatus = 'error';
-            console.log(textStatus);
-          }
-        };
-        var noopfn = function() {
-          var noopdone = false;
-          var event = {type: 'noop', from: 'dan', sessionid: ''};
-          $.ajax({
-            url: self.actions.noop,
-            data: event,
-            dataType: 'jsonp',
-            type: type,
-            cache: false,
-            timeout: 299000
-          }).done(function(/*data*/) {
-            noopdone = true;
-            if (!success) {
-              setTimeout(noopfn, 3000);
-            }
-          }).fail(function() {
-            // since JSONP, never called
-          });
-          setTimeout(function() {
-            if (!noopdone) {
-              failfn();
-            }
-          }, 3000);
-        };
-        noopfn();
-      }, 3000);
-    }
-
-    // This prevents Firefox from spinning indefinitely
-    // while it waits for a response.
-    /*
-    if(url == 'jsonp' && $.browser.mozilla) {
-      $.jsonp({
-        'url': 'about:',
-        timeout: 0
-      });
-    }
-    */
-  }
 
   /**
    * Create an xibbit object.
@@ -287,6 +24,8 @@ var xibbit = function() {
   function xibbit(config) {
     /* jshint validthis: true */
     var self = this;
+    var key = 'xibbit';
+    var value = null;
     var cookie = null;
     self.config = config;
     if (typeof self.config.log === 'undefined') {
@@ -333,35 +72,41 @@ var xibbit = function() {
     }
     if ((typeof self.config.preserveSession === 'undefined') || (self.config.preserveSession !== false)) {
       if (typeof Storage === 'undefined') {
-        try {
-          cookie = cookies.get('xibbit');
-          if (cookie) {
-            self.instance = cookie.instance;
+        var ca = (document && document.cookie)? document.cookie.split(';'): [];
+        for (var c=0; c < ca.length; ++c) {
+          cookie = ca[c];
+          while (cookie.charAt(0) === ' ') {
+            cookie = cookie.substring(1, cookie.length);
           }
-        } catch (e) {
-          // only store session values in JavaScript
+          if (cookie.indexOf(key+'=') === 0) {
+            value = cookie.substring((key+'=').length);
+            value = decodeURIComponent(value);
+            try {
+              value = JSON.parse(value);
+            } catch (e) {
+              // use unparsed value
+            }
+          }
         }
       } else {
         try {
-          cookie = sessionStorage.getItem('xibbit');
-          if (cookie) {
+          value = sessionStorage.getItem(key);
+          if (value) {
             try {
-              cookie = JSON.parse(cookie);
+              value = JSON.parse(value);
             } catch (e) {
-              cookie = null;
+              value = null;
             }
-          }
-          if (cookie) {
-            self.instance = cookie.instance;
           }
         } catch (e) {
           // only store session values in JavaScript
         }
       }
+      if (value && value.instance) {
+        self.instance = value.instance;
+      }
     }
-    if (self.config.log) {
-      console.log('xibbit.instance='+self.instance);
-    }
+    self.log('xibbit.instance='+self.getInstanceValue());
     self.requestEvents = {};
     self.waitingEvents = [];
     self.seqEvents = [];
@@ -379,6 +124,15 @@ var xibbit = function() {
   }
 
   /**
+   * Return the instance value or null.
+   * @author Daniel Howard
+   **/
+  xibbit.prototype.getInstanceValue = function() {
+    var self = this;
+    return self.instance;
+  };
+
+  /**
    * Return true if the events are working.
    * @author Daniel Howard
    **/
@@ -387,7 +141,35 @@ var xibbit = function() {
   };
 
   /**
-   * Provide a callback for an event.
+   * Save a session instance.
+   * @author Daniel Howard
+   **/
+  xibbit.prototype.preserveSession = function(instance) {
+    var self = this;
+    var key = 'xibbit';
+    var value = {
+      instance: instance
+    };
+    self.instance = instance;
+    if ((typeof self.config.preserveSession === 'undefined') || (self.config.preserveSession !== false)) {
+      if (typeof Storage === 'undefined') {
+        try {
+          document.cookie = key+"="+JSON.stringify(value)+"; path=/";
+        } catch (e) {
+          // suppress any cookie setting errors
+        }
+      } else {
+        try {
+          sessionStorage.setItem(key, JSON.stringify(value));
+        } catch (e) {
+          // only store session values in JavaScript
+        }
+      }
+    }
+  };
+
+  /**
+   * Provide a handler for an event.
    * @author Daniel Howard
    **/
   xibbit.prototype.on = function(type, fn) {
@@ -398,7 +180,7 @@ var xibbit = function() {
   };
 
   /**
-   * Remove all callbacks for an event.
+   * Remove all handlers for an event.
    * @author Daniel Howard
    **/
   xibbit.prototype.off = function(type) {
@@ -438,7 +220,7 @@ var xibbit = function() {
       if (this.socket) {
         this.socket.emit('server', event);
       } else {
-        poll(self, event);
+        self.shortPoll(event);
       }
     }
   };
@@ -460,7 +242,7 @@ var xibbit = function() {
     if ((method === 'socket.io') && !self.config.socketio.start) {
       var query = {};
       if ((self.config.socketio.transports === 'polling') && self.instance) {
-        query.instance = self.instance;
+        query.instance = self.getInstanceValue();
       }
       var params = (self.config.socketio.transports === 'polling')? {
         path: self.config.poll.url,
@@ -497,10 +279,10 @@ var xibbit = function() {
           var instanceEvent = {
             type: '_instance'
           };
-          if (self.instance !== null) {
-            instanceEvent.instance = self.instance;
+          if (self.getInstanceValue() !== null) {
+            instanceEvent.instance = self.getInstanceValue();
             if (self.config.socketio.transports === 'polling') {
-              self.socket.io.engine.transport.query.instance = self.instance;
+              self.socket.io.engine.transport.query.instance = instanceEvent.instance;
             }
           }
           // send _instance event
@@ -510,7 +292,7 @@ var xibbit = function() {
             if (self.config.socketio.transports === 'polling') {
               self.socket.io.engine.transport.query.instance = self.instance;
             }
-            preserveSession(self);
+            self.preserveSession(event.instance);
             // send connected event
             $(self).trigger(evt.type, evt);
             // send any waiting events
@@ -526,7 +308,7 @@ var xibbit = function() {
       setTimeout(function() {
         if (!self.config.poll.start && !self.socket) {
           self.config.poll.start = true;
-          poll(self);
+          self.shortPoll();
         }
       }, 0);
     }
@@ -552,11 +334,15 @@ var xibbit = function() {
    **/
   xibbit.prototype.dispatchEvent = function(event) {
     if (event && (event._id || event.type)) {
+      var _id = event._id;
       this.log(event);
       if (event._id) {
+        // send the response event to the callback
         if (this.requestEvents[event._id]) {
-          var callback = this.requestEvents[event._id]._response.callback;
-          delete this.requestEvents[event._id];
+          var request = this.requestEvents[_id];
+          var response = request._response;
+          var callback = response.callback;
+          delete this.requestEvents[_id];
           callback(event);
         }
         // send next seq event
@@ -570,6 +356,128 @@ var xibbit = function() {
     } else {
       this.log('malformed event -- '+JSON.stringify(event), this.logColors.malformed);
     }
+  };
+
+  /**
+   * Do a short poll.
+   * @author Daniel Howard
+   **/
+  xibbit.prototype.shortPoll = function(events) {
+    var self = this;
+    var query = '';
+    if (self.getInstanceValue() === null) {
+      // send _instance event
+      var instanceEvent = {
+        type: '_instance'
+      };
+      query += '_event=' + encodeURIComponent(JSON.stringify(instanceEvent));
+      self.log(JSON.stringify(instanceEvent), self.logColors.request);
+    } else {
+      query += 'instance='+self.getInstanceValue();
+      query += '&_event=' + encodeURIComponent(events? JSON.stringify(events): '{}');
+    }
+
+    var url = $.isFunction(self.config.poll.url)? self.config.poll.url(): self.config.poll.url;
+    var type = 'GET';
+    var data = query;
+    var jsonp = false;
+    var success = false;
+    self._pollStarted = $.now();
+    var pollEvent = events && (events.type === '_poll');
+    $.ajax({
+      url: url,
+      type: type,
+      data: data,
+      dataType: jsonp? 'jsonp': 'json',
+      cache: false,
+      timeout: self.config.poll.max,
+      xhr: function() {
+        var xhr = new window.XMLHttpRequest();
+        return xhr;
+      }
+    }).done(function(event) {
+      success = true;
+      // pre-process _instance event
+      if ($.isArray(event)) {
+        $.each(event, function(key, event) {
+          if ((event.type === '_instance') && event.instance) {
+            self.preserveSession(event.instance);
+          }
+        });
+      } else if($.isPlainObject(event)) {
+        if ((event.type === '_instance') && event.instance) {
+          self.preserveSession(event.instance);
+        }
+      }
+      // send connected event, if needed
+      if (!self.connected) {
+        self.connected = true;
+        var evt = {
+          'type': 'connection',
+          'on': 'poll'
+        };
+        $(self).trigger(evt.type, evt);
+        // send any waiting events
+        $.each(self.waitingEvents, function(index, event) {
+          self.send(event.event, event.callback);
+        });
+        self.waitingEvents = [];
+      }
+      // send events to listeners
+      if ($.isArray(event)) {
+        $.each(event, function(key, event) {
+          self.dispatchEvent(event);
+        });
+      } else if($.isPlainObject(event)) {
+        self.dispatchEvent(event);
+      }
+      // restart the poll
+      if (self.config.poll.start && !self.socket && !events) {
+        var delay = self._pollStarted + self.config.poll.min - $.now();
+        delay = (self.config.poll.strategy === 'long')? 0: delay;
+        setTimeout(function() {
+          if (self.config.poll.strategy === 'long') {
+            self.shortPoll({type: '_poll'});
+          } else {
+            self.shortPoll();
+          }
+        }, (delay < 0)? 0: delay);
+      }
+    }).fail(function(jqXHR) {
+      var responseText = jqXHR.responseText;
+      if (pollEvent) {
+        self.log('{"type":"_poll","i":"'+jqXHR.status+':'+jqXHR.statusText+'"}', self.logColors.response);
+        self.shortPoll({type: '_poll'});
+      } else {
+        // clean up error data and write to the console
+        if (responseText) {
+          responseText = self.getStringFromDirtyHtml(responseText);
+          self.log(''+jqXHR.status+' '+jqXHR.statusText+' '+responseText, self.logColors.outofband_error);
+        } else if (jqXHR.responseText === '') {
+          self.log(''+jqXHR.status+' '+jqXHR.statusText+': server returned empty string', self.logColors.outofband_error);
+        } else {
+          self.log(''+jqXHR.status+' '+jqXHR.statusText+': unknown client or server error', self.logColors.outofband_error);
+        }
+        // send disconnected event, if needed
+        if (self.connected && !self.socket) {
+          self.connected = false;
+          var evt = {
+            'type': 'connection',
+            'on': false
+          };
+          $(self).trigger(evt.type, evt);
+        }
+        // try reconnecting in n*2 seconds (max 16)
+        self._reconnectIn = (self._lastReconnect < $.now() - 60000)? 1000: Math.min(self._reconnectIn * 2, 16000);
+        self._lastReconnect = $.now();
+        // restart the poll
+        if (self.config.poll.start && !self.socket) {
+          setTimeout(function() {
+            self.shortPoll();
+          }, self._reconnectIn);
+        }
+      }
+    });
   };
 
   /**
@@ -624,13 +532,14 @@ var xibbit = function() {
    * Log string or event to the console.
    * @author Daniel Howard
    **/
-  xibbit.prototype.log = function(event, color) {
-    var msg = event;
+  xibbit.prototype.log = function(obj, color) {
+    var msg = typeof obj === 'string'? obj: null;
+    var event = typeof obj === 'string'? null: obj;
     var stacktrace = event && event.e_stacktrace;
     // use color enum or standard color name
     color = this.logColors[color]? this.logColors[color]: color;
-    if (this.config.log || event._log) {
-      if (typeof event === 'string') {
+    if (this.config.log || (event && event._log)) {
+      if (typeof obj === 'string') {
         // log colored text to the console
          console.log('%c'+msg, 'color:'+color);
       } else {
