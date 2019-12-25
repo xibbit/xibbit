@@ -1,3 +1,9 @@
+# `react-public-figure` — a React xibbit frontend demo
+
+The Public Figure demo web application using React xibbit which can be connected to any Public Figure xibbit backend.
+
+# `create-react-app` — the best way to start building in React
+
 This project was bootstrapped with [Create React App](https://github.com/facebook/create-react-app).
 
 ## Available Scripts
