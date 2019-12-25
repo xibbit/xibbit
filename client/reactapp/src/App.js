@@ -1,9 +1,16 @@
+///////////////////////////////////////////////////////
+//                     xibbit 1.50                   //
+//    This source code is a trade secret owned by    //
+// Daniel W. Howard and Sanjana A. Joshi Partnership //
+//              Do not remove this notice            //
+///////////////////////////////////////////////////////
 import React from 'react';
 import logo from './logo.svg';
 import './App.css';
 
-function App() {
-  return (
+class App extends React.Component {
+  render() {
+    return (
     <div className="App">
       <header className="App-header">
         <img src={logo} className="App-logo" alt="logo" />
@@ -20,7 +27,8 @@ function App() {
         </a>
       </header>
     </div>
-  );
+    );
+  }
 }
 
 export default App;
