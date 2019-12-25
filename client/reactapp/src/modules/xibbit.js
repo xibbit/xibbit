@@ -4,18 +4,18 @@
 // Daniel W. Howard and Sanjana A. Joshi Partnership //
 //              Do not remove this notice            //
 ///////////////////////////////////////////////////////
-/* global $, io */
-/* exported xibbit */
-'use strict';
+/* global io */
 
-var _$ = $;
+import $ from 'jquery';
+
+//var _$ = $;
 
 /**
  * Create a xibbit object.
  * @author DanielWHoward
  **/
-var xibbit = (function() {
-  var $ = _$;
+const xibbit = (function() {
+//  var $ = _$;
 
   /**
    * Create an xibbit object.
@@ -653,3 +653,5 @@ var xibbit = (function() {
   };
   return xibbit;
 })();
+
+export default xibbit;
