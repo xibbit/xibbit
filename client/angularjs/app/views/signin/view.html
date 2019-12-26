@@ -1,0 +1,22 @@
+<div class="signin-view">
+<form name="SignInView.form" data-ng-submit="SignInView.submit()">
+  <div class="row">
+    <label class="text-input-label" for="email">E-mail</label>
+    <input class="form-control text-input" type="email" placeholder="E-mail" name="email" data-ng-model="SignInView.email" data-ng-pattern="/^[_a-z0-9]+(\.[_a-z0-9]+)*@[a-z0-9-]+(\.[a-z0-9-]+)*(\.[a-z]{2,4})$/" required="required" autocomplete="username" />
+  </div>
+  <div class="row">
+    <label class="text-input-label" for="pwd">Password</label>
+    <input class="form-control text-input" type="password" placeholder="Password" name="pwd" data-ng-model="SignInView.pwd" data-ng-minlength="1" required="required" autocomplete="current-password" />
+  </div>
+  <div class="row">
+    <button type="submit">Sign In</button>
+  </div>
+</form>
+<div class="row">
+{{SignInView.error}}
+</div>
+<p>
+  Showing of 'interpolate' filter:
+  {{ 'Current version is v%VERSION%.' | interpolate }}
+</p>
+</div>
