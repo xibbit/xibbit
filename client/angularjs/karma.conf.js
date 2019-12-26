@@ -7,8 +7,13 @@ module.exports = function(config) {
     files: [
       'lib/angular/angular.js',
       'lib/angular-route/angular-route.js',
+      'lib/angular-cookies/angular-cookies.js',
       '../node_modules/angular-mocks/angular-mocks.js',
+      './url_config2.js',
+      './xibbit-mocks.js',
+      './app.js',
       'core/**/*.js',
+      'services/**/*.js',
       'view*/**/*.js'
     ],
 

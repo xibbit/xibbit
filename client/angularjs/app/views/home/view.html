@@ -1,0 +1,12 @@
+<div class="home-view">
+<div data-ng-if="App.signedIn">
+  <div class=" data-ng-include="" src="'views/profile/view.html'" data-ng-controller="ProfileView as ProfileView"></div>
+</div>
+<div data-ng-if="!App.signedIn">
+  <div class=" data-ng-include="" src="'views/intro/view.html'" data-ng-controller="IntroView as IntroView"></div>
+</div>
+<p>
+  Showing of 'interpolate' filter:
+  {{ 'Current version is v%VERSION%.' | interpolate }}
+</p>
+</div>
