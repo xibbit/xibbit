@@ -1,22 +1,23 @@
 {
-  "name": "marko-starter-demo",
-  "description": "Demo of how to build an app using marko-starter",
-  "version": "2.0.0",
+  "name": "marko-public-figure",
+  "private": true,
+  "version": "1.5.0",
+  "description": "Public Figure webapp using Marko",
+  "repository": "github:xibbit/xibbit",
+  "license": "UNLICENSED",
   "dependencies": {
-    "marko": "^4.18.28",
-    "marko-starter": "^2.1.0"
+    "jquery": "^3.6.0",
+    "js-sha256": "^0.9.0",
+    "marko": "^4.23.15",
+    "marko-starter": "xibbit/marko-starter#middleware"
   },
   "devDependencies": {
-    "eslint": "^5.9.0",
-    "eslint-config-prettier": "^3.3.0",
-    "eslint-plugin-prettier": "^3.1.2",
-    "marko-prettyprint": "^1.5.2",
-    "prettier": "^1.19.1"
-  },
-  "license": "MIT",
-  "repository": {
-    "type": "git",
-    "url": "https://github.com/marko-js-samples/marko-starter-demo"
+    "eslint": "^7.22.0",
+    "eslint-config-prettier": "^8.1.0",
+    "eslint-plugin-prettier": "^3.3.1",
+    "http-proxy-middleware": "^1.0.6",
+    "marko-prettyprint": "^2.0.0",
+    "prettier": "^2.2.1"
   },
   "scripts": {
     "build": "NODE_ENV=production marko-starter build",

@@ -1,3 +1,9 @@
+# `marko-public-figure` — a Marko xibbit frontend demo
+
+The Public Figure demo web application using Marko xibbit which can be connected to any Public Figure xibbit backend.
+
+# `marko-starter` — a project for building and running Marko.js applications
+
 # Marko Starter Demo
 This repo demos the basic features of [`marko-starter`](https://github.com/marko-js/marko-starter).
 

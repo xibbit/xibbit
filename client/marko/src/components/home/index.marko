@@ -1,0 +1,42 @@
+///////////////////////////////////////////////////////
+//                     xibbit 1.50                   //
+//    This source code is a trade secret owned by    //
+// Daniel W. Howard and Sanjana A. Joshi Partnership //
+//              Do not remove this notice            //
+///////////////////////////////////////////////////////
+class {
+  onCreate() {
+    this.state = { loggedIn: false, msg: '' };
+  }
+  onMount() {
+    this.state.loggedIn = global.xibbitObject.getSessionValue('loggedIn');
+    global.xibbitObject.on('notify_laughs', event => {
+      this.state.msg = ({
+        'notify_laughs': event.from + ' laughs out loud',
+        'notify_jumps': event.from + ' jumps up and down'
+      })[event.type];
+    });
+    global.xibbitObject.on('notify_jumps', event => {
+      this.state.msg = ({
+        'notify_laughs': event.from + ' laughs out loud',
+        'notify_jumps': event.from + ' jumps up and down'
+      })[event.type];
+    });
+  }
+}
+
+style {
+  .footer {
+    margin-top: 1em;
+  }
+}
+
+<div style="color: skyblue;">${state.msg}</div>
+<if(!state.loggedIn)>
+  <div class="footer">
+    <intro />
+  </div>
+</if>
+<else>
+  <profile />
+</else>

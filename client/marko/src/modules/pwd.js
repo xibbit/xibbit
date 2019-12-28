@@ -4,6 +4,14 @@
 // Daniel W. Howard and Sanjana A. Joshi Partnership //
 //              Do not remove this notice            //
 ///////////////////////////////////////////////////////
-module.exports = require("marko-starter").projectConfig({
-  name: "marko-public-figure" // Optional, but added here for demo purposes
-});
+const { sha256 } = require('js-sha256');
+
+const encrypt = (email, pwd) => {
+  const hash = sha256.create();
+  hash.update(email+'xibbit.github.io'+pwd);
+  return hash.hex();
+}
+
+global.Pwd = {
+  encrypt
+}
