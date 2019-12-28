@@ -1,3 +1,9 @@
+///////////////////////////////////////////////////////
+//                     xibbit 1.50                   //
+//    This source code is a trade secret owned by    //
+// Daniel W. Howard and Sanjana A. Joshi Partnership //
+//              Do not remove this notice            //
+///////////////////////////////////////////////////////
 const webpack = require('webpack');
 const MiniCssExtractPlugin = require('mini-css-extract-plugin');
 const Dotenv = require('dotenv-webpack');
@@ -11,7 +17,8 @@ module.exports = {
         contentBase: paths.outputPath,
         port: 3000,
         proxy: {
-            '/api': 'http://localhost:3001'
+            '/php': 'http://localhost:80/xibbit/server',
+            '/socket.io': 'http://localhost:80/xibbit/server/php'
         },
         open: true,
         /*overlay: {

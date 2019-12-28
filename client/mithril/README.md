@@ -1,3 +1,9 @@
+# `mithril-public-figure` — a Mithril xibbit frontend demo
+
+The Public Figure demo web application using Mithril xibbit which can be connected to any Public Figure xibbit backend.
+
+# `mithril-starter-kit` — a boilerplate Mithril application
+
 # Mithril Starter Kit
 A boilerplate Mithril application using ES6, Babel, Webpack 4, Sass/SCSS, Webpack dev server hot reload and eslint
 

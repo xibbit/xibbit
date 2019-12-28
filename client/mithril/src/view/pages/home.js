@@ -1,0 +1,19 @@
+///////////////////////////////////////////////////////
+//                     xibbit 1.50                   //
+//    This source code is a trade secret owned by    //
+// Daniel W. Howard and Sanjana A. Joshi Partnership //
+//              Do not remove this notice            //
+///////////////////////////////////////////////////////
+import Intro from './intro';
+import Profile from './profile';
+import xibbitObject from '../../modules/xibbitobject';
+
+export default function() {
+    return {        
+        view() {
+            return m('div', [
+                m(!xibbitObject.getSessionValue('loggedIn') ? Intro : Profile),
+            ]);
+        },
+    };
+}

@@ -1,9 +1,17 @@
+///////////////////////////////////////////////////////
+//                     xibbit 1.50                   //
+//    This source code is a trade secret owned by    //
+// Daniel W. Howard and Sanjana A. Joshi Partnership //
+//              Do not remove this notice            //
+///////////////////////////////////////////////////////
 import PageLayout from './components/page-layout';
 
 // Individual pages
 import IndexPage from './pages/landing-page';
 import Splash from './components/splash-loader/index';
 import MaintenancePage from './components/maintenance-layout/index';
+import SignIn from './pages/signin';
+import SignUp from './pages/signup';
 
 function loadSpinner() {
     let $splashDiv = document.getElementById('splash');
@@ -50,6 +58,16 @@ const Routes = {
                 return vnode;
             }
             return m(PageLayout, m(IndexPage));
+        },
+    },
+    '/signin': {
+        render: function() {
+            return m(PageLayout, m(SignIn));
+        },
+    },
+    '/signup': {
+        render: function() {
+            return m(PageLayout, m(SignUp));
         },
     },
 };

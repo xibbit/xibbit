@@ -1,4 +1,4 @@
-const webpackMerge = require('webpack-merge');
+const { merge } = require('webpack-merge');
 const common = require('./config/webpack/webpack.common');
 /* eslint-disable global-require,import/no-dynamic-require */
 const env = process.env.NODE_ENV || 'development';
@@ -13,5 +13,5 @@ const getAddons = addonsArgs => {
 
 module.exports = ({ addon } = {}) => {
     console.log('process.env.NODE_ENV===>', env, 'addon ==>', addon);
-    return webpackMerge(common, envConfig, ...getAddons(addon));
+    return merge(common, envConfig, ...getAddons(addon));
 };
