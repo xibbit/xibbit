@@ -1,0 +1,105 @@
+///////////////////////////////////////////////////////
+//                     xibbit 1.50                   //
+//    This source code is a trade secret owned by    //
+// Daniel W. Howard and Sanjana A. Joshi Partnership //
+//              Do not remove this notice            //
+///////////////////////////////////////////////////////
+class {
+  onCreate() {
+    this.state = {
+      profile: {
+        name: '',
+        address: '',
+        address2: '',
+        city: '',
+        state: '',
+        zip: ''
+      },
+      error: ''
+    };
+  }
+  onMount() {
+    xibbitObject.send({
+      type: 'user_profile'
+    }, event => {
+      if (event.i) {
+        this.state.profile = event.profile;
+      }
+      this.state.error = event.i || event.e;
+    });
+  }
+  setName(event) {
+    this.state.profile.name = event.target.value;
+  }
+  setAddress(event) {
+    this.state.profile.address = event.target.value;
+  }
+  setAddress2(event) {
+    this.state.profile.address2 = event.target.value;
+  }
+  setCity(event) {
+    this.state.profile.city = event.target.value;
+  }
+  setState(event) {
+    this.state.profile.state = event.target.value;
+  }
+  setZip(event) {
+    this.state.profile.zip = event.target.value;
+  }
+  handleFormSubmit(event) {
+    event.preventDefault();
+    xibbitObject.send({
+      type: 'user_profile_mail_update',
+      user: this.state.profile
+    }, event => {
+      this.state.error = event.i || event.e;
+    });
+  }
+}
+
+style {
+  .form-control {
+    display: flex;
+    flex-direction: column;
+  }
+  .row {
+    display: flex;
+    flex-direction: row;
+  }
+}
+
+<div class="profile-view">
+  <form name="profile" on-submit("handleFormSubmit")>
+    <div class="form-control">
+      <label>Name</label>
+      <input type="text" key="name" value=state.profile.name on-input('setName') placeholder="Name" />
+    </div>
+    <div class="form-control">
+      <label>Address</label>
+      <input type="text" key="address" value=state.profile.address on-input('setAddress') placeholder="Address" />
+    </div>
+    <div class="form-control">
+      <input type="text" key="address2" value=state.profile.address2 on-input('setAddress2') />
+    </div>
+    <div class="form-control">
+      <label>City</label>
+      <input type="text" key="city" value=state.profile.city on-input('setCity') placeholder="City" />
+    </div>
+    <div class="row">
+      <div class="form-control">
+        <label>State</label>
+        <input type="text" key="state" value=state.profile.state on-input('setState') placeholder="State" />
+      </div>
+      <div class="form-control">
+        <label>Postal</label>
+        <input type="text" key="zip" value=state.profile.zip on-input('setZip') placeholder="Postal code" />
+      </div>
+    </div>
+    <div class="row">
+      <button type="submit" data-ng-disabled="ProfileView.form.$invalid">Update</button>
+    </div>
+  </form>
+  <div class="row">
+    ${state.error}
+  </div>
+</div>

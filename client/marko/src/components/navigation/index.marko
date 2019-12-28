@@ -1,0 +1,44 @@
+///////////////////////////////////////////////////////
+//                     xibbit 1.50                   //
+//    This source code is a trade secret owned by    //
+// Daniel W. Howard and Sanjana A. Joshi Partnership //
+//              Do not remove this notice            //
+///////////////////////////////////////////////////////
+class {
+  onCreate() {
+    this.state = { loggedIn: false };
+  }
+  onMount() {
+    this.state.loggedIn = global.xibbitObject.getSessionValue('loggedIn');
+  }
+  handleClick(event) {
+    event.preventDefault();
+    global.xibbitObject.send({
+      type: 'logout'
+    }, event => {
+      if (event.i) {
+        this.state.loggedIn = false;
+        global.xibbitObject.addSessionValue('loggedIn', false);
+        // explicitly return to the front page
+        if (window.location.href === '/') {
+          window.location.reload();
+        } else {
+          window.location = '/';
+        }
+      }
+    });
+  }
+}
+
+<nav.menu>
+  <a href="/">/</a>
+  <if(!state.loggedIn)>
+    <a href="/signin">signin</a>
+    <a href="/signup">signup</a>
+  </if>
+  <else>
+    <a on-click("handleClick") href="/">signout</a>
+  </else>
+  <a href="/hello/routing">routes</a>
+  <a href="/layouts">layouts</a>
+</nav>

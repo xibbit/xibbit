@@ -1,0 +1,6 @@
+{
+    "dependencies": [
+        "require-run: ../../../../modules/pwd.js",
+        "require-run: ../../../../modules/xibbitobject.js"
+    ]
+}

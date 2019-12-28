@@ -1,0 +1,76 @@
+///////////////////////////////////////////////////////
+//                     xibbit 1.50                   //
+//    This source code is a trade secret owned by    //
+// Daniel W. Howard and Sanjana A. Joshi Partnership //
+//              Do not remove this notice            //
+///////////////////////////////////////////////////////
+class {
+  onCreate() {
+    this.state = {
+      email: '',
+      pwd: '',
+      error: ''
+    };
+  }
+  setEmail(event) {
+    this.state.email = event.target.value;
+  }
+  setPwd(event) {
+    this.state.pwd = event.target.value;
+  }
+  handleFormSubmit(event) {
+    event.preventDefault();
+    const { email, pwd } = this.state;
+    event.preventDefault();
+    global.xibbitObject.send({
+      type: 'login',
+      to: this.state.email,
+      pwd: global.Pwd.encrypt(this.state.email, this.state.pwd)
+    }, event => {
+      var path = '/';
+      if (event.i && event.from) {
+        global.xibbitObject.addSessionValue('loggedIn', true);
+        global.xibbitObject.addSessionValue('me', event.me);
+        // collect additional user settings if needed
+        if (event.i && (event.i.substring(0, 8) === 'collect:')) {
+          path = event.i.substring(8).split(':');
+          path = '/'+path[0];
+        }
+        window.location = path;
+      } else {
+        this.state.error = event.i || event.e;
+      }
+    });
+  }
+}
+
+style {
+  .form-control {
+    align-items: center;
+    display: flex;
+    flex-direction: row;
+    margin: 0 0 0.5em 0;
+  }
+  .form-control div {
+    margin: 0 0.25em 0 0;
+  }
+}
+
+<div>
+  <form name="signin" on-submit('handleFormSubmit')>
+    <div class="row">
+      <label class="text-input-label" for="email">E-mail</label>
+      <input class="form-control text-input" type="email" name="email" key="email" value=state.email on-input('setEmail') placeholder="E-mail" data-ng-pattern="/^[_a-z0-9]+(\\.[_a-z0-9]+)*@[a-z0-9-]+(\\.[a-z0-9-]+)*(\\.[a-z]{2,4})$/" required="required" autoComplete="username" />
+    </div>
+    <div class="row">
+      <label class="text-input-label" for="pwd">Password</label>
+      <input class="form-control text-input" type="password" name="pwd" key="pwd" value=state.pwd on-input('setPwd') placeholder="Password" data-ng-minlength="1" required="required" autoComplete="current-password" />
+    </div>
+    <div class="row">
+      <button type="submit">Sign In</button>
+    </div>
+  </form>
+  <div class="row">
+    ${state.error}
+  </div>
+</div>
