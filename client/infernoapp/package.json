@@ -1,10 +1,20 @@
 {
-  "name": "infernoapp",
-  "version": "0.1.0",
+  "name": "inferno-public-figure",
   "private": true,
+  "version": "1.5.0",
+  "description": "Public Figure webapp using Inferno",
+  "repository": "github:xibbit/xibbit",
+  "license": "UNLICENSED",
+  "proxy": "http://localhost:80/xibbit/server",
   "dependencies": {
-    "inferno": "^7.3.3",
-    "inferno-scripts": "7.0.4"
+    "inferno": "^7.4.8",
+    "inferno-redux": "^7.4.8",
+    "inferno-router": "^7.4.8",
+    "inferno-scripts": "7.0.4",
+    "jquery": "^3.6.0",
+    "js-sha256": "^0.9.0",
+    "redux": "^4.0.5",
+    "redux-thunk": "^2.3.0"
   },
   "scripts": {
     "start": "inferno-scripts start",

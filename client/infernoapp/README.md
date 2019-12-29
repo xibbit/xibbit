@@ -1,3 +1,9 @@
+# `inferno-public-figure` â€” a React xibbit frontend demo
+
+The Public Figure demo web application using React xibbit which can be connected to any Public Figure xibbit backend.
+
+# `create-inferno-app` â€” a port of create-react-app for Inferno
+
 This project was bootstrapped with [Create Inferno App](https://github.com/infernojs/create-inferno-app).
 
 Below you will find some information on how to perform common tasks.<br>
