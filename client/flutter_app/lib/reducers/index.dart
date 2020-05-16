@@ -1,0 +1,193 @@
+///////////////////////////////////////////////////////
+//                    xibbit 1.50                    //
+//    This source code is a trade secret owned by    //
+// Daniel W. Howard and Sanjana A. Joshi Partnership //
+//             Do not remove this notice             //
+///////////////////////////////////////////////////////
+
+import 'package:reselect/reselect.dart';
+import '../modules/platform/reduce.dart';
+import '../modules/platform/select.dart';
+import '../actions/action.dart';
+
+///
+/// Get login state.
+///
+final loginSelectors = combineSelectors(
+  {},
+  (state) => {'isLoggedIn': () => state as bool},
+);
+
+///
+/// Put login state.
+///
+bool loginReducer({bool state = false, Action action}) {
+  ActionTypes type = action.type;
+  switch (type) {
+    case ActionTypes.Login:
+      return true;
+    case ActionTypes.Logout:
+      return false;
+    default:
+      break;
+  }
+  return state;
+}
+
+///
+/// Save login state.
+///
+Map eventsReducer({Map state = emptyMap, Action action}) {
+  ActionTypes type = action.type;
+  switch (type) {
+    case ActionTypes.Event:
+      return action.event;
+    default:
+      break;
+  }
+  return state;
+}
+
+final eventsSelectors = combineSelectors(
+    {},
+    (state) => {
+          'getType': () => (state as Map)['type'] as String,
+          'getMessage': () {
+            String msg = '';
+            switch ((state as Map)['type']) {
+              case 'notify_instance':
+                msg = 'Somebody arrived.';
+                break;
+              case 'notify_login':
+                String from = (state as Map)['from'];
+                msg = from + ' signed in.';
+                break;
+              case 'notify_logout':
+                String from = (state as Map)['from'];
+                msg = from + ' signed out.';
+                break;
+              case 'notify_laughs':
+                String user = (state as Map)['from'];
+                msg = user + ' laughs out loud';
+                break;
+              case 'notify_jumps':
+                String user = (state as Map)['from'];
+                msg = user + ' jumps up and down';
+                break;
+              default:
+                break;
+            }
+            return msg;
+          },
+        });
+
+///
+/// Get profile state.
+///
+final profileSelectors = combineSelectors(
+  {},
+  (state) => {
+    'getName': () => (state as Map<String, String>)['name'],
+    'getAddress': () => (state as Map<String, String>)['address'],
+    'getAddress2': () => (state as Map<String, String>)['address2'],
+    'getCity': () => (state as Map<String, String>)['city'],
+    'getState': () => (state as Map<String, String>)['state'],
+    'getZip': () => (state as Map<String, String>)['zip']
+  },
+);
+
+const Map<String, String> defaultProfile = {
+  'name': 'Xibbit X. Xibbit',
+  'address': '9 Xibbit Road',
+  'address2': '',
+  'city': 'Xibbitown',
+  'state': 'XX',
+  'zip': '99999',
+};
+
+///
+/// Put profile state.
+///
+Map<String, String> profileReducer(
+    {Map<String, String> state = defaultProfile, Action action}) {
+  ActionTypes type = action.type;
+  switch (type) {
+    case ActionTypes.SetProfile:
+      return (action['profile'] as Map).cast<String, String>();
+    default:
+      break;
+  }
+  return state;
+}
+
+final rootConfig = {
+  'login': {
+    'reducer': loginReducer,
+    'selector': loginSelectors,
+  },
+  'events': {
+    'reducer': eventsReducer,
+    'selector': eventsSelectors,
+  },
+  'profile': {
+    'reducer': profileReducer,
+    'selector': profileSelectors,
+  },
+};
+
+///
+/// Return a new map that dereferences a key.
+///
+Map remap(Map tgt, Map src, Object key) {
+  return src.entries.fold(tgt, (map, entry) {
+    map[entry.key] = entry.value[key];
+    return map;
+  });
+}
+
+// cast a base action class to a derived action class
+final downcast = (ReduxAction action) => action as Action;
+
+final reducerMap = remap(Map<String, Function>(), rootConfig, 'reducer');
+
+final selectorMap = remap(Map<String, Function>(), rootConfig, 'selector');
+
+final initialState =
+    getInitialState(reducerMap, Action({'type': ActionTypes.Init}));
+
+final rootReducer = flutterReducer(combineReducers(reducerMap, downcast));
+
+class _getLoginSelectors {
+  dynamic _selectors;
+  _getLoginSelectors(this._selectors);
+  isLoggedIn() => _selectors['isLoggedIn']();
+}
+
+class _getEventsSelectors {
+  dynamic _selectors;
+  _getEventsSelectors(this._selectors);
+  getMessage() => _selectors['getMessage']();
+}
+
+class _getProfileSelectors {
+  dynamic _selectors;
+  _getProfileSelectors(this._selectors);
+  getProfile() => _selectors['getProfile']();
+  getName() => _selectors['getName']();
+  getAddress() => _selectors['getAddress']();
+  getAddress2() => _selectors['getAddress2']();
+  getCity() => _selectors['getCity']();
+  getState() => _selectors['getState']();
+  getZip() => _selectors['getZip']();
+}
+
+class _RootSelector {
+  dynamic _selectors;
+  _RootSelector(this._selectors);
+  getLoginSelectors() => _getLoginSelectors(_selectors['getLoginSelectors']);
+  getEventsSelectors() => _getEventsSelectors(_selectors['getEventsSelectors']);
+  getProfileSelectors() => _getProfileSelectors(_selectors['getProfileSelectors']);
+}
+
+final dynamic rootSelectors = (state) =>
+    _RootSelector(combineSelectors(selectorMap, (state) => {})(state));
