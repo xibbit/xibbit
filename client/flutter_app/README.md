@@ -1,3 +1,9 @@
+# `flutter-public-figure` — a Flutter xibbit app demo
+
+The Public Figure demo Android and iOS app using Flutter xibbit which can be connected to any Public Figure xibbit backend.
+
+# `flutter create` — creates a starter Flutter app
+
 # flutter_app
 
 A new Flutter project.
