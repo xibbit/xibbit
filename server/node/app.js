@@ -74,11 +74,21 @@ var hub = new XibbitHub({
 // start the xibbit system
 hub.start();
 
-//fallback to serving the Node.js folder (url_config.js)
-app.use(express.static('../../client/angularjs/app'));
+// serve url_config.js and socket.io from Node.js as top priorities
+app.use("/url_config.js", express.static(__dirname + '/public/url_config.js'));
+app.use("/socket.io", express.static(__dirname + '/public/socket.io'));
+app.use("/socket.io.js.map", express.static(__dirname + '/public/socket.io/socket.io.js.map'));
 
-// fallback to serving the Node.js folder (url_config.js)
-app.use(express.static('public'));
+// serve the client folder and ignore their url_config.js and socket.io versions
+const clientFolders = {
+  node: '.',
+  react: '../../client/reactapp/build',
+  angularjs: '../../client/angularjs/app',
+  inferno: '../../client/infernoapp/build',
+  mithril: '../../client/mithril/dist'
+};
+const clientFolder = clientFolders.angularjs;
+app.use(express.static(clientFolder));
 
 // start server
 http.listen(APP_PORT, APP_HOST, function(){
