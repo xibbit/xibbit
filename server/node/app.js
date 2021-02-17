@@ -8,6 +8,7 @@ var timeZone = 'America/Los_Angeles';
 var config = require('./config');
 var XibDb = require('./xibdb');
 var pfapp = require('./pfapp');
+var install = require('./misc/install');
 
 var express = require('express');
 var app = express();
@@ -66,6 +67,7 @@ var hub = new XibbitHub({
   },
   'vars': {
     'pf': pf,
+    'useInstances': true,
     'hacks': config.hacks
   },
   time_zone: config.time_zone
@@ -78,6 +80,7 @@ hub.start();
 app.use("/url_config.js", express.static(__dirname + '/public/url_config.js'));
 app.use("/socket.io", express.static(__dirname + '/public/socket.io'));
 app.use("/socket.io.js.map", express.static(__dirname + '/public/socket.io/socket.io.js.map'));
+app.use('/install', (req, res) => install.install((e, html) => res.send(html)))
 
 // serve the client folder and ignore their url_config.js and socket.io versions
 const clientFolders = {
