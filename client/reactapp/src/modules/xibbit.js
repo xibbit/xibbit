@@ -344,10 +344,6 @@ var xibbit = (function() {
           }
           self.socket = url ? io(url, params): io(params);
           self.connected = true;
-          var evt = {
-            'type': 'connection',
-            'on': 'socket.io'
-          };
           self.config.socketio.start = true;
           self.socket.on('disconnect', function() {
             self.connected = false;
@@ -363,42 +359,53 @@ var xibbit = (function() {
             event = $.extend(true, {}, event);
             self.dispatchEvent(event);
           });
-          var instanceEvent = {
-            type: '_instance'
-          };
-          if (self.getInstanceValue() !== null) {
-            instanceEvent.instance = self.getInstanceValue();
-            if (self.config.socketio.transports === 'polling') {
-              self.socket.io.engine.transport.query.instance = instanceEvent.instance;
-            }
-          }
-          // send _instance event
-          self.send(instanceEvent, function(event) {
-            // process _instance event
-            self.instance = event.instance;
-            if (self.config.socketio.transports === 'polling') {
-              self.socket.io.engine.transport.query.instance = self.instance;
-            }
-            self.preserveSession(event.instance);
-            // send connected event
-            $(self).trigger(evt.type, evt);
-            // send any waiting events
-            $.each(self.waitingEvents, function(index, event) {
-              self.send(event.event, event.callback);
-            });
-            self.waitingEvents = [];
-          });
+          self.initInstance(method);
         });
       }, 1);
     }
     if ((method === 'poll') && !self.config.poll.start) {
       setTimeout(function() {
         if (!self.config.poll.start && !self.socket) {
+          self.connected = true;
           self.config.poll.start = true;
-          self.xioPoll();
+          self.initInstance(method);
         }
       }, 0);
     }
+  };
+
+  /**
+   * Send the _instance event.
+   * @author DanielWHoward
+   **/
+  xibbit.prototype.initInstance = function(method) {
+    var self = this;
+    var instanceEvent = {
+      type: '_instance'
+    };
+    if (self.getInstanceValue() !== null) {
+      instanceEvent.instance = self.getInstanceValue();
+      if (self.config.socketio.transports === 'polling') {
+        self.socket.io.engine.transport.query.instance = instanceEvent.instance;
+      }
+    }
+    // send _instance event
+    self.send(instanceEvent, function(event) {
+      // process _instance event
+      self.instance = event.instance;
+      if (self.config.socketio.transports === 'polling') {
+        self.socket.io.engine.transport.query.instance = self.instance;
+      }
+      self.preserveSession(event.instance);
+      // send any waiting events
+      $.each(self.waitingEvents, function(index, event) {
+        self.send(event.event, event.callback);
+      });
+      self.waitingEvents = [];
+      if (method === 'poll') {
+        self.xioPoll();
+      }
+    });
   };
 
   /**
