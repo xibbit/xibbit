@@ -4,38 +4,34 @@
 // Daniel W. Howard and Sanjana A. Joshi Partnership //
 //              Do not remove this notice            //
 ///////////////////////////////////////////////////////
-
-//TODO implement long polling
-//TODO implement JSONP
-
 var crypto = require('crypto');
 var fs = require('fs');
+var moment = require('moment-timezone');
 
 /**
- * Xibbit, main execution class to handle simple events
- * from JavaScript clients.
+ * A socket handling hub object that makes it
+ * easy to set up sockets, dispatch client socket
+ * packets to a server-side event handler and send
+ * packets back to the client.
  *
- * @package Xibbit
- * @author Daniel Howard
+ * @package xibbit
+ * @author DanielWHoward
  **/
 module.exports = function() {
-  var socketio = null;
-
   /**
    * Constructor.
    *
-   * @author Daniel Howard
+   * @author DanielWHoward
    **/
-  function Xibbit(config) {
+  function XibbitHub(config) {
     config.vars.hub = this;
     this.config = config;
-    this.prefix = '';
     this.onfn = {};
     this.apifn = {};
     this.impersonate = false;
-    this.username = null;
-    socketio = config.socketio;
-    this.users = {};
+    this.sessions = {};
+    this.prefix = '';
+    this.socketio = config.socketio;
     if (this.config['mysql'] && this.config['mysql']['SQL_PREFIX']) {
       this.prefix = this.config['mysql']['SQL_PREFIX'];
     } else if (this.config['mysqli'] && this.config['mysqli']['SQL_PREFIX']) {
@@ -43,17 +39,165 @@ module.exports = function() {
     }
   }
 
+/**
+ * Return the socket associated with a socket ID.
+ *
+ * @param $sid string The socket ID.
+ * @return A socket.
+ *
+ * @author DanielWHoward
+ **/
+  XibbitHub.prototype.getSocket = function(sock) {
+    return this.socketio;
+  };
+
   /**
-   * Start the Xibbit backend.
+   * Get the session associated with a socket which always
+   * has a data key and a _conn key.  The _conn key has a
+   * map that contains a sockets key with an array of
+   * sockets.  A socket is globally unique in the sessions
+   * object.  The session may also have a username key and
+   * an instance key.
    *
-   * @param $method string An event handling strategy.
+   * An instance is also globally unique.  A socket may
+   * have a non-instance session or may be combined with
+   * other sockets for an instanced session.
    *
-   * @author Daniel Howard
+   * @param sock socketio.Conn A socket.
+   *
+   * @author DanielWHoward
    **/
-  Xibbit.prototype.start = function(method) {
+  XibbitHub.prototype.getSession = function(sock) {
+    //TODO unimplemented getSession()
+    return {};
+  };
+
+  /**
+   * This is an implementation helper.  It assumes that
+   * the session store is an array.
+   *
+   * @param sock socketio.Conn A socket.
+   * @returns int The index into a session array.
+   *
+   * @author DanielWHoward
+   **/
+  XibbitHub.prototype.getSessionIndex = function(sock) {
+    //TODO unimplemented getSessionIndex()
+    return -1
+  };
+
+  /**
+   * Get the session associated with an instance.
+   *
+   * @param instance string An instance string.
+   *
+   * @author DanielWHoward
+   **/
+  XibbitHub.prototype.getSessionByInstance = function(instance) {
     var self = this;
-    if (typeof socketio !== 'undefined') {
-      socketio.on('connection', function(socket) {
+    if (self.sessions[instance]) {
+      return self.sessions[instance];
+    }
+    return null;
+  };
+
+  /**
+ * Change the session associated with a socket.
+ *
+ * @param sock socketio.Conn A socket.
+ * @param session Object The session values.
+   *
+   * @author DanielWHoward
+   **/
+  XibbitHub.prototype.setSession = function(sock, session) {
+    //TODO unimplemented setSession()
+  };
+
+  /**
+   * Add a new, empty session only for this socket.
+   *
+   * @param sock socketio.Conn A socket.
+   *
+   * @author DanielWHoward
+   **/
+  XibbitHub.prototype.addSession = function(sock) {
+    //TODO unimplemented addSession()
+  };
+
+  /**
+   * Remove the socket from the session or the whole session
+   * if it is the only socket.
+   *
+   * @param sock socketio.Conn A socket.
+   *
+   * @author DanielWHoward
+   **/
+  XibbitHub.prototype.removeSession = function(sock) {
+    //TODO unimplemented removeSession()
+  };
+
+  /**
+   * Return a duplicate of the session, though the _conn is shared.  A
+   * clone prevents code from relying on shared pointers.
+   *
+   * @param session Object The session values.
+   *
+   * @author DanielWHoward
+   **/
+  XibbitHub.prototype.cloneSession = function(session) {
+    return JSON.parse(JSON.stringify(session));
+  };
+
+  /**
+   * Return a JSON string with keys in a specific order.
+   *
+   * @param s string A JSON string with keys in random order.
+   * @param first array An array of key names to put in order at the start.
+   * @param last array An array of key names to put in order at the end.
+   *
+   * @author DanielWHoward
+   **/
+  XibbitHub.prototype.reorderJson = function(s, first, last) {
+    // create JSON maps
+    var source = JSON.parse(s);
+    var target = {};
+    // save the first key-value pairs
+    for (var f=0; f < first.length; ++f) {
+      var key = first[f];
+      if (typeof source[key] !== 'undefined') {
+        target[key] = source[key];
+      }
+    }
+    // save the non-first and non-last key-value pairs
+    var keys = Object.keys(source);
+    for (var k=0; k < keys.length; ++k) {
+      var key = keys[k];
+      var value = source[key];
+      if ((first.indexOf(key) === -1) && (last.indexOf(key) === -1)) {
+        target[key] = value;
+      }
+    }
+    // save the last key-value pairs
+    for (var l=0; l < last.length; ++l) {
+      var key = first[f];
+      if (typeof source[key] !== 'undefined') {
+        target[key] = source[key];
+      }
+    }
+    return JSON.stringify(target);
+  };
+
+  /**
+   * Start the xibbit system.
+   *
+   * @param method string An event handling strategy.
+   *
+   * @author DanielWHoward
+   **/
+  XibbitHub.prototype.start = function(method) {
+    var self = this;
+    if (typeof self.socketio !== 'undefined') {
+      self.socketio.on('connection', function(socket) {
       // the connection values
       var user = {
         'username': null,
@@ -68,31 +212,33 @@ module.exports = function() {
         // process the event
         var events = [];
         var handled = false;
-        if (!handled) {
+        if (typeof event !== 'object') {
+          event = {};
+          event.e = 'malformed--json';
+          events.push(event);
+          socket.emit('client', events[0]);
+          handled = true;
+        }
+        if (!handled && (Object.keys(event).length > 0)) {
           // verify that the event is well formed
           for (var key in event) {
             // _id is a special property so sender can invoke callbacks
             if ((key.substring(0, 1) === '_') && (['_id'].indexOf(key) === -1)) {
               event['e'] = 'malformed--property';
               events.push(event);
+              socket.emit('client', events[0]);
               handled = true;
               break;
             }
           }
-          if (handled) {
-            // run garbage collector
-            self.gc(user, function() {
-              // output any waiting events
-              socket.emit('client', events[0]);
-            });
-          } else {
+          if (!handled) {
             // override the from property
-            if (user.username === null) {
-              if (event['from']) {
-                delete event['from'];
-              }
+            if (user.username !== null) {
+              event.from = user.username;
             } else {
-              event['from'] = user.username;
+              if (event.from) {
+                delete event.from;
+              }
             }
             // add _session and _conn properties for convenience
             event['_session'] = user.session;
@@ -100,53 +246,58 @@ module.exports = function() {
               socket: socket,
               user: user
             };
-            // check event type
-            if (!event['type']) {
-              event['e'] = 'malformed--type';
-              delete event['_session'];
-              delete event['_conn'];
+            // check event type exists
+            if (!event.type) {
+              event.e = 'malformed--type';
+              delete event._session;
+              delete event._conn;
               events.push(event);
               socket.emit('client', events[0]);
               handled = true;
             }
+            // check event type is valid
             if (!handled && event['type']) {
-              if (event['type'].match(/[a-z][a-z_]*/) === null) {
-                event['e'] = 'malformed--type:'+event['type'];
-                delete event['_session'];
-                delete event['_conn'];
+              if (event.type.match(/[a-z][a-z_]*/) === null) {
+                event.e = 'malformed--type:'+event['type'];
+                delete event._session;
+                delete event._conn;
                 events.push(event);
                 socket.emit('client', events[0]);
                 handled = true;
               }
             }
             // handle _instance event
-            if (!handled && (event['type'] === '_instance')) {
-              var instance = event['instance']? event['instance']: null;
-              if (instance) {
-                if (self.users[instance]) {
-                  user.username = self.users[instance].username;
-                  user.session = self.users[instance].session;
-                  self.users[instance] = user;
-                  event['i'] = 'instance retrieved';
+            if (!handled && (event.type === '_instance')) {
+              var created = 'retrieved';
+              // event instance value takes priority
+              var instance = event.instance? event.instance: instance;
+              if (self.getSessionByInstance(instance) === null) {
+                if (!instance || instance.match(/^[a-zA-Z0-9]{25}$/) === null) {
+                  var length = 25;
+                  var a = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789';
+                  instance = '';
+                  for (var i=0; i < length; i++) {
+                    instance += a[self.rand_secure(0, a.length)];
+                  }
+                  created = 'created';
                 } else {
-                  instance = null;
+                  created = 'recreated';
                 }
+                // create a new instance for every tab even though they share session cookie
+                event.instance = instance;
+                // update request with instance for convenience
+                self.sessions[instance] = user;
               }
-              if (!instance) {
-                var length = 25;
-                var a = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789';
-                var instance = '';
-                for (var i=0; i < length; i++) {
-                  instance += a[self.instance_rand_secure(0, a.length)];
-                }
-                event['instance'] = instance;
-                event['i'] = 'instance created';
-                self.users[instance] = user;
-              }
+              // update request with instance for convenience
+              user = self.sessions[instance];
+              user._conn.socket = socket;
+              event._session = user.session;
+              event.i = 'instance '+created;
             }
             // handle the event
             if (!handled) {
-              self.trigger(event, function(e, eventReply) {
+              self.trigger(event, function(e, eventsReply) {
+              var eventReply = eventsReply[0];
               // remove the session property
               if (eventReply['_session']) {
                 delete eventReply['_session'];
@@ -179,16 +330,11 @@ module.exports = function() {
               ret_reorder = Object.assign(ret_reorder, eventReply);
               events.push(ret_reorder);
               handled = true;
-              // run the garbage collector
-              self.gc(user, function() {
               // output any waiting events
-              self.preReceive(events, user.session, function(events) {
-              self.receive(events, user.session, function(events) {
+              self.receive(events, user.session, false, function(events) {
                 for (e=0; e < events.length; ++e) {
-                  socket.emit('client', events[0]);
+                  socket.emit('client', events[e]);
                 }
-              });
-              });
               });
               });
             }
@@ -197,36 +343,48 @@ module.exports = function() {
       });
       // socket disconnected
       socket.on('disconnect', function() {
-        delete user._conn;
-        self.gc(user, function() {
-        });
+        delete user._conn.socket;
       });
       });
+
+      // run the garbage collector
+      setInterval(function() {
+        self.checkClock();
+        for (var user in self.sessions) {
+          self.receive([], self.sessions[user].session, false, function(events) {
+            for (e=0; e < events.length; ++e) {
+              if (self.sessions[user]._conn.socket) {
+                self.sessions[user]._conn.socket.emit('client', events[e]);
+              }
+            }
+          });
+        }
+      }, 1000);
     }
   }
 
   /**
    * Provide an authenticated callback for an event.
    *
-   * @param type string The event to handle.
+   * @param typ string The event to handle.
    * @param fn mixed A function that will handle the event.
    *
-   * @author Daniel Howard
+   * @author DanielWHoward
    **/
-  Xibbit.prototype.on = function(type, fn) {
-    this.onfn[type] = fn;
+  XibbitHub.prototype.on = function(typ, fn) {
+    this.onfn[typ] = fn;
   };
 
   /**
    * Provide an unauthenticated callback for an event.
    *
-   * @param type string The event to handle.
+   * @param typ string The event to handle.
    * @param fn mixed A function that will handle the event.
    *
-   * @author Daniel Howard
+   * @author DanielWHoward
    **/
-  Xibbit.prototype.api = function(type, fn) {
-    this.apifn[type] = fn;
+  XibbitHub.prototype.api = function(typ, fn) {
+    this.apifn[typ] = fn;
   };
 
   /**
@@ -234,22 +392,31 @@ module.exports = function() {
    *
    * @param event array The event to handle.
    *
-   * @author Daniel Howard
+   * @author DanielWHoward
    **/
-  Xibbit.prototype.trigger = function(event, callback) {
+  XibbitHub.prototype.trigger = function(event, callback) {
     var self = this;
+    var keysToSkip = ['_conn', '_session'];
     var eventType = event['type'];
     var pluginsFolder = null;
     var handlerFile = null;
     var handler = null;
-    var authenticated = false;
     var invoked = !!event.e;
     // load event handler dynamically
     if (invoked) {
-      callback(null, event);
+      callback(null, [event]);
     } else if (self.onfn[eventType] || self.apifn[eventType]) {
       // clone the event
-      var eventReply = self.cloneEvent(event);
+      var eventReply = self.cloneEvent(event, keysToSkip);
+      if (typeof event._conn !== 'undefined') {
+        eventReply._conn = event._conn;
+      }
+      if (typeof event._session !== 'undefined') {
+        eventReply._session = event._session;
+      }
+      if (typeof event._id !== 'undefined') {
+        eventReply._id = event._id;
+      }
       // find the event handler to invoke
       handler = ((handler === null) && self.onfn[eventType])? self.onfn[eventType]: handler;
       handler = ((handler === null) && self.apifn[eventType])? self.apifn[eventType]: handler;
@@ -259,38 +426,56 @@ module.exports = function() {
           handler = self.apifn[eventType];
         } else {
           eventReply.e = 'unauthenticated';
-          callback(null, eventReply);
+          callback(null, [eventReply]);
           invoked = true;
         }
       }
       // invoke the handler
       if (!invoked) {
         try {
-          var deferredFn = handler(eventReply, self.config.vars, function(eventReply) {
+          var deferredFn = handler(eventReply, self.config.vars, function(err, eventReply) {
             // handle asynchronous asserte() failure
             if (!eventReply.type) {
               let e = eventReply;
-              eventReply = self.cloneEvent(event);
+              eventReply = self.cloneEvent(event, keysToSkip);
+              if (typeof event._conn !== 'undefined') {
+                eventReply._conn = event._conn;
+              }
+              if (typeof event._session !== 'undefined') {
+                eventReply._session = event._session;
+              }
+              if (typeof event._id !== 'undefined') {
+                eventReply._id = event._id;
+              }
               eventReply.e = e;
             }
-            callback(null, eventReply);
+            callback(null, [eventReply]);
           });
           if (deferredFn) {
             new Promise(deferredFn).then(eventReply => {
               // handle asynchronous asserte() failure
               if (!eventReply.type) {
                 let e = eventReply;
-                eventReply = self.cloneEvent(event);
+                eventReply = self.cloneEvent(event, keysToSkip);
+                if (typeof event._conn !== 'undefined') {
+                  eventReply._conn = event._conn;
+                }
+                if (typeof event._session !== 'undefined') {
+                  eventReply._session = event._session;
+                }
+                if (typeof event._id !== 'undefined') {
+                  eventReply._id = event._id;
+                }
                 eventReply.e = e.message;
                 eventReply.e_stacktrace = e.stack;
                 console.error(e);
               }
-              callback(null, eventReply);
+              callback(null, [eventReply]);
             }).catch(e => {
               eventReply.e = e.message;
               eventReply.e_stacktrace = e.stack;
               console.error(e);
-              callback(null, eventReply);
+              callback(null, [eventReply]);
             });
           }
         } catch (e) {
@@ -308,7 +493,7 @@ module.exports = function() {
             }
           }
           console.error(e);
-          callback(null, eventReply);
+          callback(null, [eventReply]);
         }
       }
     } else {
@@ -384,16 +569,12 @@ module.exports = function() {
       // promise an events folder
       all.push(function promise() {
         fs.lstat('events', function(e, stats) {
-          promise.resolve(stats.isDirectory()? 'events/': null);
+          promise.resolve(stats.isDirectory()? ['events/']: []);
         });
       });
       // resolve the promise
       all.resolve(function(folders) {
-        if (folders[1]) {
-          folders[0].push(folders[1]);
-        }
-        folders = folders[0];
-        var handlerFolders = folders;
+        var handlerFolders = [].concat.apply([], folders);
         folders = folders.map(function(folder) {
           return function promise() {
             fs.lstat(folder+eventType+'.js', function(e, stats) {
@@ -434,12 +615,12 @@ module.exports = function() {
                 && (onfn === Object.keys(self.onfn).length)) {
               // found the file but didn't get an event handler
               event.e = 'unhandled:'+handlerFile;
-              callback(null, event);
+              callback(null, [event]);
             } else if (!self.onfn[eventType]
                 && !self.apifn[eventType]) {
               // found the file but got an event handler with a different name
               event.e = 'mismatch:'+handlerFile;
-              callback(null, event);
+              callback(null, [event]);
             } else {
               self.trigger(event, callback);
             }
@@ -494,7 +675,7 @@ module.exports = function() {
                 // found a file with a similar but incorrect name
                 event['e'] = 'misnamed:'+misnamed;
               }
-              callback(null, event);
+              callback(null, [event]);
             });
           }
         });
@@ -509,93 +690,67 @@ module.exports = function() {
    * @param event array The event to send.
    * @return boolean True if the event was sent.
    *
-   * @author Daniel Howard
+   * @author DanielWHoward
    **/
-  Xibbit.prototype.send = function(event, callback) {
+  XibbitHub.prototype.send = function(event, recipient, emitOnly, callback) {
     var self = this;
+    var sent = false;
     var to = null;
     var user = null;
-    var sent = false;
-    // decode JSON string if needed
-    if (typeof event === 'string') {
-      event = JSON.parse(event);
-    }
-    // send an array of events
-    if (Array.isArray(event)) {
-      for (var e=0; e < event.length; ++e) {
-        this.send(event[e], callback);
+    var keysToSkip = ['_session', '_conn'];
+    if (emitOnly) {
+      var address = '';
+      if (recipient) {
+        address = recipient;
+      } else if (event.to) {
+        address = event.to;
       }
-      return;
-    }
-    var sent = false;
-    // remove _session value
-    var session = null;
-    var isSession = false;
-    if (event['_session']) {
-      session = event['_session'];
-      delete event['_session'];
-      isSession = true;
-    }
-    // remove _conn value
-    var conn = null;
-    var isConn = false;
-    if (event['_conn']) {
-      conn = event['_conn'];
-      delete event['_conn'];
-      isConn = true;
-    }
-    // convert _id to __id
-    var id = null;
-    if (event['_id']) {
-      id = event['_id'];
-      delete $event['_id'];
-      event['__id'] = id;
-    }
-    // provide special __send event for caller to implement aliases, groups, all addresses
-    self.trigger({
-      'type': '__send',
-      'event': event
-    }, function(e, ret) {
-    if ((ret.length > 0) && ret[0]['e'] && ret[0]['e'] === 'unimplemented') {
-      this.rawSend(event);
-    }
-    sent = true;
-    if (isSession) {
-      event['_session'] = session;
-    }
-    if (isConn) {
-      event['_conn'] = conn;
-    }
-    if (id !== null) {
-      delete $event['__id'];
-      event['_id'] = id;
-    }
-    if (callback) {
-      callback(event);
-    }
-    });
-  };
-
-  /**
-   * Apply __receive event to these events.
-   *
-   * @return array An array of altered events.
-   *
-   * @author Daniel Howard
-   **/
-  Xibbit.prototype.preReceive = function(events, session, callback) {
-    // provide special __receive event for alternative event system
-    this.trigger({
-      'type': '__receive',
-      '_session': session
-    }, function(e, ret) {
-      if ((ret['type'] !== '__receive') || !ret['e'] || (ret['e'] !== 'unimplemented')) {
-        if (ret['events']) {
-          events = events.concat(ret['events']);
+      if (address) {
+        var recipients = [];
+        if (address === 'all') {
+          recipients = self.getUsers();
+        } else {
+          var user = self.getUser(address);
+          if (user) {
+            recipients.push(user);
+          }
+        }
+        for (var r=0; r < recipients.length; ++r) {
+          var clone = self.cloneEvent(event, keysToSkip);
+          try {
+            var socket = recipients[r]._conn.socket;
+            socket.emit('client', clone);
+          } catch (e) {
+          }
         }
       }
-      callback(events);
-    });
+      if (callback) {
+        callback();
+      }
+    } else {
+      // temporarily remove _session property
+      var keysToSkip = ['_session', '_conn', '_id', '__id'];
+      var clone = self.cloneEvent(event, keysToSkip);
+      // convert _id to __id
+      if (event._id) {
+        clone.__id = event._id;
+      }
+      // provide special __send event for caller to implement aliases, groups, all addresses
+      self.trigger({
+        'type': '__send',
+        'event': clone
+      }, function(e, ret) {
+        if ((ret.length > 0) && ret[0]['e'] && ret[0]['e'] === 'unimplemented') {
+          self.send(clone, recipient, true);
+        }
+        sent = true;
+        // restore properties
+        event = self.updateEvent(event, clone, keysToSkip);
+        if (callback) {
+          callback(event);
+        }
+      });
+    }
   };
 
   /**
@@ -603,18 +758,35 @@ module.exports = function() {
    *
    * @return array An array of events.
    *
-   * @author Daniel Howard
+   * @author DanielWHoward
    **/
-  Xibbit.prototype.receive = function(events, session, callback) {
+  XibbitHub.prototype.receive = function(events, session, collectOnly, callback) {
+    var self = this;
+    if (collectOnly) {
 //    if (session.username === null) {
 //      return events;
 //    }
-    callback(events);
+      callback(events);
+    } else {
+      // provide special __receive event for alternative event system
+      self.trigger({
+        'type': '__receive',
+        '_session': session
+      }, function(e, rets) {
+        var ret = rets[0];
+        if ((ret['type'] !== '__receive') || !ret['e'] || (ret['e'] !== 'unimplemented')) {
+          if (ret.eventQueue) {
+            events = events.concat(ret.eventQueue);
+          }
+        }
+        callback(events);
+      });
+    }
     return;
     var eventsNow = [];
     // read events for this user from database
-    $q = 'SELECT * FROM `'+$this.config['mysql']['SQL_PREFIX']+'events` WHERE `to`=\''+$this.username+'\';';
-    $qr_events = mysql_query($q, $this.config['mysql']['link']);
+    $q = 'SELECT * FROM `'+self.config['mysql']['SQL_PREFIX']+'events` WHERE `to`=\''+self.username+'\';';
+    $qr_events = mysql_query($q, self.config['mysql']['link']);
     while ($row = mysql_fetch_assoc($qr_events)) {
       // integrate the 'json' column with the row
       $row = Object.assign($row, json_decode($row['json'], true));
@@ -630,58 +802,10 @@ module.exports = function() {
       $eventsNow.push($obj);
     }
     // delete the events returned from the database
-    $q = 'DELETE FROM `'+$this.config['mysql']['SQL_PREFIX']+'events` WHERE `to`=\''+$this.username+'\';';
-    mysql_query($q, $this.config['mysql']['link']);
+    $q = 'DELETE FROM `'+self.config['mysql']['SQL_PREFIX']+'events` WHERE `to`=\''+self.username+'\';';
+    mysql_query($q, self.config['mysql']['link']);
     usort($eventsNow, array($this, 'cmp'));
     return $eventsNow;
-  };
-
-  /**
-   * Return user status, permissions, etc.
-   *
-   * @param username string The user name of the user to retrieve.
-   * @return array The user.
-   *
-   * @author Daniel Howard
-   **/
-  Xibbit.prototype.getUser = function(username) {
-    var self = this;
-    var user = null;
-    if (self.users[username]) {
-      return self.users[username];
-    }
-    for (var instance in self.users) {
-      if (self.users[instance]['username'] === username) {
-        user = self.users[instance];
-        break;
-      }
-    }
-    return user;
-  };
-
-  /**
-   * Return all users' status, permissions, etc.
-   *
-   * @return array An array of users.
-   *
-   * @author Daniel Howard
-   **/
-  Xibbit.prototype.getUsers = function() {
-    var self = this;
-    return self.users;
-  };
-
-  /**
-   * Return the names of logged in users who have not pinged the server in
-   * a number of seconds.
-   *
-   * @param secs int A number of seconds.
-   * @return array An array of disconnected users.
-   *
-   * @author Daniel Howard
-   **/
-  Xibbit.prototype.getDisconnectedUsers = function(secs) {
-    return [];
   };
 
   /**
@@ -691,12 +815,10 @@ module.exports = function() {
    * @param connect boolean Connect or disconnect.
    * @return array The modified event.
    *
-   * @author Daniel Howard
+   * @author DanielWHoward
    **/
-  Xibbit.prototype.connect = function(event, connect) {
+  XibbitHub.prototype.connect = function(event, username, connect) {
     var self = this;
-    // save the connection as a session variable
-    var username = connect? event['to']: event['from'];
     // update last connection time for user in the database
     var connected = 0;
     var user = event._conn.user;
@@ -715,59 +837,207 @@ module.exports = function() {
   /**
    * Update the connected value for this user.
    *
-   * @author Daniel Howard
+   * @author DanielWHoward
    **/
-  Xibbit.prototype.touch = function() {
+  XibbitHub.prototype.touch = function() {
   };
 
   /**
-   * Insert an event into the event queue.
+   * Garbage collector.
    *
-   * @param event array The event to insert.
-   *
-   * @author Daniel Howard
+   * @author DanielWHoward
    **/
-  Xibbit.prototype.rawSend = function(event) {
+  XibbitHub.prototype.checkClock = function(callback) {
     var self = this;
-    var to = event['to'];
-    var user = null;
-    if (to) {
-      user = self.getUser(to);
-      if (!user) {
-        user = self.users[to];
+    callback = callback || function() {};
+    var config = self.config;
+    var disconnect_seconds = 2 * 60;
+    // try to lock the global variables
+    self.lockGlobalVars(function(e, locked) {
+      if (locked) {
+        self.readGlobalVars(function(e, globalVars) {
+          // create tick and lastTick native time objects
+          var tick = new Date();
+          var lastTick = new Date(tick.getTime());
+          if (globalVars._lastTick && (typeof globalVars._lastTick === 'string')) {
+            lastTickObject = Date.parse(globalVars._lastTick.split(' ').join('T'));
+            if (lastTickObject) {
+              lastTick = new Date(lastTickObject);
+            }
+          }
+          if (globalVars._lastTick) {
+            delete globalVars._lastTick;
+          }
+          // provide special __clock event for housekeeping
+          self.trigger({
+            type: '__clock',
+            tick: tick,
+            lastTick: lastTick,
+            globalVars: globalVars
+          }, function(e, events) {
+            var event = events[0];
+            // write and unlock global variables
+            globalVars = event.globalVars;
+            globalVars._lastTick = tick.toISOString().substring(0, 19).split('T').join(' ');
+            self.writeGlobalVars(globalVars, function() {
+              self.unlockGlobalVars(function() {
+                callback();
+              });
+            });
+          });
+        });
+      } else {
+        callback();
       }
-      if (user) {
-        var session = event['_session'];
-        var conn = event['_conn'];
-        delete event['_session'];
-        delete event['_conn'];
-        user['_conn'].socket.emit('client', event);
-        event['_session'] = session;
-        event['_conn'] = conn;
-      }
-    }
-  }
+    });
+  };
 
   /**
-   * Clone an event but share embedded session.
+   * Return user status, permissions, etc.
    *
-   * @param event array The event to handle.
+   * @param username string The user name of the user to retrieve.
+   * @return array The user.
    *
-   * @author Daniel Howard
+   * @author DanielWHoward
    **/
-  Xibbit.prototype.cloneEvent = function(event) {
-    // clone the event
-    var _conn = event._conn? event._conn: null;
-    if (_conn) {
-      delete event._conn;
+  XibbitHub.prototype.getUser = function(username) {
+    var self = this;
+    var user = null;
+    if (self.sessions[username]) {
+      return self.sessions[username];
     }
-    var clone = JSON.parse(JSON.stringify(event));
-    clone._session = event._session;
-    if (_conn) {
-      event._conn = _conn;
-      clone._conn = _conn;
+    for (var instance in self.sessions) {
+      if (self.sessions[instance]['username'] === username) {
+        user = self.sessions[instance];
+        break;
+      }
+    }
+    return user;
+  };
+
+  /**
+   * Return all users' status, permissions, etc.
+   *
+   * @return array An array of users.
+   *
+   * @author DanielWHoward
+   **/
+  XibbitHub.prototype.getUsers = function() {
+    var self = this;
+    var users = [];
+    for (var user in self.sessions) {
+      users.push(self.sessions[user]);
+    }
+    return users;
+  };
+
+  /**
+   * Return the names of logged in users who have not pinged the server in
+   * a number of seconds.
+   *
+   * @param secs int A number of seconds.
+   * @return array An array of disconnected users.
+   *
+   * @author DanielWHoward
+   **/
+  XibbitHub.prototype.getDisconnectedUsers = function(secs) {
+    return [];
+  };
+
+  /**
+   * Delete rows that have not been touched recently.
+   *
+   * @param secs int A number of seconds.
+   *
+   * @author DanielWHoward
+   **/
+  XibbitHub.prototype.deleteExpired = function(table, secs, clause, callback) {
+    var self = this;
+    var expiration = moment(new Date(new Date().getTime() - (secs * 1000))).tz(self.config.time_zone).format('YYYY-MM-DD HH:mm:ss');
+    var q = 'DELETE FROM `'+self.prefix+table+'` '
+      +'WHERE (`touched` < \''+expiration+'\''+clause+');';
+    self.mysql_query(q, callback? callback: function() {});
+  };
+
+  /**
+   * Delete rows in the first table that don't have a row in the second table.
+   *
+   * This is a way to manually enforce a foreign key constraint.
+   *
+   * @param $table string A table to delete rows from.
+   * @param $column string A column to try to match to a column in the other table.
+   * @param $table2 string The other table that should have a corresponding row.
+   * @param $column2 string A column of the other table to match against.
+   *
+   * @author DanielWHoward
+   **/
+  XibbitHub.prototype.deleteOrphans = function(table, column, table2, column2) {
+    var self = this;
+    var q = 'DELETE FROM `'+self.prefix+table+'` '
+      +'WHERE NOT EXISTS (SELECT * FROM `'+self.prefix+table2+'` '
+      +'WHERE `'+column2+'`=`'+self.prefix+table+'`.`'+column+'`);';
+    self.mysql_query(q, callback? callback: function() {});
+  };
+
+  /**
+   * Sort events by the __id database property.
+   *
+   * @param a array An event.
+   * @param b array A different event.
+   * @return int 1, -1 or 0.
+   *
+   * @author DanielWHoward
+   **/
+  XibbitHub.prototype.cmp = function(a, b) {
+    return a['___id'] > b['___id']? 1: (a['___id'] < b['___id']? -1: 0);
+  };
+
+  /**
+   * Create a clone with a subset of key-value pairs.
+   *
+   * Often, there are unneeded or problematic keys
+   * that are better to remove or copy manually to
+   * the clone.
+   *
+   * @param event array An event to clone.
+   * @param keysToSkip An array of keys to not copy to the clone.
+   *
+   * @author DanielWHoward
+   **/
+  XibbitHub.prototype.cloneEvent = function(event, keysToSkip) {
+    // clone the event
+    var clone = {};
+    for (var key in event) {
+      if (keysToSkip.indexOf(key) === -1) {
+        clone[key] = event[key];
+      }
     }
     return clone;
+  };
+
+  /**
+   * Update the key-value pairs of an event using
+   * the key-value pairs from a clone.
+   *
+   * This will only overwrite changed key-value
+   * pairs; it will not copy unchanged key-value
+   * pairs or remove keys.
+   *
+   * @param event array A target event.
+   * @param clone array A source event.
+   * @param keysToSkip An array of keys to not copy from the clone.
+   *
+   * @author DanielWHoward
+   **/
+  XibbitHub.prototype.updateEvent = function(event, clone, keysToSkip) {
+    for (var key in clone) {
+      if (keysToSkip.indexOf(key) === -1) {
+        if (!(key in event) || (event[key] !== clone[key])) {
+          event[key] = clone[key];
+        }
+      }
+    }
+    return event;
   };
 
   /**
@@ -777,9 +1047,9 @@ module.exports = function() {
    * @param max int The maximum value.
    * @return A random value.
    *
-   * @author Daniel Howard
+   * @author DanielWHoward
    **/
-  Xibbit.prototype.instance_rand_secure = function(min, max) {
+  XibbitHub.prototype.rand_secure = function(min, max) {
     var log = Math.log2(max - min);
     var bytes = Math.floor((log / 8) + 1);
     var bits = Math.floor(log + 1);
@@ -793,69 +1063,162 @@ module.exports = function() {
   };
 
   /**
-   * Sort events by the __id database property.
+   * Lock global variable in database for access.
    *
-   * @param a array An event.
-   * @param b array A different event.
-   * @return int 1, -1 or 0.
-   *
-   * @author Daniel Howard
+   * @author DanielWHoward
    **/
-  Xibbit.prototype.cmp = function(a, b) {
-    return a['___id'] > b['___id']? 1: (a['___id'] < b['___id']? -1: 0);
-  };
-
-  /**
-   * Emit an array as JSON or JSONP.
-   *
-   * @param json mixed An array to be converted to JSON.
-   *
-   * @author Daniel Howard
-   **/
-  Xibbit.prototype.jsonp = function(json) {
-    // stringify JSON
-    json = JSON.stringify(json);
-    // use JSONP if a callback is provided
-    if (isset($_GET['callback'])) {
-      header('Content-Type: application/javascript');
-      print($_GET['callback']+'('+$json+')');
-    } else {
-      header('Content-Type: application/json');
-      print($json);
-    }
-  }
-
-  /**
-   * Garbage collector.
-   *
-   * @author Daniel Howard
-   **/
-  Xibbit.prototype.gc = function(user, callback) {
+  XibbitHub.prototype.lockGlobalVars = function(callback) {
     var self = this;
-    // update this user
-    self.touch();
-    // provide special __gc event for caller to do housekeeping
-    self.trigger({
-      'type': '__gc'//,
-//      'from': username,
-//      'to': username
-//      'user': user,
-//      '_session': user._session
-    }, function() {
-
-    // read users from database that should be disconnected
-    var disconnect_seconds = 10;
-    var usernames = self.getDisconnectedUsers(disconnect_seconds);
-    for (var u=0; u < usernames.length; ++u) {
-      self.trigger({
-        'type': 'logout',
-        'from': usernames[u],
-        'to': usernames[u]
-      }, function() {});
+    callback = callback || function() {};
+    var now = moment(new Date()).tz(self.config.time_zone).format('YYYY-MM-DD HH:mm:ss');
+    // generate a unique lock identifier
+    var length = 25;
+    var a = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789';
+    var lockId = '';
+    for (var i=0; i < length; i++) {
+      lockId += a[self.rand_secure(0, a.length)];
     }
-    callback();
+    var vars = JSON.stringify({id: lockId});
+    // try to get the lock
+    var q = 'INSERT INTO '+self.prefix+'sockets_sessions '
+      +'(`id`, `socksessid`, `connected`, `touched`, `vars`) VALUES ('
+      +"0, "
+      +"'lock', "
+      +"'"+self.mysql_real_escape_string(now)+"', "
+      +"'"+self.mysql_real_escape_string(now)+"', "
+      +"'"+self.mysql_real_escape_string(vars)+"');";
+    var qr = self.mysql_query(q, function(e, qr) {
+      var oneAndOnly = !e;
+      var unlock = oneAndOnly;
+      if (oneAndOnly) {
+        // retrieve lock ID and confirm that it's the same
+        q = 'SELECT vars FROM '+self.prefix+'sockets_sessions WHERE `socksessid` = \'lock\'';
+        self.mysql_query(q, function(e, rows) {
+          var row;
+          if (rows.length && (row = self.mysql_fetch_assoc(rows)[0])) {
+            oneAndOnly = (row['vars'] === vars)? true: false;
+          } else {
+            oneAndOnly = false;
+          }
+          self.mysql_free_query(rows);
+          if (callback) {
+            callback(null, oneAndOnly);
+          }
+        });
+      }
+      if (!oneAndOnly) {
+        // release the lock if it has been too long
+        self.deleteExpired('sockets_sessions', 60, ' AND `socksessid` = \'lock\'', function() {
+          callback(null, oneAndOnly);
+        });
+      }
     });
   };
 
-  return Xibbit;
+  /**
+   * Unlock global variable in database.
+   *
+   * @author DanielWHoward
+   **/
+  XibbitHub.prototype.unlockGlobalVars = function(callback) {
+    var self = this;
+    callback = callback || function() {};
+    // release the lock
+    var q = 'DELETE FROM '+self.prefix+'sockets_sessions WHERE socksessid = \'lock\';';
+    self.mysql_query(q, callback);
+  };
+
+  /**
+   * Read global variables from database.
+   *
+   * @author DanielWHoward
+   **/
+  XibbitHub.prototype.readGlobalVars = function(callback) {
+    var self = this;
+    callback = callback || function() {};
+    var q = 'SELECT vars FROM `'+self.prefix+'sockets_sessions` WHERE socksessid = \'global\';';
+    self.mysql_query(q, function(e, qr) {
+      var vars = {};
+      if (s = self.mysql_fetch_assoc(qr)) {
+        s = s[0];
+        vars = JSON.parse(s.vars);
+      }
+      self.mysql_free_query(qr);
+      callback(e, vars);
+    });
+  };
+
+  /**
+   * Write global variables to database.
+   *
+   * @author DanielWHoward
+   **/
+  XibbitHub.prototype.writeGlobalVars = function(vars, callback) {
+    var self = this;
+    callback = callback || function() {};
+    var now = moment(new Date()).tz(self.config.time_zone).format('YYYY-MM-DD HH:mm:ss');
+    var s = JSON.stringify(vars);
+    var q = 'UPDATE `'+self.prefix+'sockets_sessions` SET '
+      +'`touched` = \''+now+'\','
+      +'`vars` = \''+s+'\' '
+      +'WHERE socksessid=\'global\';';
+    self.mysql_query(q, callback);
+  };
+
+  /**
+   * Flexible mysql_query() function.
+   *
+   * @param query String The query to execute.
+   * @return The mysql_query() return value.
+   *
+   * @author DanielWHoward
+   */
+  XibbitHub.prototype.mysql_query = function(query, callback) {
+    var self = this;
+    return self.config.mysql.link.query(query, callback);
+  };
+
+  /**
+   * Flexible mysql_fetch_assoc() function.
+   *
+   * @param result String The result to fetch.
+   * @return The mysql_fetch_assoc() return value.
+   *
+   * @author DanielWHoward
+   */
+  XibbitHub.prototype.mysql_fetch_assoc = function(result) {
+    return result;
+  };
+
+  /**
+   * Flexible mysql_free_result() function.
+   *
+   * @param $result String The result to free.
+   * @return The mysql_free_result() return value.
+   *
+   * @author DanielWHoward
+   */
+  XibbitHub.prototype.mysql_free_query = function(result) {
+  };
+
+  /**
+   * Flexible mysql_real_escape_string() function.
+   *
+   * @param unescaped_string String The string.
+   * @return The mysql_real_escape_string() return value.
+   *
+   * @author DanielWHoward
+   */
+  XibbitHub.prototype.mysql_real_escape_string = function(unescaped_string) {
+    return (unescaped_string + '')
+      .replace(/\0/g, '\\x00')
+      .replace(/\n/g, '\\n')
+      .replace(/\r/g, '\\r')
+      .replace(/\\/g, '\\\\')
+      .replace(/'/g, '\\\'')
+      .replace(/"/g, '\\"')
+      .replace(/\x1a/g, '\\\x1a');
+  };
+
+  return XibbitHub;
 };
