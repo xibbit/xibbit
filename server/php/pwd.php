@@ -1,14 +1,8 @@
 <?php
-///////////////////////////////////////////////////////
-//                     xibbit 1.50                   //
-//    This source code is a trade secret owned by    //
-// Daniel W. Howard and Sanjana A. Joshi Partnership //
-//              Do not remove this notice            //
-///////////////////////////////////////////////////////
-//
 // The MIT License (MIT)
 //
 // cuid Copyright (c) 2014 Endy Jasmi
+// xibbit 1.50 Copyright (c) © 2021 Daniel W. Howard and Sanjana A. Joshi Partnership
 //
 // Permission is hereby granted, free of charge, to any person obtaining a copy
 // of this software and associated documentation files (the "Software"), to deal
@@ -27,6 +21,9 @@
 // LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
 // OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 // SOFTWARE.
+//
+// @copyright xibbit 1.50 Copyright (c) © 2021 Daniel W. Howard and Sanjana A. Joshi Partnership
+// @license http://opensource.org/licenses/MIT
 /**
  * Return true (verified), false (unverified) or a shadow
  * password record value as a string (verified but hash

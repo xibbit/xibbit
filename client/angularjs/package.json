@@ -4,7 +4,7 @@
   "version": "1.5.0",
   "description": "Public Figure webapp using AngularJS",
   "repository": "github:xibbit/xibbit",
-  "license": "UNLICENSED",
+  "license": "MIT",
   "dependencies": {
     "angular": "^1.8.2",
     "angular-cookies": "^1.8.2",
