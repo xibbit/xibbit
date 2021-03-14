@@ -12,21 +12,19 @@ var _$ = $;
 
 /**
  * Create a xibbit object.
- * @author Daniel Howard
+ * @author DanielWHoward
  **/
-var xibbit = function() {
+var xibbit = (function() {
   var $ = _$;
 
   /**
    * Create an xibbit object.
-   * @author Daniel Howard
+   * @author DanielWHoward
    **/
   function xibbit(config) {
     /* jshint validthis: true */
     var self = this;
-    var key = 'xibbit';
-    var value = null;
-    var cookie = null;
+    self.sessionKey = 'xibbit';
     self.config = config;
     if (typeof self.config.log === 'undefined') {
       self.config.log = false;
@@ -35,24 +33,31 @@ var xibbit = function() {
     if (typeof self.config.socketio === 'undefined') {
       self.config.socketio = {};
     }
-    if (typeof self.config.socketio.url !== 'string') {
-      var h = window.location.protocol;
-      var d = window.location.hostname;
-      var p = window.location.port;
-      self.config.socketio.host = h + '//' + d + (p? ':' + p: '');
-    }
     if (self.config.socketio.start !== false) {
       self.config.socketio.start = true;
+    }
+    //TODO support multiple transports
+    if (Array.isArray(self.config.socketio.transports) && self.config.socketio.transports.length) {
+      self.config.socketio.transports = self.config.socketio.transports[0];
     }
     // set defaults for poll
     if (typeof self.config.poll === 'undefined') {
       self.config.poll = {};
     }
+    if (self.config.socketio.transports === 'xio') {
+      self.config.poll.start = self.config.socketio.start;
+      self.config.socketio.start = false;
+      if (self.config.socketio.min) {
+        self.config.poll.min = self.config.socketio.min;
+        delete self.config.socketio.min;
+      }
+      if (self.config.socketio.url) {
+        self.config.poll.url = self.config.socketio.url;
+        delete self.config.socketio.url;
+      }
+    }
     if (typeof self.config.poll.url === 'undefined') {
       self.config.poll.url = '/events';
-    }
-    if (typeof self.config.poll.strategy !== 'string') {
-      self.config.poll.strategy = 'short';
     }
     if (typeof self.config.poll.min !== 'number') {
       self.config.poll.min = 1000;
@@ -60,8 +65,8 @@ var xibbit = function() {
     if (typeof self.config.poll.max !== 'number') {
       self.config.poll.max = 299000;
     }
-    if (self.config.poll.start !== false) {
-      self.config.poll.start = true;
+    if (self.config.poll.start !== true) {
+      self.config.poll.start = false;
     }
     self.connected = false;
     self.eventId = 1;
@@ -71,40 +76,7 @@ var xibbit = function() {
       self.config.seq = false;
     }
     if ((typeof self.config.preserveSession === 'undefined') || (self.config.preserveSession !== false)) {
-      if (typeof Storage === 'undefined') {
-        var ca = (document && document.cookie)? document.cookie.split(';'): [];
-        for (var c=0; c < ca.length; ++c) {
-          cookie = ca[c];
-          while (cookie.charAt(0) === ' ') {
-            cookie = cookie.substring(1, cookie.length);
-          }
-          if (cookie.indexOf(key+'=') === 0) {
-            value = cookie.substring((key+'=').length);
-            value = decodeURIComponent(value);
-            try {
-              value = JSON.parse(value);
-            } catch (e) {
-              // use unparsed value
-            }
-          }
-        }
-      } else {
-        try {
-          value = sessionStorage.getItem(key);
-          if (value) {
-            try {
-              value = JSON.parse(value);
-            } catch (e) {
-              value = null;
-            }
-          }
-        } catch (e) {
-          // only store session values in JavaScript
-        }
-      }
-      if (value && value.instance) {
-        self.instance = value.instance;
-      }
+      self.instance = self.getSessionValue('instance') || null;
     }
     self.log('xibbit.instance='+self.getInstanceValue());
     self.requestEvents = {};
@@ -125,7 +97,7 @@ var xibbit = function() {
 
   /**
    * Return the instance value or null.
-   * @author Daniel Howard
+   * @author DanielWHoward
    **/
   xibbit.prototype.getInstanceValue = function() {
     var self = this;
@@ -134,43 +106,114 @@ var xibbit = function() {
 
   /**
    * Return true if the events are working.
-   * @author Daniel Howard
+   * @author DanielWHoward
    **/
   xibbit.prototype.isConnected = function() {
     return this.connected;
   };
 
   /**
+   * Get a value for a key from the xibbit session.
+   *
+   * Even though sessions are not our mission, this
+   * simple session storage API is provided for users.
+   * @author DanielWHoward
+   **/
+  xibbit.prototype.getSessionValue = function(key) {
+    var self = this;
+    var value, cookie;
+    if (typeof Storage === 'undefined') {
+      var ca = (document && document.cookie)? document.cookie.split(';'): [];
+      for (var c=0; c < ca.length; ++c) {
+        cookie = ca[c];
+        while (cookie.charAt(0) === ' ') {
+          cookie = cookie.substring(1, cookie.length);
+        }
+        if (cookie.indexOf(self.sessionKey+'=') === 0) {
+          value = cookie.substring((self.sessionKey+'=').length);
+          value = decodeURIComponent(value);
+          try {
+            value = JSON.parse(value);
+          } catch (e) {
+            // use unparsed value
+          }
+        }
+      }
+    } else {
+      try {
+        value = sessionStorage.getItem(self.sessionKey);
+        if (value) {
+          try {
+            value = JSON.parse(value);
+          } catch (e) {
+            value = null;
+          }
+        }
+      } catch (e) {
+        // only store session values in JavaScript
+      }
+    }
+    return (value && key)? value[key] : value;
+  };
+
+  /**
+   * Add or replace a value for a key from the xibbit
+   * session.
+   *
+   * Even though sessions are not our mission, this
+   * simple session storage API is provided for users.
+   * @author DanielWHoward
+   **/
+  xibbit.prototype.addSessionValue = function(key, value) {
+    var self = this;
+    var sessionValue = self.getSessionValue() || {};
+    // if value is undefined, delete the key instead of adding it
+    if (typeof value === 'undefined') {
+      delete sessionValue[key];
+    } else {
+      sessionValue[key] = value;
+    }
+    if (typeof Storage === 'undefined') {
+      try {
+        document.cookie = self.sessionKey+"="+JSON.stringify(sessionValue)+"; path=/";
+      } catch (e) {
+        // suppress any cookie setting errors
+      }
+    } else {
+      try {
+        sessionStorage.setItem(self.sessionKey, JSON.stringify(sessionValue));
+      } catch (e) {
+        // only store session values in JavaScript
+      }
+    }
+    return value;
+  };
+
+  /**
+   * Delete a key from the xibbit session.
+   *
+   * Even though sessions are not our mission, this
+   * simple session storage API is provided for users.
+   * @author DanielWHoward
+   **/
+  xibbit.prototype.removeSessionValue = function(key) {
+    var self = this;
+    self.addSessionValue(key);
+  };
+
+  /**
    * Save a session instance.
-   * @author Daniel Howard
+   * @author DanielWHoward
    **/
   xibbit.prototype.preserveSession = function(instance) {
     var self = this;
-    var key = 'xibbit';
-    var value = {
-      instance: instance
-    };
+    self.addSessionValue('instance', instance);
     self.instance = instance;
-    if ((typeof self.config.preserveSession === 'undefined') || (self.config.preserveSession !== false)) {
-      if (typeof Storage === 'undefined') {
-        try {
-          document.cookie = key+"="+JSON.stringify(value)+"; path=/";
-        } catch (e) {
-          // suppress any cookie setting errors
-        }
-      } else {
-        try {
-          sessionStorage.setItem(key, JSON.stringify(value));
-        } catch (e) {
-          // only store session values in JavaScript
-        }
-      }
-    }
   };
 
   /**
    * Provide a handler for an event.
-   * @author Daniel Howard
+   * @author DanielWHoward
    **/
   xibbit.prototype.on = function(type, fn) {
     var self = this;
@@ -181,7 +224,7 @@ var xibbit = function() {
 
   /**
    * Remove all handlers for an event.
-   * @author Daniel Howard
+   * @author DanielWHoward
    **/
   xibbit.prototype.off = function(type) {
     var self = this;
@@ -191,7 +234,7 @@ var xibbit = function() {
   /**
    * Send an event and, optionally, provide a callback to
    * process a response.
-   * @author Daniel Howard
+   * @author DanielWHoward
    **/
   xibbit.prototype.send = function(event, callback) {
     var self = this;
@@ -200,13 +243,13 @@ var xibbit = function() {
         'event': event,
         'callback': callback
       });
-    } else if (callback && self.config.seq && !$.isEmptyObject(this.requestEvents)) {
+    } else if (callback && self.config.seq && !$.isEmptyObject(self.requestEvents)) {
       self.seqEvents.push({
         'event': event,
         'callback': callback
       });
     } else {
-      event._id = this.eventId++;
+      event._id = self.eventId++;
       if (self.config.log || event._log) {
         self.log(JSON.stringify(event), self.logColors.request);
       }
@@ -215,19 +258,20 @@ var xibbit = function() {
         evt._response = {
           callback: callback
         };
-        this.requestEvents[event._id] = evt;
+        self.requestEvents[event._id] = evt;
       }
-      if (this.socket) {
-        this.socket.emit('server', event);
+      if (self.socket) {
+        var marshalledEvent = event; //JSON.stringify(event); //golang
+        self.socket.emit('server', marshalledEvent);
       } else {
-        self.shortPoll(event);
+        self.xioPoll(event);
       }
     }
   };
 
   /**
    * Only provided for consistency with server implementations.
-   * @author Daniel Howard
+   * @author DanielWHoward
    **/
   xibbit.prototype.receive = function() {
     return [];
@@ -235,7 +279,7 @@ var xibbit = function() {
 
   /**
    * Start event polling if using polling and polling is stopped.
-   * @author Daniel Howard
+   * @author DanielWHoward
    **/
   xibbit.prototype.start = function(method) {
     var self = this;
@@ -244,19 +288,61 @@ var xibbit = function() {
       if ((self.config.socketio.transports === 'polling') && self.instance) {
         query.instance = self.getInstanceValue();
       }
-      var params = (self.config.socketio.transports === 'polling')? {
-        path: self.config.poll.url,
+      var url = self.config.socketio.url;
+      var sampleUrl = url;
+      if (typeof url === 'function') {
+        sampleUrl = url();
+      }
+      var isPhp = sampleUrl.endsWith('.php');
+      var host = '';
+      if (sampleUrl.startsWith('http')) {
+        var pos = sampleUrl.indexOf('/');
+        for (var s=0; (pos !== -1) && (s < 2); ++s) {
+          pos = sampleUrl.indexOf('/', pos+1);
+        }
+        if (pos === -1) {
+          pos = sampleUrl.length;
+        }
+        host = sampleUrl.substring(0, pos);
+      } else {
+        var h = window.location.protocol;
+        var d = window.location.hostname;
+        var p = window.location.port;
+        host = h + '//' + d + (p? ':' + p: '');
+      }
+      var transport = self.config.socketio.transports;
+      var transports = [transport];
+      if (isPhp) {
+        transports = ['polling'];
+      }
+      var params = isPhp? {
+        path: url,
         query: query,
-        transports: ['polling'],
+        nsp: '/',
+        transports: transports,
+        upgrade: false,
+        compress: false,
         outOfBand: function(data) {
           data = self.getStringFromDirtyHtml(data);
           self.log(data, self.logColors.outofband_error);
         }
-      }: self.config.socketio.host+'/';
+      }: {
+        url: host+'/',
+//        path: '/ws',
+        transports: transports
+      };
       // try to connect to Socket.IO
       setTimeout(function() {
-        $.getScript(self.config.socketio.host+'/socket.io/socket.io.js', function() {
-          self.socket = io(params);
+        $.getScript(host+'/socket.io/socket.io.js', function() {
+          var url = params.url;
+          if (url) {
+            delete params.url;
+          }
+          if (Object.keys(params).length === 0) {
+            params = url;
+            url = '';
+          }
+          self.socket = url ? io(url, params): io(params);
           self.connected = true;
           var evt = {
             'type': 'connection',
@@ -273,6 +359,7 @@ var xibbit = function() {
             $(self).trigger(evt.type, evt);
           });
           self.socket.on('client', function(event) {
+            // deep clone
             event = $.extend(true, {}, event);
             self.dispatchEvent(event);
           });
@@ -308,7 +395,7 @@ var xibbit = function() {
       setTimeout(function() {
         if (!self.config.poll.start && !self.socket) {
           self.config.poll.start = true;
-          self.shortPoll();
+          self.xioPoll();
         }
       }, 0);
     }
@@ -316,7 +403,7 @@ var xibbit = function() {
 
   /**
    * Stop event polling if using polling and polling is running.
-   * @author Daniel Howard
+   * @author DanielWHoward
    **/
   xibbit.prototype.stop = function(method) {
     var self = this;
@@ -330,7 +417,7 @@ var xibbit = function() {
 
   /**
    * Dispatch events from the server to client listeners.
-   * @author Daniel Howard
+   * @author DanielWHoward
    **/
   xibbit.prototype.dispatchEvent = function(event) {
     if (event && (event._id || event.type)) {
@@ -359,29 +446,24 @@ var xibbit = function() {
   };
 
   /**
-   * Do a short poll.
-   * @author Daniel Howard
+   * Do a short poll using the xio protocol.
+   * @author DanielWHoward
    **/
-  xibbit.prototype.shortPoll = function(events) {
+  xibbit.prototype.xioPoll = function(events) {
     var self = this;
     var query = '';
-    if (self.getInstanceValue() === null) {
-      // send _instance event
-      var instanceEvent = {
-        type: '_instance'
-      };
-      query += '_event=' + encodeURIComponent(JSON.stringify(instanceEvent));
-      self.log(JSON.stringify(instanceEvent), self.logColors.request);
-    } else {
-      query += 'instance='+self.getInstanceValue();
-      query += '&_event=' + encodeURIComponent(events? JSON.stringify(events): '{}');
+    var instanceValue = self.getInstanceValue();
+    if (instanceValue !== null) {
+      query += 'instance=' + instanceValue + '&';
     }
+    var strEvents = events? JSON.stringify(events): '{}';
+    var uriEncodedEvents = encodeURIComponent(strEvents);
+    query += '&XIO=' + uriEncodedEvents;
 
     var url = $.isFunction(self.config.poll.url)? self.config.poll.url(): self.config.poll.url;
-    var type = 'GET';
+    var type = 'POST';
     var data = query;
     var jsonp = false;
-    var success = false;
     self._pollStarted = $.now();
     var pollEvent = events && (events.type === '_poll');
     $.ajax({
@@ -396,7 +478,6 @@ var xibbit = function() {
         return xhr;
       }
     }).done(function(event) {
-      success = true;
       // pre-process _instance event
       if ($.isArray(event)) {
         $.each(event, function(key, event) {
@@ -434,20 +515,15 @@ var xibbit = function() {
       // restart the poll
       if (self.config.poll.start && !self.socket && !events) {
         var delay = self._pollStarted + self.config.poll.min - $.now();
-        delay = (self.config.poll.strategy === 'long')? 0: delay;
         setTimeout(function() {
-          if (self.config.poll.strategy === 'long') {
-            self.shortPoll({type: '_poll'});
-          } else {
-            self.shortPoll();
-          }
+          self.xioPoll();
         }, (delay < 0)? 0: delay);
       }
     }).fail(function(jqXHR) {
       var responseText = jqXHR.responseText;
       if (pollEvent) {
         self.log('{"type":"_poll","i":"'+jqXHR.status+':'+jqXHR.statusText+'"}', self.logColors.response);
-        self.shortPoll({type: '_poll'});
+        self.xioPoll({type: '_poll'});
       } else {
         // clean up error data and write to the console
         if (responseText) {
@@ -473,7 +549,7 @@ var xibbit = function() {
         // restart the poll
         if (self.config.poll.start && !self.socket) {
           setTimeout(function() {
-            self.shortPoll();
+            self.xioPoll();
           }, self._reconnectIn);
         }
       }
@@ -482,14 +558,14 @@ var xibbit = function() {
 
   /**
    * Return a file upload structure.
-   * @author Daniel Howard
+   * @author DanielWHoward
    **/
   xibbit.prototype.createUploadFormData = function(event) {
     var fd = new FormData();
     fd.append('sid', this.socket.io.engine.id);
     fd.append('instance', this.instance);
     for (var k in event) {
-      if ((k !== 'type') && event.hasOwnProperty(k)) {
+      if ((k !== 'type') && Object.prototype.hasOwnProperty.call(event, k)) {
         if (event[k] && event[k].constructor && event[k].constructor.name === 'File') {
           fd.append(event.type+'_'+k, event[k]);
         } else {
@@ -502,20 +578,21 @@ var xibbit = function() {
 
   /**
    * Return a string with HTML tags turned into string characters.
-   * @author Daniel Howard
+   * @author DanielWHoward
    **/
   xibbit.prototype.getStringFromDirtyHtml = function(data) {
     data = data.replace(/(<([^>]+)>)/ig, ''); // HTML tags
     data = data.replace(/\n+/g, ' '); // newline -> space
-    data = data.replace(/\:\s+/g, ': '); // extra spaces
-    data = data.replace(/\#/g, '\n#'); // PHP stack trace
+    data = data.replace(/:\s+/g, ': '); // extra spaces
+    data = data.replace(/#/g, '\n#'); // PHP stack trace
     data = data.replace(/&quot;/g, '"'); // real quotes
+    data = data.replace(/&gt;/g, '>'); // greater than
     return data;
   };
 
   /**
    * Logging colors.
-   * @author Daniel Howard
+   * @author DanielWHoward
    */
   xibbit.prototype.logColors = {
     request: 'lightgreen',
@@ -530,7 +607,7 @@ var xibbit = function() {
 
   /**
    * Log string or event to the console.
-   * @author Daniel Howard
+   * @author DanielWHoward
    **/
   xibbit.prototype.log = function(obj, color) {
     var msg = typeof obj === 'string'? obj: null;
@@ -568,4 +645,4 @@ var xibbit = function() {
     }
   };
   return xibbit;
-}();
+})();
