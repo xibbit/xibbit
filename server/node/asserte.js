@@ -4,7 +4,6 @@
 // Daniel W. Howard and Sanjana A. Joshi Partnership //
 //              Do not remove this notice            //
 ///////////////////////////////////////////////////////
-
 /**
  * Throw an exception if the assert condition is false.
  *
@@ -12,7 +11,7 @@
  * @param msg The message to use if the assertion fails.
  * @throws Exception The assertion failed.
  *
- * @author Daniel Howard
+ * @author DanielWHoward
  **/
 function asserte(cond, msg, callback) {
   if (!cond) {
@@ -30,7 +29,7 @@ exports.asserte = asserte;
  * @param event array The event that should be minimal.
  * @throws Exception The assertion failed.
  *
- * @author Daniel Howard
+ * @author DanielWHoward
  **/
 function noAsserte(event) {
   // check the required properties
