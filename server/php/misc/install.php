@@ -35,22 +35,48 @@ require_once('../pwd.php');
 .warn {
   background-color: yellow;
 }
-.error {
+.error, .php_error {
   background-color: red;
 }
+.warn, .error { display: none; }
+<?php print '.php_error { display: none; } .warn, .error { display: block; }'; ?>
 </style>
 </head>
 <body>
+<div class="php_error">if you can see this, PHP not available; please install or configure</div>
 <?php
 // get the current time
 date_default_timezone_set('America/Los_Angeles');
 $now = date('Y-m-d H:i:s');
 $nullDateTime = '1970-01-01 00:00:00';
 $daysMap = array('SUN', 'MON', 'TUE', 'WED', 'THU', 'FRI', 'SAT');
+// detect and handle php-mysqli not installed error
+if (!function_exists('mysqli_connect')) {
+  function mysqli_connect($sql_host, $sql_user, $sql_pass) {
+    return false;
+  }
+  function mysqli_select_db($link, $q) {
+    return false;
+  }
+  function mysqli_query($link, $q) {
+    return false;
+  }
+  function mysqli_num_rows($result) {
+    return 0;
+  }
+  function mysqli_errno() {
+    return -1;
+  }
+  function mysqli_error() {
+    return 'php-mysqli not available; please install or configure';
+  }
+  function mysqli_close($link) {
+  }
+}
 // connect to the database
 $link = @mysqli_connect($sql_host, $sql_user, $sql_pass);
 if (!$link) {
-  print '<div class="error">'.$sql_host.' had a MySQL error ('.mysqli_errno().'): '.mysqli_error().'</div>'."\n";
+  print '<div class="error">'.$sql_host.' mysqli_connect() had a MySQL error ('.mysqli_connect_errno().'): '.mysqli_connect_error().'</div>'."\n";
 }
 // create the database
 $q = 'CREATE DATABASE `'.$sql_db.'`';
@@ -58,13 +84,13 @@ $result = @mysqli_query($link, $q);
 if (!$result) {
   if (mysqli_errno($link) == 1007) {
   } else {
-    print '<div class="error">'.$sql_host.' had a MySQL error ('.mysqli_errno($link).'): '.mysqli_error($link).'</div>'."\n";
+    print '<div class="error">'.$sql_host.' CREATE DATABASE had a MySQL error ('.mysqli_errno($link).'): '.mysqli_error($link).'</div>'."\n";
   }
 }
 // select the database
 $result = mysqli_select_db($link, $sql_db);
 if (!$result) {
-  print '<div class="error">'.$sql_host.' had a MySQL error ('.mysqli_errno($link).'): '.mysqli_error($link).'</div>'."\n";
+  print '<div class="error">'.$sql_host.' mysqli_select_db() had a MySQL error ('.mysqli_errno($link).'): '.mysqli_error($link).'</div>'."\n";
 }
 @mysqli_query($link, 'SET NAMES \'utf8\'');
 
@@ -80,7 +106,7 @@ if (!mysqli_query($link, $q)) {
   if (mysqli_errno($link) == 1050) {
     print '<div class="warn">Table '.$sql_prefix.'sockets already exists!</div>'."\n";
   } else {
-    print '<div class="error">'.$sql_host.' had a MySQL error ('.mysqli_errno($link).'): '.mysqli_error($link).'</div>'."\n";
+    print '<div class="error">Table '.$sql_prefix.'sockets had a MySQL error ('.mysqli_errno($link).'): '.mysqli_error($link).'</div>'."\n";
   }
 } else {
   print '<div>'.$q.'</div>'."\n";
@@ -97,7 +123,7 @@ if (!mysqli_query($link, $q)) {
   if (mysqli_errno($link) == 1050) {
     print '<div class="warn">Table '.$sql_prefix.'sockets_events already exists!</div>'."\n";
   } else {
-    print '<div class="error">'.$sql_host.' had a MySQL error ('.mysqli_errno($link).'): '.mysqli_error($link).'</div>'."\n";
+    print '<div class="error">Table '.$sql_prefix.'sockets_events had a MySQL error ('.mysqli_errno($link).'): '.mysqli_error($link).'</div>'."\n";
   }
 } else {
   print '<div>'.$q.'</div>'."\n";
@@ -116,7 +142,7 @@ if (!mysqli_query($link, $q)) {
   if (mysqli_errno($link) == 1050) {
     print '<div class="warn">Table '.$sql_prefix.'sockets_sessions already exists!</div>'."\n";
   } else {
-    print '<div class="error">'.$sql_host.' had a MySQL error ('.mysqli_errno($link).'): '.mysqli_error($link).'</div>'."\n";
+    print '<div class="error">Table '.$sql_prefix.'sockets_sessions had a MySQL error ('.mysqli_errno($link).'): '.mysqli_error($link).'</div>'."\n";
   }
 } else {
   print '<div>'.$q.'</div>'."\n";
@@ -124,7 +150,7 @@ if (!mysqli_query($link, $q)) {
 // add data to the sockets_sessions table
 $q = 'SELECT id FROM '.$sql_prefix.'sockets_sessions';
 $result = mysqli_query($link, $q);
-if (mysqli_num_rows($result) === 0) {
+if (mysqli_num_rows($result) == 0) {
   $values = array();
   $values[] = "0, 'global', '".$now."', '".$now."', '{}'";
   $values = isset($values_sockets_sessions)? $values_sockets_sessions: $values;
@@ -132,7 +158,7 @@ if (mysqli_num_rows($result) === 0) {
     $q = 'INSERT INTO '.$sql_prefix.'sockets_sessions VALUES ('.$value.')';
     $result = mysqli_query($link, $q);
     if (!$result) {
-      print '<div class="error">'.$sql_host.' had a MySQL error ('.mysqli_errno($link).'): '.mysqli_error($link).'</div>'."\n";
+      print '<div class="error">INSERT INTO: Table '.$sql_prefix.'sockets_sessions had a MySQL error ('.mysqli_errno($link).'): '.mysqli_error($link).'</div>'."\n";
       print '<div class="error">'.$q.'</div>'."\n";
     } else {
       print '<div>'.$q.'</div>'."\n";
@@ -152,7 +178,7 @@ if (!mysqli_query($link, $q)) {
   if (mysqli_errno($link) == 1050) {
     print '<div class="warn">Table '.$sql_prefix.'locks already exists!</div>'."\n";
   } else {
-    print '<div class="error">'.$sql_host.' had a MySQL error ('.mysqli_errno($link).'): '.mysqli_error($link).'</div>'."\n";
+    print '<div class="error">Table '.$sql_prefix.'locks had a MySQL error ('.mysqli_errno($link).'): '.mysqli_error($link).'</div>'."\n";
   }
 } else {
   print '<div>'.$q.'</div>'."\n";
@@ -170,7 +196,7 @@ if (!mysqli_query($link, $q)) {
   if (mysqli_errno($link) == 1050) {
     print '<div class="warn">Table '.$sql_prefix.'at already exists!</div>'."\n";
   } else {
-    print '<div class="error">'.$sql_host.' had a MySQL error ('.mysqli_errno($link).'): '.mysqli_error($link).'</div>'."\n";
+    print '<div class="error">Table '.$sql_prefix.'at had a MySQL error ('.mysqli_errno($link).'): '.mysqli_error($link).'</div>'."\n";
   }
 } else {
   print '<div>'.$q.'</div>'."\n";
@@ -187,7 +213,7 @@ if (mysqli_num_rows($result) == 0) {
     $q = 'INSERT INTO '.$sql_prefix.'at VALUES ('.$value.')';
     $result = mysqli_query($link, $q);
     if (!$result) {
-      print '<div class="error">'.$sql_host.' had a MySQL error ('.mysqli_errno($link).'): '.mysqli_error($link).'</div>'."\n";
+      print '<div class="error">INSERT INTO: Table '.$sql_prefix.'at had a MySQL error ('.mysqli_errno($link).'): '.mysqli_error($link).'</div>'."\n";
       print '<div class="error">'.$q.'</div>'."\n";
     } else {
       print '<div>'.$q.'</div>'."\n";
@@ -223,7 +249,7 @@ if (!mysqli_query($link, $q)) {
   if (mysqli_errno($link) == 1050) {
     print '<div class="warn">Table '.$sql_prefix.'users already exists!</div>'."\n";
   } else {
-    print '<div class="error">'.$sql_host.' had a MySQL error ('.mysqli_errno($link).'): '.mysqli_error($link).'</div>'."\n";
+    print '<div class="error">Table '.$sql_prefix.'users had a MySQL error ('.mysqli_errno($link).'): '.mysqli_error($link).'</div>'."\n";
   }
 } else {
   print '<div>'.$q.'</div>'."\n";
@@ -241,7 +267,7 @@ if (mysqli_num_rows($result) == 0) {
     $q = 'INSERT INTO '.$sql_prefix.'users VALUES ('.$value.')';
     $result = mysqli_query($link, $q);
     if (!$result) {
-      print '<div class="error">'.$sql_host.' had a MySQL error ('.mysqli_errno($link).'): '.mysqli_error($link).'</div>'."\n";
+      print '<div class="error">INSERT INTO: Table '.$sql_prefix.'users had a MySQL error ('.mysqli_errno($link).'): '.mysqli_error($link).'</div>'."\n";
       print '<div class="error">'.$q.'</div>'."\n";
     } else {
       $dataInserted = true;
@@ -252,7 +278,7 @@ if (mysqli_num_rows($result) == 0) {
   $q = 'ALTER TABLE '.$sql_prefix.'users  MODIFY COLUMN `id` bigint(20) unsigned AUTO_INCREMENT, AUTO_INCREMENT = 9;';
   $result = mysqli_query($link, $q);
   if (!$result) {
-    print '<div class="error">'.$sql_host.' had a MySQL error ('.mysqli_errno($link).'): '.mysqli_error($link).'</div>'."\n";
+    print '<div class="error">Table '.$sql_prefix.'users had a MySQL error ('.mysqli_errno($link).'): '.mysqli_error($link).'</div>'."\n";
     print '<div class="error">'.$q.'</div>'."\n";
   } else {
     print '<div>'.$q.'</div>'."\n";
@@ -276,7 +302,7 @@ if (!mysqli_query($link, $q)) {
   if (mysqli_errno($link) == 1050) {
     print '<div class="warn">Table '.$sql_prefix.'instances already exists!</div>'."\n";
   } else {
-    print '<div class="error">'.$sql_host.' had a MySQL error ('.mysqli_errno($link).'): '.mysqli_error($link).'</div>'."\n";
+    print '<div class="error">Table '.$sql_prefix.'instances had a MySQL error ('.mysqli_errno($link).'): '.mysqli_error($link).'</div>'."\n";
   }
 } else {
   print '<div>'.$q.'</div>'."\n";
@@ -286,6 +312,7 @@ if (!mysqli_query($link, $q)) {
 if ($link) {
   mysqli_close($link);
 }
+print '<div>Done.</div>'."\n";
 ?>
 </body>
 </html>
