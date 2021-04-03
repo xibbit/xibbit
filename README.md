@@ -5,10 +5,6 @@ Meet xibbit.
 
 A small but stellar framework for startups, solo developers and new developers, especially teenagers and new college grads, to quickly build websites (a.k.a. webapps) and iOS and Android apps.
 
-xibbit is both a client-side framework (supports **React**, **Flutter**, **AngularJS**, **Inferno**, **Marko**, **Mithril**) and a server-side framework (supports **Go**, **Node**, **PHP**).  Developers can choose any client/server combination and, if they change their mind later, they can port their existing code easily to a new language.
-
-xibdb is an optional database access library (supports **MySQL**) for xibbit that provides an easy-to-use, powerful and portable database access.
-
 (The silver frog mascot's name is Xorat.)
 
 ## motivation
@@ -23,17 +19,24 @@ You need xibbit (or something like it) so you can finally:
 
 xibbit is also great for freelance developers and offshore teams.
 
+## what it is (the technobabble)
+
+xibbit is both a client-side framework (supports **React**, **Flutter**, **AngularJS**, **Inferno**, **Marko**, **Mithril**) and a server-side framework (supports **Go**, **Node**, **PHP**).  Developers can choose any client/server combination and, if they change their mind later, they can port their existing code easily to a new language.
+
+xibdb is an optional database access library (supports **MySQL**) for xibbit that provides an easy-to-use, powerful and portable database access.
+
 ## installation
 
-1. Download, install and run MAMP (or AMPPS) to have a [LAMP stack](https://en.wikipedia.org/wiki/LAMP_(software_bundle)) running locally
+1. Download, install and run MAMP (or AMPPS or `sudo apt-get install lamp-server^`) on Windows, Mac or Linux to have a [LAMP stack](https://en.wikipedia.org/wiki/LAMP_(software_bundle)) running locally
 1. Download and install Node.js to have `node` and `npm` commands available locally
 1. Download and install `git` command to have it available locally
-1. Clone xibbit from Github (using `git clone https://github.com/xibbit/xibbit.git`) to your Windows PC or Mac to the "www" folder in your LAMP stack (e.g. C:\Mamp\www or /Applications/MAMP/www)
+1. Clone xibbit from Github (using `git clone https://github.com/xibbit/xibbit.git`) to the "www" folder in your LAMP stack (e.g. C:\MAMP\htdocs or /Applications/MAMP/htdocs or /var/www/html)
 1. Run `mysql -u root -p` MySQL client command and log in with the "mysql" default password
 1. Type `create database publicfigure;` and press the Enter key to execute the MySQL client command
-1. Use a browser like Google Chrome to go to http://localhost/xibbit/server/php/misc/install.php (this should generate the tables and default data for the publicfigure database)
-1. Go to "www/xibbit/client/angularjs" folder
-1. Run `npm install` and let it install AngularJS libraries in "www/xibbit/client/angularjs/app/lib"
+1. Use a browser like Google Chrome to go to http://localhost/xibbit/server/php/misc/install.php and let it generate the tables and default data for the "publicfigure" database
+1. Go to "xibbit/client/angularjs" folder
+1. Run `npm install` and let it install AngularJS libraries in "xibbit/client/angularjs/app/lib"
+1. Copy the "xibbit/client/angularjs/app/socket.io" folder and its contents to the "www" folder in your LAMP stack (e.g. C:\MAMP\htdocs or /Applications/MAMP/htdocs or /var/www/html) -- a temporary fix to be removed in a future release
 1. Then, use the browser to go to http://localhost/xibbit/server/php/index.html
 
 The webapp is running successfully if you see:
@@ -51,9 +54,9 @@ PHP was chosen as the default server because it is the easiest to set up and the
 
 ## current status
 
-xibbit is under active development.  Version 1.5 is the current version.
+xibbit is under active development.  Version 1.50 is the current version.
 
-Version 1.5 is the initial version released into open source.  It is of alpha quality: suitable for development but you may need to fix additional minor bugs to bring it to production quality.
+Version 1.50 is the initial version released into open source.  It is of alpha quality: suitable for development but you may need to fix additional minor bugs to bring it to production quality.
 
 Version 1.0 was a proprietary implementation inside the MovieTrekker webapp.
 
