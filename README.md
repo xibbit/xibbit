@@ -33,7 +33,7 @@ xibdb is an optional database access library (supports **MySQL**) for xibbit tha
 1. Clone xibbit from Github (using `git clone https://github.com/xibbit/xibbit.git`) to the "www" folder in your LAMP stack (e.g. C:\MAMP\htdocs or /Applications/MAMP/htdocs or /var/www/html)
 1. Run `mysql -u root -p` MySQL client command and log in with the "mysql" default password
 1. Type `create database publicfigure;` and press the Enter key to execute the MySQL client command
-1. Use a browser like Google Chrome to go to http://localhost/xibbit/server/php/misc/install.php and let it generate the tables and default data for the "publicfigure" database
+1. Use a browser like Google Chrome to go to http://localhost/xibbit/server/php/misc/install.php and let it generate the tables and default data for the "publicfigure" database.  If this isn't working, you can consult this [LAMP stack installation troubleshooting guide](LAMP.md).
 1. Go to "xibbit/client/angularjs" folder
 1. Run `npm install` and let it install AngularJS libraries in "xibbit/client/angularjs/app/lib"
 1. Copy the "xibbit/client/angularjs/app/socket.io" folder and its contents to the "www" folder in your LAMP stack (e.g. C:\MAMP\htdocs or /Applications/MAMP/htdocs or /var/www/html) -- a temporary fix to be removed in a future release
