@@ -351,7 +351,11 @@ const xibbit = (function() {
       };
       // try to connect to Socket.IO
       setTimeout(function() {
-        $.getScript(host+'/socket.io/socket.io.js', function() {
+        var js_location = self.config.socketio.js_location;
+        if (!js_location) {
+          js_location = host;
+        }
+        $.getScript(js_location+'/socket.io/socket.io.js', function() {
           var url = params.url;
           if (url) {
             delete params.url;
@@ -393,6 +397,20 @@ const xibbit = (function() {
   };
 
   /**
+   * Stop event polling if using polling and polling is running.
+   * @author DanielWHoward
+   **/
+  xibbit.prototype.stop = function(method) {
+    var self = this;
+    if ((method === 'poll') && self.config.poll.start) {
+      self.config.poll.start = false;
+    }
+    if ((method === 'socket.io') && self.config.socketio.start) {
+      //TODO disconnect from the socket
+    }
+  };
+
+  /**
    * Send the _instance event.
    * @author DanielWHoward
    **/
@@ -424,20 +442,6 @@ const xibbit = (function() {
         self.xioPoll();
       }
     });
-  };
-
-  /**
-   * Stop event polling if using polling and polling is running.
-   * @author DanielWHoward
-   **/
-  xibbit.prototype.stop = function(method) {
-    var self = this;
-    if ((method === 'poll') && self.config.poll.start) {
-      self.config.poll.start = false;
-    }
-    if ((method === 'socket.io') && self.config.socketio.start) {
-      //TODO disconnect from the socket
-    }
   };
 
   /**

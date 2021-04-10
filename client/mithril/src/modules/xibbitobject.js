@@ -35,6 +35,7 @@ export default new Xibbit({
         url: url_config.server_platform === 'php'? function() {
             return url_config.server_base.php+'/app.php';
         } : url_config.server_base[url_config.server_platform],
+        js_location: url_config.server_base[url_config.server_platform],
     },
     log: url_config.client_debug,
 });
