@@ -31,6 +31,25 @@
   <div data-ng-view></div>
 
   <div class="footer">AngularJS seed app: v<span data-app-version></span></div>
+  <div class="footer">
+    AngularJS xibbit detector: <span id="xibbit_detector">please wait ...</span>
+    <script>
+    setTimeout(function() {
+      var xibbit_detector = document.getElementById('xibbit_detector');
+      if (xibbit_detector) {
+        var msg = 'AngularJS is not working';
+        var working = 'is working';
+        if (xibbit_detector.textContent && (xibbit_detector.textContent.indexOf(working) === -1)) {
+          xibbit_detector.textContent = msg;
+          xibbit_detector.style.backgroundColor = 'red';
+        } else if (xibbit_detector.innerHTML && (xibbit_detector.innerHTML.indexOf(working) === -1)) {
+          xibbit_detector.innerHTML = msg;
+          xibbit_detector.style.backgroundColor = 'red';
+        }
+      }
+    }, 2000);
+    </script>
+  </div>
 
   <!-- In production use:
   <script src="//ajax.googleapis.com/ajax/libs/angularjs/x.x.x/angular.min.js"></script>
