@@ -41,7 +41,8 @@ xibdb is an optional database access library (supports **MySQL**) for xibbit tha
 
 The webapp is running successfully if you see:
 
-1. "AngularJS seed app: v0.1" at the bottom
+1. "AngularJS seed app: v0.1" at the bottom of the page
+1. "xibbit is working" in green text at the bottom of the page (only in newer versions)
 1. After a few seconds, you should see something like "admin jumps up and down" in blue text
 1. You can sign in, change the profile and sign out for "admin@xibbit.github.io" and "user1@xibbit.github.io" users using the "passw0rd" password
 1. You can create new users at the "Sign up" page, filling out the form and then sign in with that data

@@ -40,6 +40,41 @@ angular.module('myApp')
     var self = this;
     var eventDeferred = $q.defer();
     self.event = eventDeferred.promise;
+    self.xibbit_detector_func = function(state) {
+      var xibbit_detector = document.getElementById('xibbit_detector');
+      if (xibbit_detector) {
+        var msg = {
+          'angularjs_worked': 'AngularJS is working but please wait for xibbit backend...',
+          'xibbit_failed': 'AngularJS is working but xibbit backend is not working',
+          'xibbit_worked': 'xibbit is working'
+        }[state];
+        var changed = false;
+        if (xibbit_detector.textContent && (xibbit_detector.textContent.indexOf(msg.xibbit_worked) === -1)) {
+          xibbit_detector.textContent = msg;
+          changed = true;
+        } else if (xibbit_detector.innerHTML && (xibbit_detector.innerHTML.indexOf(msg.xibbit_worked) === -1)) {
+          xibbit_detector.innerHTML = msg;
+          changed = true;
+        }
+        if (changed) {
+          if (state === 'angularjs_worked') {
+            xibbit_detector.style.backgroundColor = '';
+            xibbit_detector.style.color = '';
+          } else if (state === 'xibbit_failed') {
+            xibbit_detector.style.backgroundColor = 'red';
+            xibbit_detector.style.color = 'black';
+          } else if (state === 'xibbit_worked') {
+            xibbit_detector.style.backgroundColor = '';
+            xibbit_detector.style.color = '#60bb60';
+            xibbit_detector.removeAttribute('id');
+          }
+        }
+      }
+    };
+    self.xibbit_detector_func('angularjs_worked');
+    setTimeout(function() {
+      self.xibbit_detector_func('xibbit_failed');
+    }, 2000);
     self.apply = function(event) {
       console.log('app inited');
     };
@@ -48,5 +83,8 @@ angular.module('myApp')
     };
     XibbitService.send(hello, function(event) {
       self.apply(event);
+      if (self.xibbit_detector_func) {
+        self.xibbit_detector_func('xibbit_worked');
+      }
     });
   }]);
