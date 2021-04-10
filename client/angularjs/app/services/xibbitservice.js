@@ -114,7 +114,8 @@ angular.module('myApp')
         min: (client_transports.indexOf('xio') !== -1)? 3000: null,
         url: server_platform === 'php'? function() {
           return server_base.php+'/app.php';
-        } : server_base[server_platform]
+        } : server_base[server_platform],
+        js_location: server_base[server_platform]
       },
       log: client_debug
     });

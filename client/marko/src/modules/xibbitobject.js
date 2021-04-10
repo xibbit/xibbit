@@ -34,7 +34,8 @@ global.xibbitObject = new Xibbit({
     min: (url_config.client_transports.indexOf('xio') !== -1)? 3000: null,
     url: url_config.server_platform === 'php'? function() {
       return url_config.server_base.php+'/app.php';
-    } : url_config.server_base[url_config.server_platform]
+    } : url_config.server_base[url_config.server_platform],
+    js_location: url_config.server_base[url_config.server_platform]
   },
   log: url_config.client_debug
 });
