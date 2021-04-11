@@ -65,10 +65,10 @@ class AjaxStylePromise {
     if (method == 'GET') {
       url += '?' + data;
       _logger.fine('AjaxStylePromise ${method} ${url}');
-      future = http.get(url, headers: headers);
+      future = http.get(Uri.parse(url), headers: headers);
     } else if (method == 'POST') {
       _logger.fine('AjaxStylePromise ${method} ${url} ${data}');
-      future = http.post(url, headers: headers, body: data);
+      future = http.post(Uri.parse(url), headers: headers, body: data);
     }
     future.then((response) {
       int status = response.statusCode;

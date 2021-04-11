@@ -33,6 +33,7 @@ import SignUp from './containers/SignUp';
 import { signIn } from './actions/signin'
 import { model } from './reducers/app'
 import xibbitObject from './modules/xibbitobject';
+import './modules/hello';
 import logo from './logo.svg';
 import './App.css';
 

@@ -1,0 +1,6 @@
+{
+    "dependencies": [
+        "require-run: ../../modules/xibbitobject.js",
+        "require-run: ../../modules/hello.js"
+    ]
+}

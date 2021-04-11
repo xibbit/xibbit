@@ -34,6 +34,7 @@ import { model } from './reducers/app'
 import Logo from './logo';
 import './App.css';
 import xibbitObject from './modules/xibbitobject';
+import './modules/hello';
 
 class App extends Component {
   signOut = () => {

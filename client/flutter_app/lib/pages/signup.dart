@@ -134,7 +134,7 @@ class _SignupPage extends State<SignupPage> {
                       'email': email,
                       'pwd': pwd
                     }, (event) {
-                      if (event['from'] != null) {
+                      if (event.containsKey('i')) {
                         Navigator.of(context).pop();
                       } else {
                         setState(() {

@@ -22,17 +22,17 @@
 //
 // @copyright xibbit 1.50 Copyright (c) © 2021 Daniel W. Howard and Sanjana A. Joshi Partnership
 // @license http://opensource.org/licenses/MIT
-export default function() {
-    var msg = 'this is a msg';
-    return {        
-        view() {
-            return m('div', {
-                class: 'intro-view',
-            }, [
-                m('div', {
-                    class: 'row'
-                }, msg),
-            ]);
-        },
+const xibbitObject = require('./xibbitobject');
+
+class Hello {
+  constructor() {
+    var hello = {
+      type: 'init'
     };
+    global.xibbitObject.send(hello, function(event) {
+      console.log('app inited');
+    });
+  }
 }
+
+global.hello = new Hello();

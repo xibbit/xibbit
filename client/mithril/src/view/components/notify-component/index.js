@@ -45,8 +45,9 @@ export default function() {
                 'notify_jumps': `${user} jumps up and down`,
             })[action];
             return m('main', [
-                m('p', {
-                    class: 'title',
+                m('div', {
+                    class: 'row',
+                    style: 'color: skyblue',
                 }, msg),
             ]);
         },
