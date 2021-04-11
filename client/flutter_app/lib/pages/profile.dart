@@ -247,7 +247,7 @@ class _ProfilePage extends State<ProfilePage> {
                         'type': 'user_profile_mail_update',
                         'user': user,
                       }, (event) {
-                        if (event['from'] != null) {
+                        if (event.containsKey('i')) {
                           setState(() {
                             _msg = 'Saved.';
                           });

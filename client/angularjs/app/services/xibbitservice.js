@@ -22,7 +22,7 @@
 //
 // @copyright xibbit 1.50 Copyright (c) © 2021 Daniel W. Howard and Sanjana A. Joshi Partnership
 // @license http://opensource.org/licenses/MIT
-/* global _, xibbit, client_debug, client_poll, client_socketio, client_transports, server_platform, server_base */
+/* global _, xibbit, client_debug, client_transports, server_platform, server_base */
 'use strict';
 
 /**

@@ -25,6 +25,7 @@
 import Intro from './intro';
 import Profile from './profile';
 import xibbitObject from '../../modules/xibbitobject';
+import '../../modules/hello';
 
 export default function() {
     return {        

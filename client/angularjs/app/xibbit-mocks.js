@@ -25,3 +25,7 @@
 function xibbit() {};
 
 xibbit.prototype.send = function() {};
+
+xibbit.prototype.on = function() {};
+
+xibbit.prototype.off = function() {};

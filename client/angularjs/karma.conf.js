@@ -9,7 +9,7 @@ module.exports = function(config) {
       'lib/angular-route/angular-route.js',
       'lib/angular-cookies/angular-cookies.js',
       '../node_modules/angular-mocks/angular-mocks.js',
-      './url_config2.js',
+      './url_config.js',
       './xibbit-mocks.js',
       './app.js',
       'core/**/*.js',
