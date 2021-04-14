@@ -102,14 +102,14 @@ $q = 'CREATE TABLE `'.$sql_prefix.'sockets` ( '
   .'`touched` datetime NOT NULL,' // 2014-12-23 06:00:00 (PST)
   .'`props` text,'
   .'UNIQUE KEY `id` (`id`));';
-if (!mysqli_query($link, $q)) {
+if (mysqli_query($link, $q)) {
+  print '<div>'.$q.'</div>'."\n";
+} else {
   if (mysqli_errno($link) == 1050) {
     print '<div class="warn">Table '.$sql_prefix.'sockets already exists!</div>'."\n";
   } else {
     print '<div class="error">Table '.$sql_prefix.'sockets had a MySQL error ('.mysqli_errno($link).'): '.mysqli_error($link).'</div>'."\n";
   }
-} else {
-  print '<div>'.$q.'</div>'."\n";
 }
 
 // create the sockets_events table
@@ -119,14 +119,14 @@ $q = 'CREATE TABLE `'.$sql_prefix.'sockets_events` ( '
   .'`event` mediumtext,'
   .'`touched` datetime NOT NULL,' // 2014-12-23 06:00:00 (PST)
   .'UNIQUE KEY `id` (`id`));';
-if (!mysqli_query($link, $q)) {
+if (mysqli_query($link, $q)) {
+  print '<div>'.$q.'</div>'."\n";
+} else {
   if (mysqli_errno($link) == 1050) {
     print '<div class="warn">Table '.$sql_prefix.'sockets_events already exists!</div>'."\n";
   } else {
     print '<div class="error">Table '.$sql_prefix.'sockets_events had a MySQL error ('.mysqli_errno($link).'): '.mysqli_error($link).'</div>'."\n";
   }
-} else {
-  print '<div>'.$q.'</div>'."\n";
 }
 
 // create the sockets_sessions table
@@ -138,14 +138,14 @@ $q = 'CREATE TABLE `'.$sql_prefix.'sockets_sessions` ( '
   .'`vars` text,'
   .'UNIQUE KEY `id` (`id`),'
   .'UNIQUE KEY `socksessid` (`socksessid`));';
-if (!mysqli_query($link, $q)) {
+if (mysqli_query($link, $q)) {
+  print '<div>'.$q.'</div>'."\n";
+} else {
   if (mysqli_errno($link) == 1050) {
     print '<div class="warn">Table '.$sql_prefix.'sockets_sessions already exists!</div>'."\n";
   } else {
     print '<div class="error">Table '.$sql_prefix.'sockets_sessions had a MySQL error ('.mysqli_errno($link).'): '.mysqli_error($link).'</div>'."\n";
   }
-} else {
-  print '<div>'.$q.'</div>'."\n";
 }
 // add data to the sockets_sessions table
 $q = 'SELECT id FROM '.$sql_prefix.'sockets_sessions';
@@ -174,14 +174,14 @@ $q = 'CREATE TABLE `'.$sql_prefix.'locks` ( '
   .'`created` datetime NOT NULL,' // 2014-12-23 06:00:00 (PST)
   .'`json` text,'
   .'UNIQUE KEY `name` (`name`));';
-if (!mysqli_query($link, $q)) {
+if (mysqli_query($link, $q)) {
+  print '<div>'.$q.'</div>'."\n";
+} else {
   if (mysqli_errno($link) == 1050) {
     print '<div class="warn">Table '.$sql_prefix.'locks already exists!</div>'."\n";
   } else {
     print '<div class="error">Table '.$sql_prefix.'locks had a MySQL error ('.mysqli_errno($link).'): '.mysqli_error($link).'</div>'."\n";
   }
-} else {
-  print '<div>'.$q.'</div>'."\n";
 }
 
 // create the at table
@@ -192,14 +192,14 @@ $q = 'CREATE TABLE `'.$sql_prefix.'at` ( '
   .'`dow` varchar(3),'
   .'`elapsed` text,'
   .'UNIQUE KEY `id` (`id`));';
-if (!mysqli_query($link, $q)) {
+if (mysqli_query($link, $q)) {
+  print '<div>'.$q.'</div>'."\n";
+} else {
   if (mysqli_errno($link) == 1050) {
     print '<div class="warn">Table '.$sql_prefix.'at already exists!</div>'."\n";
   } else {
     print '<div class="error">Table '.$sql_prefix.'at had a MySQL error ('.mysqli_errno($link).'): '.mysqli_error($link).'</div>'."\n";
   }
-} else {
-  print '<div>'.$q.'</div>'."\n";
 }
 
 // add data to the at table
@@ -219,16 +219,6 @@ if (mysqli_num_rows($result) == 0) {
       print '<div>'.$q.'</div>'."\n";
     }
   }
-/*
-  $q = 'ALTER TABLE '.$sql_prefix.'at  MODIFY COLUMN `id` bigint(20) unsigned AUTO_INCREMENT, AUTO_INCREMENT = 2;';
-  $result = mysqli_query($link, $q);
-  if (!$result) {
-    print '<div class="error">'.$sql_host.' had a MySQL error ('.mysqli_errno($link).'): '.mysqli_error($link).'</div>'."\n";
-    print '<div class="error">'.$q.'</div>'."\n";
-  } else {
-    print '<div>'.$q.'</div>'."\n";
-  }
-*/
 } else {
   print '<div class="warn">Table '.$sql_prefix.'at already has data!</div>'."\n";
 }
@@ -245,14 +235,14 @@ $q = 'CREATE TABLE `'.$sql_prefix.'users` ( '
   .'`touched` datetime NOT NULL,' // 2014-12-23 06:00:00 (PST)
   .'`json` text,'
   .'UNIQUE KEY `id` (`id`));';
-if (!mysqli_query($link, $q)) {
+if (mysqli_query($link, $q)) {
+  print '<div>'.$q.'</div>'."\n";
+} else {
   if (mysqli_errno($link) == 1050) {
     print '<div class="warn">Table '.$sql_prefix.'users already exists!</div>'."\n";
   } else {
     print '<div class="error">Table '.$sql_prefix.'users had a MySQL error ('.mysqli_errno($link).'): '.mysqli_error($link).'</div>'."\n";
   }
-} else {
-  print '<div>'.$q.'</div>'."\n";
 }
 // add data to the users table
 $q = 'SELECT id FROM '.$sql_prefix.'users';
@@ -298,14 +288,14 @@ $q = 'CREATE TABLE `'.$sql_prefix.'instances` ( '
   .'`uid` bigint(20) unsigned NOT NULL,'
   .'`json` text,'
   .'UNIQUE KEY `id` (`id`));';
-if (!mysqli_query($link, $q)) {
+if (mysqli_query($link, $q)) {
+  print '<div>'.$q.'</div>'."\n";
+} else {
   if (mysqli_errno($link) == 1050) {
     print '<div class="warn">Table '.$sql_prefix.'instances already exists!</div>'."\n";
   } else {
     print '<div class="error">Table '.$sql_prefix.'instances had a MySQL error ('.mysqli_errno($link).'): '.mysqli_error($link).'</div>'."\n";
   }
-} else {
-  print '<div>'.$q.'</div>'."\n";
 }
 
 // close the database
