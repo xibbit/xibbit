@@ -150,9 +150,11 @@ func (self *XibbitHub) GetSessionIndex(sock socketio.Conn) int {
  * @author DanielWHoward
  **/
 func (self *XibbitHub) GetSessionByInstance(instance string) map[string]interface{} {
-	for _, session := range self.Sessions {
-		if instance == session["instance"] {
-			return self.CloneSession(session)
+	if instance != "" {
+		for _, session := range self.Sessions {
+			if instance == session["instance"] {
+				return self.CloneSession(session)
+			}
 		}
 	}
 	return nil
@@ -382,6 +384,7 @@ func (self *XibbitHub) ReorderJson(s string, first []string, last []string) stri
  * @author DanielWHoward
  **/
 func (self *XibbitHub) Start(method string) {
+	// socket connected
 	self.socketio.OnConnect("/", func(sock socketio.Conn) error {
 		session := self.GetSession(sock)
 		if session == nil {
@@ -441,7 +444,7 @@ func (self *XibbitHub) Start(method string) {
 					"user":    session,
 				}
 				// check event type exists
-				if event["type"] == nil {
+				if _, ok := event["type"]; !ok {
 					event["e"] = "malformed--type"
 					delete(event, "_session")
 					delete(event, "_conn")
@@ -449,10 +452,19 @@ func (self *XibbitHub) Start(method string) {
 					sock.Emit("client", events[0])
 					handled = true
 				}
-				// check event type is valid
-				if !handled && (event["type"] != "_instance") {
-					typeValueMatched, _ := regexp.MatchString(`^[a-z][a-z_]*$`, event["type"].(string))
-					if !typeValueMatched {
+				// check event type is string and has valid value
+				if !handled {
+					typeStr, _ := event["type"].(string)
+					typeValidated, _ := regexp.MatchString(`^[a-z][a-z_]*$`, typeStr)
+					if !typeValidated {
+						typesAllowed := []string{"_instance"}
+						for _, v := range typesAllowed {
+							if typeStr == v {
+								typeValidated = true
+							}
+						}
+					}
+					if !typeValidated {
 						event["e"] = "malformed--type:" + event["type"].(string)
 						delete(event, "_session")
 						delete(event, "_conn")
@@ -469,36 +481,33 @@ func (self *XibbitHub) Start(method string) {
 					if value, ok := event["instance"].(string); ok {
 						instance = value
 					}
-					if instance != "" {
-						sess := self.GetSessionByInstance(instance)
-						if sess == nil {
-							instance = ""
+					// recreate session
+					sess := self.GetSessionByInstance(instance)
+					if sess == nil {
+						instanceMatched, _ := regexp.MatchString(`^[a-zA-Z0-9]{25}$`, instance)
+						if instanceMatched {
+							created = "recreated"
 						} else {
-							self.SetSession(sock, sess)
-							event["i"] = "instance " + created
+							var length = 25
+							var a = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789"
+							instance = ""
+							for i := 0; i < length; i++ {
+								instance += string(a[self.RandSecure(0, len(a))])
+							}
+							created = "created"
 						}
-					}
-					ok, _ := regexp.MatchString(`^[a-zA-Z0-9]{25}$`, instance)
-					if !ok {
-						instance = ""
-					}
-					if instance == "" {
-						var length = 25
-						var a = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789"
-						for i := 0; i < length; i++ {
-							instance += string(a[self.RandSecure(0, len(a))])
-						}
+						// create a new instance for every tab even though they share session cookie
 						event["instance"] = instance
-						event["i"] = "instance created"
+						// update request with instance for convenience
 						session["instance"] = instance
 						self.SetSession(sock, session)
 					}
-					if instance != "" {
-						s := self.GetSession(sock)
-						event["_session"] = s["session_data"]
-						event["_session"].(map[string]interface{})["instance"] = instance
-						event["_conn"] = s["_conn"]
-					}
+					// get session (again)
+					session = self.GetSessionByInstance(instance)
+					event["_session"] = session["session_data"]
+					event["_session"].(map[string]interface{})["instance"] = instance
+					event["_conn"] = session["_conn"]
+					event["i"] = "instance " + created
 				}
 				// handle the event
 				if !handled {
@@ -575,10 +584,12 @@ func (self *XibbitHub) Start(method string) {
 					session["session_data"].(map[string]interface{})["instance"] = session["instance"]
 					events = self.Receive(events, session["session_data"].(map[string]interface{}), false)
 					for _, event := range events {
-						sockets := session["_conn"].(map[string]interface{})["sockets"].([]socketio.Conn)
-						for _, socket := range sockets {
-							clone := self.CloneEvent(event, keysToSkip)
-							socket.Emit("client", clone)
+						if _conn, ok := session["_conn"].(map[string]interface{}); ok {
+							sockets := _conn["sockets"].([]socketio.Conn)
+							for _, socket := range sockets {
+								clone := self.CloneEvent(event, keysToSkip)
+								socket.Emit("client", clone)
+							}
 						}
 					}
 				}

@@ -605,9 +605,8 @@ class XibbitHub {
    *
    * @author DanielWHoward
    **/
-  function getSession($sock) {
-    //TODO unimplemented getSession()
-    return array();
+  function &getSession(&$sock) {
+    return $this->session;
   }
 
   /**
@@ -620,7 +619,6 @@ class XibbitHub {
    * @author DanielWHoward
    **/
   function getSessionIndex($sock) {
-    //TODO unimplemented getSessionIndex()
     return -1;
   }
 
@@ -734,8 +732,16 @@ class XibbitHub {
       // the connection values
       $socket = &$this->getSocket('');
 
+      // socket connected
+      $socket->on('connect', function($event) use ($socket) {
+        $session = &$self->getSession($socket);
+        if ($session === null) {
+          $self->addSession($socket);
+        }
+      });
       // decode the event
       $socket->on('server', function($event) use ($self, &$socket) {
+        $session = &$self->getSession($socket);
         // process the event
         $events = array();
         $handled = false;
@@ -778,11 +784,15 @@ class XibbitHub {
               $events[] = $event;
               $handled = true;
             }
-            // check event type is valid
-            if (!$handled && isset($event['type'])) {
-              if ((preg_match('/[a-z][a-z_]*/', $event['type']) !== 1)
-                  && ($event['type'] !== '_instance')
-                  && ($event['type'] !== '_poll')) {
+            // check event type is string and has valid value
+            if (!$handled) {
+              $typeStr = is_string($event['type'])? $event['type']: '';
+              $typeValidated = preg_match('/[a-z][a-z_]*/', $typeStr) === 1;
+              if (!$typeValidated) {
+                $typesAllowed = array('_instance', '_poll');
+                $typeValidated = in_array($typeStr, $typesAllowed);
+              }
+              if (!$typeValidated) {
                 $event['e'] = 'malformed--type:'.$event['type'];
                 unset($event['_session']);
                 unset($event['_conn']);
@@ -794,10 +804,14 @@ class XibbitHub {
             if (!$handled && ($event['type'] === '_instance')) {
               $created = 'retrieved';
               // event instance value takes priority over $_REQUEST instance
-              $instance = isset($_REQUEST['instance'])? $_REQUEST['instance']: null;
+              $instance = isset($_REQUEST['instance'])? $_REQUEST['instance']: '';
               $instance = isset($event['instance'])? $event['instance']: $instance;
+              // recreate session
               if ($this->getSessionByInstance($instance) === null) {
-                if (($instance === null) || (preg_match('/^[a-zA-Z0-9]{25}$/', $instance) !== 1)) {
+                $instanceMatched = preg_match('/^[a-zA-Z0-9]{25}$/', $instance) === 1;
+                if ($instanceMatched) {
+                  $created = 'recreated';
+                } else {
                   $length = 25;
                   $a = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789';
                   $instance = '';
@@ -805,8 +819,6 @@ class XibbitHub {
                     $instance .= $a[$self->rand_secure(0, strlen($a))];
                   }
                   $created = 'created';
-                } else {
-                  $created = 'recreated';
                 }
                 // create a new instance for every tab even though they share session cookie
                 $event['instance'] = $instance;
@@ -820,7 +832,10 @@ class XibbitHub {
               // update request with instance for convenience
               $_REQUEST['instance'] = $instance;
               $self->session = $this->getSessionByInstance($instance);
+              $self->setSession($socket, $self->session);
               $event['_session'] = $self->session;
+//              $event['_session']['instance'] = $instance;
+//              $event['_conn'] = $self->session['_conn'];
               $event['i'] = 'instance '.$created;
               if ($this->useSocketIO) {
                 $pollSocket = &$self->getSocket($socket->sid.'_poll');
@@ -829,39 +844,41 @@ class XibbitHub {
             }
             // handle the event
             if (!$handled) {
-              $ret = $self->trigger($event);
+              $eventsReply = $self->trigger($event);
+              $eventReply = $eventsReply[0];
+              $self->setSession($socket, $self->session);
               // add the response events
-              for ($e=0; $e < count($ret); ++$e) {
+              for ($e=0; $e < count($eventsReply); ++$e) {
                 // remove the session property
-                if (isset($ret[$e]['_session'])) {
-                  unset($ret[$e]['_session']);
+                if (isset($eventsReply[$e]['_session'])) {
+                  unset($eventsReply[$e]['_session']);
                 }
                 // remove the connection property
-                if (isset($ret[$e]['_conn'])) {
-                  unset($ret[$e]['_conn']);
+                if (isset($eventsReply[$e]['_conn'])) {
+                  unset($eventsReply[$e]['_conn']);
                 }
                 // update the "from" property
                 if (isset($self->session['username'])) {
-                  $ret[$e]['from'] = $self->session['username'];
+                  $eventsReply[$e]['from'] = $self->session['username'];
                 }
                 // reorder the properties so they look pretty
-                $ret_reorder = array('type'=>$ret[$e]['type']);
-                if (isset($ret[$e]['from'])) {
-                  $ret_reorder['from'] = $ret[$e]['from'];
+                $ret_reorder = array('type'=>$eventsReply[$e]['type']);
+                if (isset($eventsReply[$e]['from'])) {
+                  $ret_reorder['from'] = $eventsReply[$e]['from'];
                 }
-                if (isset($ret[$e]['to'])) {
-                  $ret_reorder['to'] = $ret[$e]['to'];
+                if (isset($eventsReply[$e]['to'])) {
+                  $ret_reorder['to'] = $eventsReply[$e]['to'];
                 }
                 // _id is the sender's id so sender can invoke callbacks
-                if (isset($ret[$e]['_id'])) {
-                  $ret_reorder['_id'] = $ret[$e]['_id'];
+                if (isset($eventsReply[$e]['_id'])) {
+                  $ret_reorder['_id'] = $eventsReply[$e]['_id'];
                 }
                 // _instance event does not require an implementation; it's optional
-                if (($ret[$e]['type'] === '_instance') && isset($ret[$e]['e'])
-                    && ($ret[$e]['e'] === 'unimplemented')) {
-                  unset($ret[$e]['e']);
+                if (($eventsReply[$e]['type'] === '_instance') && isset($eventsReply[$e]['e'])
+                    && ($eventsReply[$e]['e'] === 'unimplemented')) {
+                  unset($eventsReply[$e]['e']);
                 }
-                $ret_reorder = array_merge($ret_reorder, $ret[$e]);
+                $ret_reorder = array_merge($ret_reorder, $eventsReply[$e]);
                 $events[] = array('client', $ret_reorder);
               }
               $handled = true;
@@ -875,9 +892,11 @@ class XibbitHub {
       });
       // socket disconnected
       $socket->on('disconnect', function($event) use ($socket) {
+        $session = &$self->getSession($socket);
+        $self->removeSession($socket);
+        $this->checkClock();
       });
 
-      // run the garbage collector
       $this->checkClock();
 
       $this->readAndWriteSocket($socket);
