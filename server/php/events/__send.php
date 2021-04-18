@@ -36,6 +36,9 @@ $self->api('__send', function($event, $vars) {
   $hub = $vars['hub'];
   $pf = $vars['pf'];
 
+  // assume that this event does not need special handling
+  $event['e'] = 'unimplemented';
+
   if (isset($event['event']) && isset($event['event']['to'])) {
     $sent = false;
     // get the sender
@@ -77,11 +80,9 @@ $self->api('__send', function($event, $vars) {
       }
       $hub->send($evt, $evt['to'], true);
     }
-    if (!$sent) {
-      $event['e'] = 'unimplemented';
+    if ($sent) {
+      unset($event['e']);
     }
-  } else {
-    $event['e'] = 'unimplemented';
   }
   return $event;
 });

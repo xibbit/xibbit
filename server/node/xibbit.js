@@ -128,7 +128,8 @@ module.exports = function() {
    * @author DanielWHoward
    **/
   XibbitHub.prototype.setSession = function(sock, session) {
-    //TODO unimplemented setSession()
+    var self = this;
+    self.sessions[session.instance] = session;
   };
 
   /**
@@ -215,11 +216,17 @@ module.exports = function() {
   XibbitHub.prototype.start = function(method) {
     var self = this;
     if (typeof self.socketio !== 'undefined') {
+      // socket connected
       self.socketio.on('connection', function(socket) {
+      var session = self.getSession(socket);
+      if (session === null) {
+        self.addSession(socket);
+      }
       // the connection values
-      var user = {
-        'username': null,
-        'session': {
+      session = {
+        instance: '',
+        username: null,
+        session_data: {
         },
         '_conn': {
           'socket': socket 
@@ -227,6 +234,7 @@ module.exports = function() {
       };
       // decode the event
       socket.on('server', function(event) {
+        var sess = self.getSession(socket);
         // process the event
         var events = [];
         var handled = false;
@@ -251,18 +259,18 @@ module.exports = function() {
           }
           if (!handled) {
             // override the from property
-            if (user.username !== null) {
-              event.from = user.username;
+            if (session.username !== null) {
+              event.from = session.username;
             } else {
               if (event.from) {
                 delete event.from;
               }
             }
             // add _session and _conn properties for convenience
-            event['_session'] = user.session;
+            event['_session'] = session.session_data;
             event['_conn'] = {
               socket: socket,
-              user: user
+              user: session
             };
             // check event type exists
             if (!event.type) {
@@ -273,9 +281,15 @@ module.exports = function() {
               socket.emit('client', events[0]);
               handled = true;
             }
-            // check event type is valid
-            if (!handled && event['type']) {
-              if (event.type.match(/[a-z][a-z_]*/) === null) {
+            // check event type is string and has valid value
+            if (!handled) {
+              var typeStr = (typeof event.type === 'string')? event.type: '';
+              var typeValidated = typeStr.match(/[a-z][a-z_]*/) !== null;
+              if (!typeValidated) {
+                var typesAllowed = ['_instance'];
+                typeValidated = (typesAllowed.indexOf(typeStr) !== -1);
+              }
+              if (!typeValidated) {
                 event.e = 'malformed--type:'+event['type'];
                 delete event._session;
                 delete event._conn;
@@ -288,9 +302,13 @@ module.exports = function() {
             if (!handled && (event.type === '_instance')) {
               var created = 'retrieved';
               // event instance value takes priority
-              var instance = event.instance? event.instance: instance;
+              var instance = (typeof event.instance === 'string')? event.instance: '';
+              // recreate session
               if (self.getSessionByInstance(instance) === null) {
-                if (!instance || instance.match(/^[a-zA-Z0-9]{25}$/) === null) {
+                var instanceMatched = instance.match(/^[a-zA-Z0-9]{25}$/) !== null;
+                if (instanceMatched) {
+                  created = 'recreated';
+                } else {
                   var length = 25;
                   var a = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789';
                   instance = '';
@@ -298,24 +316,27 @@ module.exports = function() {
                     instance += a[self.rand_secure(0, a.length)];
                   }
                   created = 'created';
-                } else {
-                  created = 'recreated';
                 }
                 // create a new instance for every tab even though they share session cookie
                 event.instance = instance;
                 // update request with instance for convenience
-                self.sessions[instance] = user;
+                session.instance = instance;
+                self.setSession(socket, session);
               }
               // update request with instance for convenience
-              user = self.sessions[instance];
-              user._conn.socket = socket;
-              event._session = user.session;
+              session = self.getSessionByInstance(instance);
+              self.setSession(socket, session);
+              session._conn.socket = socket;
+              event._session = session.session_data;
+//              event._session.instance = instance;
+//              event._conn = session._conn;
               event.i = 'instance '+created;
             }
             // handle the event
             if (!handled) {
               self.trigger(event, function(e, eventsReply) {
               var eventReply = eventsReply[0];
+//              self.setSession(socket, session);
               // remove the session property
               if (eventReply['_session']) {
                 delete eventReply['_session'];
@@ -325,8 +346,8 @@ module.exports = function() {
                 delete eventReply['_conn'];
               }
               // update the "from" property
-              if (user.username !== null) {
-                eventReply['from'] = user.username;
+              if (session.username !== null) {
+                eventReply['from'] = session.username;
               }
               // reorder the properties so they look pretty
               var ret_reorder = {'type': eventReply['type']};
@@ -349,8 +370,9 @@ module.exports = function() {
               events.push(ret_reorder);
               handled = true;
               // output any waiting events
-              self.receive(events, user.session, false, function(events) {
+              self.receive(events, session.session_data, false, function(events) {
                 for (e=0; e < events.length; ++e) {
+                  //events[e] = self.reorderJson(events[e]);
                   socket.emit('client', events[e]);
                 }
               });
@@ -361,18 +383,21 @@ module.exports = function() {
       });
       // socket disconnected
       socket.on('disconnect', function() {
-        delete user._conn.socket;
+        var sess = self.getSession(socket);
+        self.removeSession(socket);
+        self.checkClock();
+        delete session._conn.socket;
       });
       });
 
       // run the garbage collector
       setInterval(function() {
         self.checkClock();
-        for (var user in self.sessions) {
-          self.receive([], self.sessions[user].session, false, function(events) {
+        for (var session in self.sessions) {
+          self.receive([], self.sessions[session].session_data, false, function(events) {
             for (e=0; e < events.length; ++e) {
-              if (self.sessions[user]._conn.socket) {
-                self.sessions[user]._conn.socket.emit('client', events[e]);
+              if (self.sessions[session]._conn.socket) {
+                self.sessions[session]._conn.socket.emit('client', events[e]);
               }
             }
           });
@@ -844,9 +869,9 @@ module.exports = function() {
     if (!user.impersonate) {
         if (connect) {
           user.username = username;
-          user.session['username'] = username;
+          user.session_data['username'] = username;
         } else {
-          user.session['username'] = null;
+          user.session_data['username'] = null;
           user.username = null;
         }
     }
