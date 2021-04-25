@@ -116,6 +116,7 @@ class Xibbit {
   var seqEvents = [];
   var requestEvents = Map<int, Object>();
   var waitingEvents = [];
+  var recentEvents = Map<String, DateTime>();
   var connected = false;
   var socket;
   int eventId = 1;
@@ -196,6 +197,7 @@ class Xibbit {
     self.requestEvents = {};
     self.waitingEvents = [];
     self.seqEvents = [];
+    self.recentEvents = {};
     self.socket = null;
     // try to connect to Socket.IO
     if (self.config['socketio']['start']) {
@@ -251,6 +253,8 @@ class Xibbit {
   ///
   /// Even though sessions are not our mission, this
   /// simple session storage API is provided for users.
+  /// @author DanielWHoward
+  ///
   dynamic getSessionValue([String key]) async {
     var self = this;
     SharedPreferences prefs = await self.instance;
@@ -521,10 +525,27 @@ class Xibbit {
         this.send(seqEvent.event, seqEvent.callback);
       }
     } else if (event != null && event['type'] != null) {
-      // show the response on the console
-      this.log(jsonEncode(event),
-          this.logColors[event['__id'] != null ? 'notification' : 'response']);
-      this.trigger(event['type'], event);
+      // debounce
+      var debounceMs = 2 * 1000;
+      var now = DateTime.now();
+      var eventStr = jsonEncode(event);
+      var keys = new List<String>.from(this.recentEvents.keys);
+      keys.forEach((key) {
+        if ((this.recentEvents[key].millisecondsSinceEpoch + debounceMs) <
+            now.millisecondsSinceEpoch) {
+          this.recentEvents.remove(key);
+        }
+      });
+      // only trigger event if it hasn't been sent recently
+      if (!this.recentEvents.containsKey(eventStr)) {
+        // show the response on the console
+        this.log(
+            jsonEncode(event),
+            this.logColors[
+                event['__id'] != null ? 'notification' : 'response']);
+        this.trigger(event['type'], event);
+        this.recentEvents[eventStr] = now;
+      }
     } else {
       this.log('malformed event -- ' + jsonEncode(event),
           this.logColors['malformed']);

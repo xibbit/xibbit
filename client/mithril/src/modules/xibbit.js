@@ -100,6 +100,7 @@ const xibbit = (function() {
     self.requestEvents = {};
     self.waitingEvents = [];
     self.seqEvents = [];
+    self.recentEvents = {};
     self.socket = null;
     // try to connect to Socket.IO
     if (self.config.socketio.start) {
@@ -467,7 +468,21 @@ const xibbit = (function() {
           this.send(seqEvent.event, seqEvent.callback);
         }
       } else if (event.type) {
+        // debounce
+        var debounceMs = 2 * 1000;
+        var now = new Date();
+        var eventStr = JSON.stringify(event);
+        var keys = Object.keys(this.recentEvents);
+        for (var k=0; k < keys.length; ++k) {
+          if ((this.recentEvents[keys[k]].getTime() + debounceMs) < now.getTime()) {
+            delete this.recentEvents[keys[k]];
+          }
+        }
+        // only trigger event if it hasn't been sent recently
+        if (!this.recentEvents[eventStr]) {
         $(this).trigger(event.type, event);
+          this.recentEvents[eventStr] = now;
+        }
       }
     } else {
       this.log('malformed event -- '+JSON.stringify(event), this.logColors.malformed);
