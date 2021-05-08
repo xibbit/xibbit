@@ -39,7 +39,11 @@ $self->api('__send', function($event, $vars) {
   // assume that this event does not need special handling
   $event['e'] = 'unimplemented';
 
-  if (isset($event['event']) && isset($event['event']['to'])) {
+  if (isset($vars['useInstances']) && $vars['useInstances']) {
+    if (!isset($event['event']) || !isset($event['event']['to'])) {
+      print '__send did not get event.to';
+    }
+    $now = date('Y-m-d H:i:s');
     $sent = false;
     // get the sender
     $eventFrom = isset($event['event']['from'])? $event['event']['from']: 'x';
@@ -78,7 +82,14 @@ $self->api('__send', function($event, $vars) {
         $evt['from'] = $from['username'];
         $evt['fromid'] = $from['uid'];
       }
-      $hub->send($evt, $evt['to'], true);
+      $pf->insertRow(array(
+        'table'=>'sockets_events',
+        'values'=>array(
+          'id'=>0,
+          'sid'=>$instanceId,
+          'event'=>json_encode($evt),
+          'touched'=>$now
+      )));
     }
     if ($sent) {
       unset($event['e']);

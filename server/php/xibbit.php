@@ -493,7 +493,6 @@ class XibbitHub {
   var $config;
   var $onfn;
   var $apifn;
-  var $impersonate;
   var $session;
   var $prefix;
   var $socket;
@@ -512,7 +511,6 @@ class XibbitHub {
     $this->config = $config;
     $this->onfn = array();
     $this->apifn = array();
-    $this->impersonate = false;
     $this->session = array();
     $this->prefix = '';
     if (isset($this->config['mysql']) && isset($this->config['mysql']['SQL_PREFIX'])) {
@@ -630,7 +628,7 @@ class XibbitHub {
    * @author DanielWHoward
    **/
   function getSessionByInstance($instance) {
-    if (isTruthy($instance) && isset($_SESSION['instance_'.$instance])) {
+    if (is_string($instance) && ($instance !== '') && isset($_SESSION['instance_'.$instance])) {
       return $_SESSION['instance_'.$instance];
     }
     return null;
@@ -694,6 +692,21 @@ class XibbitHub {
   function reorderJson($s, $first, $last) {
     // create JSON maps
     $source = json_decode($s, true);
+    $target = &reorderArray($source, $first, $last);
+    return json_encode($target);
+  }
+
+  /**
+   * Return a JSON string with keys in a specific order.
+   *
+   * @param s string A JSON string with keys in random order.
+   * @param first array An array of key names to put in order at the start.
+   * @param last array An array of key names to put in order at the end.
+   *
+   * @author DanielWHoward
+   **/
+  function &reorderArray(&$source, $first, $last) {
+    // create JSON maps
     $target = array();
     // save the first key-value pairs
     foreach ($first as $key) {
@@ -713,7 +726,7 @@ class XibbitHub {
         $target[$key] = $source[$key];
       }
     }
-    return json_encode($target);
+    return $target;
   }
 
   /**
@@ -745,7 +758,7 @@ class XibbitHub {
         // process the event
         $events = array();
         $handled = false;
-        if ($event === null) {
+        if (!is_array($event)) {
           $event = array();
           $event['e'] = 'malformed--json';
           $events[] = $event;
@@ -861,24 +874,16 @@ class XibbitHub {
                 if (isset($self->session['username'])) {
                   $eventsReply[$e]['from'] = $self->session['username'];
                 }
-                // reorder the properties so they look pretty
-                $ret_reorder = array('type'=>$eventsReply[$e]['type']);
-                if (isset($eventsReply[$e]['from'])) {
-                  $ret_reorder['from'] = $eventsReply[$e]['from'];
-                }
-                if (isset($eventsReply[$e]['to'])) {
-                  $ret_reorder['to'] = $eventsReply[$e]['to'];
-                }
-                // _id is the sender's id so sender can invoke callbacks
-                if (isset($eventsReply[$e]['_id'])) {
-                  $ret_reorder['_id'] = $eventsReply[$e]['_id'];
-                }
                 // _instance event does not require an implementation; it's optional
                 if (($eventsReply[$e]['type'] === '_instance') && isset($eventsReply[$e]['e'])
                     && ($eventsReply[$e]['e'] === 'unimplemented')) {
                   unset($eventsReply[$e]['e']);
                 }
-                $ret_reorder = array_merge($ret_reorder, $eventsReply[$e]);
+                // reorder the properties so they look pretty
+                $ret_reorder = &$self->reorderArray($eventsReply[$e],
+                  array('type', 'from', 'to', '_id'),
+                  array('i', 'e')
+                );
                 $events[] = array('client', $ret_reorder);
               }
               $handled = true;
@@ -897,7 +902,9 @@ class XibbitHub {
         $this->checkClock();
       });
 
-      $this->checkClock();
+      if (isset($_REQUEST['XIO'])) {
+        $this->checkClock();
+      }
 
       $this->readAndWriteSocket($socket);
     }
@@ -938,6 +945,7 @@ class XibbitHub {
                 $this->session['instance'] = $instance;
               }
             }
+            $this->checkClock();
             // read events sent to this socket from itself
             foreach ($socket->eventBuffer as $emittedEvent) {
               $packetsOut[] = $this->createPacket(4, '2'.$emittedEvent);
@@ -947,7 +955,6 @@ class XibbitHub {
             foreach ($events as $event) {
               $packetsOut[] = $this->createPacket(4, '2'.json_encode($event));
             }
-            $this->checkClock();
             // wait for 1/4 second
             usleep(250000);
           }
@@ -1002,6 +1009,8 @@ class XibbitHub {
           ."'".$this->mysql_real_escape_string($props)."');";
         $qr = &$this->mysql_query($q);
         // send an open packet
+        // pingInterval (default: 25000) how many ms before sending a new ping packet
+        // pingTimeout  (default: 5000)  how many ms without a pong packet to consider the connection closed
         $contents = '{"sid":"'.$localSid.'","upgrades":[],"pingInterval":20000,"pingTimeout":60000}';
         $packetsOut[] = $this->createPacket(0, $contents);
         // send a message packet with open packet type id
@@ -1160,13 +1169,15 @@ class XibbitHub {
         }
         // see if some event handler files have similar names
         $misnamed = null;
-        for ($f=0; $f < count($handlerFiles); ++$f) {
-          $file = $handlerFiles[$f];
-          $pos = strrpos($file, '/');
-          if (is_int($pos) && ($pos >= 0)
-              && (substr($file, $pos+1, strlen($eventType.'.')) === $eventType.'.')) {
-            $misnamed = $file;
-            break;
+        if (!in_array($eventType, array('__receive', '__send'))) {
+          for ($f=0; $f < count($handlerFiles); ++$f) {
+            $file = $handlerFiles[$f];
+            $pos = strrpos($file, '/');
+            if (is_int($pos) && ($pos >= 0)
+                && (substr($file, $pos+1, strlen($eventType.'.')) === $eventType.'.')) {
+              $misnamed = $file;
+              break;
+            }
           }
         }
         if ($misnamed === null) {
@@ -1241,7 +1252,7 @@ class XibbitHub {
       }
       //TODO replace __receive _session ignore hack
       // For Socket.IO long polling, __receive() is called
-      // during the log poll and main execution but the
+      // during the long poll and main execution but the
       // session data is not synchronized so, if the
       if ($event['type'] !== '__receive') {
         // save pseudo $_SESSION
@@ -1360,11 +1371,12 @@ class XibbitHub {
         'type'=>'__receive',
         '_session'=>$session
       ));
-      if ((count($ret) !== 1) || ($ret[0]['type'] !== '__receive') || !isset($ret[0]['e']) || ($ret[0]['e'] !== 'unimplemented')) {
-        if (isset($ret[0]['eventQueue'])) {
-          $events = array_merge($events, $ret[0]['eventQueue']);
+      for ($r=0; $r < count($ret); ++$r) {
+        if (($ret[$r]['type'] === '__receive') && isset($ret[$r]['eventQueue']) && (!isset($ret[$r]['e']) || ($ret[$r]['e'] !== 'unimplemented'))) {
+          for ($q=0; $q < count($ret[$r]['eventQueue']); ++$q) {
+            $events[] = array('client', $ret[$r]['eventQueue'][$q]);
+          }
         }
-        return $events;
       }
       return $this->receive($events, $session, true);
     }
@@ -1388,19 +1400,17 @@ class XibbitHub {
       .'WHERE `username` = \''.$username.'\';';
     $qr = &$this->mysql_query($q);
     // update username variables
-    if (!$this->impersonate) {
-      $instance = isset($_REQUEST['instance'])? $_REQUEST['instance']: null;
-      if ($this->getSessionByInstance($instance) !== null) {
-        if ($connect) {
-          $event['_session']['username'] = $username;
-          $this->session['username'] = $username;
-        } else {
-          if (isset($event['_session']['username'])) {
-            unset($event['_session']['username']);
-          }
-          if (isset($this->session['username'])) {
-            unset($this->session['username']);
-          }
+    $instance = isset($_REQUEST['instance'])? $_REQUEST['instance']: null;
+    if ($this->getSessionByInstance($instance) !== null) {
+      if ($connect) {
+        $event['_session']['username'] = $username;
+        $this->session['username'] = $username;
+      } else {
+        if (isset($event['_session']['username'])) {
+          unset($event['_session']['username']);
+        }
+        if (isset($this->session['username'])) {
+          unset($this->session['username']);
         }
       }
     }
@@ -1446,12 +1456,6 @@ class XibbitHub {
       if (isset($globalVars['_lastTick'])) {
         unset($globalVars['_lastTick']);
       }
-      // impersonate other users to keep code clean
-      $username = null;
-      if (isset($this->session['username'])) {
-        $username = $this->session['username'];
-      }
-      $this->impersonate = true;
       // provide special __clock event for housekeeping
       $event = $this->trigger(array(
         'type'=>'__clock',
@@ -1459,30 +1463,11 @@ class XibbitHub {
         'lastTick'=>$lastTick,
         'globalVars'=>$globalVars
       ));
-      // read users from database that should be disconnected
-      $usernames = $this->getDisconnectedUsers($disconnect_seconds);
-      for ($u=0; $u < count($usernames); ++$u) {
-        $this->session['username'] = $usernames[$u];
-        $this->trigger(array(
-          'type'=>'logout',
-          'from'=>$this->session['username'],
-          'to'=>$this->session['username']
-        ));
-      }
-      // turn off impersonation
-      if ($username === null) {
-        if (isset($this->session['username'])) {
-          unset($this->session['username']);
-        }
-      } else {
-        $this->session['username'] = $username;
-      }
-      $this->impersonate = false;
-
+      // remove stale sessions
+      $this->updateExpired('users', $disconnect_seconds);
       $this->deleteExpired('sockets', $disconnect_seconds);
       $this->deleteExpired('sockets_events', $disconnect_seconds);
       $this->deleteExpired('sockets_sessions', $disconnect_seconds, ' AND `socksessid` NOT IN (\'global\', \'lock\')');
-
       // write and unlock global variables
       $globalVars = $event[0]['globalVars'];
       $globalVars['_lastTick'] = date('Y-m-d H:i:s', $tick);
@@ -1540,23 +1525,19 @@ class XibbitHub {
   }
 
   /**
-   * Return the names of logged in users who have not pinged the server in
-   * a number of seconds.
+   * Update rows that have not been touched recently.
    *
    * @param $secs int A number of seconds.
-   * @return array An array of disconnected users.
    *
    * @author DanielWHoward
    **/
-  function getDisconnectedUsers($secs) {
-    $temp_time = date('Y-m-d H:i:s', time() - $secs);
-    $users = array();
-    $q = 'SELECT `username` FROM `'.$this->prefix.'users`'.' WHERE `touched` < \'' . $temp_time . '\' && `connected` <> \'1970-01-01 00:00:00\';';
+  function updateExpired($table, $secs, $clause='') {
+    $nullDateTime = '1970-01-01 00:00:00';
+    $q = 'UPDATE `'.$this->prefix.$table.'` SET '
+      .'connected=\''.$nullDateTime.'\', '
+      .'touched=\''.$nullDateTime.'\' '
+      .'WHERE (`touched` < \''.date('Y-m-d H:i:s', time() - $secs).'\''.$clause.');';
     $qr = &$this->mysql_query($q);
-    while ($row = &$this->mysql_fetch_assoc($qr)) {
-      $users[] = $row['username'];
-    }
-    return $users;
   }
 
   /**

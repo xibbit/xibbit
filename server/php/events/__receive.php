@@ -38,27 +38,29 @@ $self->api('__receive', function($event, $vars) {
   $event['e'] = 'unimplemented';
 
   if (isset($vars['useInstances']) && $vars['useInstances']) {
-    if (isset($event['_session']) && isset($event['_session']['instance'])) {
-      $instance = $event['_session']['instance'];
-      $event['eventQueue'] = array();
-      // get the events from the events table
-      $events = $pf->readRows(array(
+    if (!isset($event['_session']) || !isset($event['_session']['instance'])) {
+      print '__receive did not get _session.instance';
+    }
+    $instance = $event['_session']['instance'];
+    $event['eventQueue'] = array();
+    // get the events from the events table
+    $events = $pf->readRows(array(
+      'table'=>'sockets_events',
+      'where'=>array(
+        'sid'=>$instance
+    )));
+    // this is intentionally not ACID; the client will handle dups
+    for ($f=0; $f < count($events); ++$f) {
+      $evt = $events[$f]['event'];
+      // delete the event from the events table
+      $pf->deleteRow(array(
         'table'=>'sockets_events',
         'where'=>array(
-          'sid'=>$instance
+          'id'=>$events[$f]['id']
       )));
-      for ($f=0; $f < count($events); ++$f) {
-        $evt = $events[$f]['event'];
-        // delete the event from the events table
-        $pf->deleteRow(array(
-          'table'=>'sockets_events',
-          'where'=>array(
-            'id'=>$events[$f]['id']
-        )));
-        $event['eventQueue'][] = $evt;
-      }
-      unset($event['e']);
+      $event['eventQueue'][] = $evt;
     }
+    unset($event['e']);
   }
   return $event;
 });
