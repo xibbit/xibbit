@@ -802,7 +802,7 @@ class XibbitHub {
               $typeStr = is_string($event['type'])? $event['type']: '';
               $typeValidated = preg_match('/[a-z][a-z_]*/', $typeStr) === 1;
               if (!$typeValidated) {
-                $typesAllowed = array('_instance', '_poll');
+                $typesAllowed = array('_instance');
                 $typeValidated = in_array($typeStr, $typesAllowed);
               }
               if (!$typeValidated) {
@@ -851,8 +851,8 @@ class XibbitHub {
 //              $event['_conn'] = $self->session['_conn'];
               $event['i'] = 'instance '.$created;
               if ($this->useSocketIO) {
-                $pollSocket = &$self->getSocket($socket->sid.'_poll');
-                $pollSocket->emit('thread', array('instance'=>$instance));
+                $syncEvent = array('instance'=>$instance);
+                $self->send($syncEvent, $socket->sid.'_sync', true);
               }
             }
             // handle the event
@@ -902,10 +902,6 @@ class XibbitHub {
         $this->checkClock();
       });
 
-      if (isset($_REQUEST['XIO'])) {
-        $this->checkClock();
-      }
-
       $this->readAndWriteSocket($socket);
     }
   }
@@ -933,7 +929,7 @@ class XibbitHub {
           for ($w=0; ($w < 80) && (count($packetsOut) === 0); ++$w) {
             if (!isset($_REQUEST['instance'])) {
               $instance = null;
-              $events = $this->receive($localSid.'_poll', $this->session);
+              $events = $this->receive($events, $this->session, true, $localSid.'_sync');
               if (count($events) > 0) {
                 if (isset($events[0][1]['instance'])) {
                   $instance = $events[0][1]['instance'];
@@ -945,15 +941,17 @@ class XibbitHub {
                 $this->session['instance'] = $instance;
               }
             }
-            $this->checkClock();
-            // read events sent to this socket from itself
-            foreach ($socket->eventBuffer as $emittedEvent) {
-              $packetsOut[] = $this->createPacket(4, '2'.$emittedEvent);
-            }
-            // read events sent to this socket from other sockets
-            $events = $this->receive($events, $this->session);
-            foreach ($events as $event) {
-              $packetsOut[] = $this->createPacket(4, '2'.json_encode($event));
+            if (isset($_REQUEST['instance'])) {
+              $this->checkClock();
+              // read events sent to this socket from itself
+              foreach ($socket->eventBuffer as $emittedEvent) {
+                $packetsOut[] = $this->createPacket(4, '2'.$emittedEvent);
+              }
+              // read events sent to this socket from other sockets
+              $events = $this->receive($events, $this->session);
+              foreach ($events as $event) {
+                $packetsOut[] = $this->createPacket(4, '2'.json_encode($event));
+              }
             }
             // wait for 1/4 second
             usleep(250000);
@@ -1025,6 +1023,7 @@ class XibbitHub {
       if (get_magic_quotes_gpc()) {
         $event = stripslashes($event);
       }
+      $this->checkClock();
       // parse the event
       $event = json_decode($event, true);
       $socket->handle('server', $event);
@@ -1327,15 +1326,14 @@ class XibbitHub {
    *
    * @author DanielWHoward
    **/
-  function receive($events, $session, $collectOnly=false) {
+  function receive($events, $session, $collectOnly=false, $asRecipient='') {
     if ($collectOnly) {
       $newEvents = array();
       $localSid = isset($_REQUEST['sid'])? $_REQUEST['sid']: '';
       $username = isset($session['username'])? $session['username']: '';
       $sid = $this->useSocketIO? $localSid: $username;
-      if (is_string($events)) {
-        $sid = $events;
-        $events = array();
+      if ($asRecipient !== '') {
+        $sid = $asRecipient;
       }
       // read events sent to this socket from other sockets
       $ids = array();
@@ -1532,11 +1530,12 @@ class XibbitHub {
    * @author DanielWHoward
    **/
   function updateExpired($table, $secs, $clause='') {
+    $expiration = date('Y-m-d H:i:s', time() - $secs);
     $nullDateTime = '1970-01-01 00:00:00';
     $q = 'UPDATE `'.$this->prefix.$table.'` SET '
       .'connected=\''.$nullDateTime.'\', '
       .'touched=\''.$nullDateTime.'\' '
-      .'WHERE (`touched` < \''.date('Y-m-d H:i:s', time() - $secs).'\''.$clause.');';
+      .'WHERE (`touched` < \''.$expiration.'\''.$clause.');';
     $qr = &$this->mysql_query($q);
   }
 
@@ -1548,8 +1547,9 @@ class XibbitHub {
    * @author DanielWHoward
    **/
   function deleteExpired($table, $secs, $clause='') {
+    $expiration = date('Y-m-d H:i:s', time() - $secs);
     $q = 'DELETE FROM `'.$this->prefix.$table.'` '
-      .'WHERE (`touched` < \''.date('Y-m-d H:i:s', time() - $secs).'\''.$clause.');';
+      .'WHERE (`touched` < \''.$expiration.'\''.$clause.');';
     $qr = &$this->mysql_query($q);
   }
 
