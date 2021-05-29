@@ -270,7 +270,11 @@ const xibbit = (function() {
     } else {
       event._id = self.eventId++;
       if (self.config.log || event._log) {
-        self.log(JSON.stringify(event), self.logColors.request);
+        var msg = this.reorderJson(JSON.stringify(event),
+          ['type', 'to', 'from', '_id'],
+          ['i', 'e']
+        );
+        self.log(msg, self.logColors.request);
       }
       if (callback) {
         var evt = $.extend({}, event);
@@ -480,7 +484,7 @@ const xibbit = (function() {
         }
         // only trigger event if it hasn't been sent recently
         if (!this.recentEvents[eventStr]) {
-        $(this).trigger(event.type, event);
+          $(this).trigger(event.type, event);
           this.recentEvents[eventStr] = now;
         }
       }
@@ -635,6 +639,45 @@ const xibbit = (function() {
   };
 
   /**
+   * Reorder keys in a JSON string.
+   * @author DanielWHoward
+   */
+  xibbit.prototype.reorderJson = function(s, first, last) {
+    var i = 0;
+    var targets = [];
+    var sMap = JSON.parse(s);
+    // separate into an array of objects/maps
+    for (i=0; i < (first.length + last.length + 1); ++i) {
+      var k = '';
+      targets.push({});
+      if (i < first.length) {
+        k = first[i];
+      } else if (i > first.length) {
+        k = last[i - first.length - 1];
+      }
+      if ((k !== '') && (typeof sMap[k] !== 'undefined')) {
+        targets[i][k] = sMap[k];
+        delete sMap[k];
+      }
+    }
+    targets[first.length] = sMap;
+    // build JSON string from array of objects/maps
+    s = '';
+    for (i=0; i < targets.length; ++i) {
+      var target = targets[i];
+      if (Object.keys(target).length > 0) {
+        var sTarget = JSON.stringify(target);
+        if (s === '') {
+          s = sTarget;
+        } else {
+          s = s.substring(0, s.length-1) + "," + sTarget.substring(1);
+        }
+      }
+    }
+    return s;
+  };
+
+  /**
    * Logging colors.
    * @author DanielWHoward
    */
@@ -674,7 +717,6 @@ const xibbit = (function() {
           }
           // log the event without the stack trace
           msg = JSON.stringify(event);
-          this.log(msg, color);
           // restore the stack trace
           if (stacktrace) {
             event.e_stacktrace = stacktrace;
@@ -683,8 +725,12 @@ const xibbit = (function() {
           // response events are in green; notifications are in blue
           color = event._id? this.logColors.response: this.logColors.notification;
           msg = JSON.stringify(event);
-          this.log(msg, color);
         }
+        msg = this.reorderJson(msg,
+          ['type', 'to', 'from', '_id'],
+          ['i', 'e']
+        );
+        this.log(msg, color);
       }
     }
   };
