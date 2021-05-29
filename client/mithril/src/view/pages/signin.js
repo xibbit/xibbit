@@ -39,7 +39,7 @@ export default function() {
             pwd: Pwd.encrypt(state.email, state.pwd),
         }, event => {
             var path = '/';
-            if (event.i && event.from) {
+            if (event.loggedIn) {
                 xibbitObject.loggedIn = true;
                 xibbitObject.addSessionValue('loggedIn', true);
                 xibbitObject.addSessionValue('me', event.me);

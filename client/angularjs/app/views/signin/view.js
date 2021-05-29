@@ -60,7 +60,7 @@ angular.module('myApp.views')
         pwd: Pwd.encrypt(SignInView.email, SignInView.pwd)
       }, function(event) {
         var path = '/';
-        if (event.from) {
+        if (event.loggedIn) {
           XibbitService.setSessionValue('me', event.me);
           // collect additional user settings if needed
           if (event.i && (event.i.substring(0, 8) === 'collect:')) {

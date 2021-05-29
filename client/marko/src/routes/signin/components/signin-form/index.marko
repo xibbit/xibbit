@@ -46,7 +46,7 @@ class {
       pwd: global.Pwd.encrypt(this.state.email, this.state.pwd)
     }, event => {
       var path = '/';
-      if (event.i && event.from) {
+      if (event.loggedIn) {
         global.xibbitObject.addSessionValue('loggedIn', true);
         global.xibbitObject.addSessionValue('me', event.me);
         // collect additional user settings if needed
