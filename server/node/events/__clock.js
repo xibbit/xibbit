@@ -32,7 +32,7 @@ const {asserte} = require('../asserte');
  * @author DanielWHoward
  **/
 module.exports = self => {
-  self.api('__clock', (event, {hub, pf}, callback) => {
+  self.api('__clock', (event, {hub}, callback) => {
 
     // use seconds since epoch instead of datetime string to demo how this is done
     var now = Math.floor(new Date().getTime() / 1000);
@@ -68,7 +68,6 @@ module.exports = self => {
         'to': 'all',
         'from': randomUser
       }, '', false, function() {
-        event.globalVars = globalVars;
         callback(null, event);
       });
     } else {

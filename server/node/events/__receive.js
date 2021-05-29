@@ -43,45 +43,45 @@ self.api('__receive', (event, {pf, useInstances}, callback) => {
   event.e = 'unimplemented';
 
   if (useInstances) {
-    if (event._session && event._session.instance) {
-      var instance = event._session.instance;
-      event.eventQueue = [];
-      // get the events from the events table
-      pf.readRows({
+    if (!event._session || !event._session.instance) {
+      console.error('__receive did not get _session.instance');
+    }
+    var instance = event._session.instance;
+    event.eventQueue = [];
+    // get the events from the events table
+    pf.readRows({
+      table: 'sockets_events',
+      where: {
+        sid: instance
+    }}, function(e, events) {
+    var promises = promise.map([]);
+    // this is intentionally not ACID; the client will handle dups
+    for (var f=0; f < events.length; ++f) {
+      const evt = events[f].event;
+      // delete the event from the events table
+      pf.deleteRow({
         table: 'sockets_events',
         where: {
-          sid: instance
-      }}, function(e, events) {
-      var promises = promise.map([]);
-      for (var f=0; f < events.length; ++f) {
-        const evt = events[f].event;
-        // delete the event from the events table
-        pf.deleteRow({
-          table: 'sockets_events',
-          where: {
-            id: events[f].id
-        }});
-        promises.push((function(f) {
-          return function promise() {
-            pf.deleteRow({
-              table: 'sockets_events',
-              where: {
-                id: events[f].id
-            }}, function() {
-              promise.resolve(true);
-            });
-          };
-        })(f));
-        event.eventQueue.push(evt);
-      }
-      delete event.e;
-      promises.resolve(function() {
-        callback(null, event);
-      });
-      });
-    } else {
-      callback(null, event);
+          id: events[f].id
+      }});
+      promises.push((function(f) {
+        return function promise() {
+          pf.deleteRow({
+            table: 'sockets_events',
+            where: {
+              id: events[f].id
+          }}, function() {
+            promise.resolve(true);
+          });
+        };
+      })(f));
+      event.eventQueue.push(evt);
     }
+    delete event.e;
+    promises.resolve(function() {
+      callback(null, event);
+    });
+    });
   } else {
     callback(null, event);
   }

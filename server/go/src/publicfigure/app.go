@@ -115,6 +115,8 @@ func main() {
 		filepath := context.Param("filepath")
 		if filepath == "/url_config.js" {
 			context.FileFromFS("url_config.js", http.Dir("./static"))
+		} else if strings.HasPrefix(filepath, "/socket.io.js.map") {
+			context.FileFromFS("socket.io/socket.io.js.map", http.Dir("./static"))
 		} else if strings.HasPrefix(filepath, "/socket.io/socket.io.js") {
 			context.FileFromFS("socket.io/socket.io.js", http.Dir("./static"))
 		} else if strings.HasPrefix(filepath, "/socket.io/") {

@@ -131,13 +131,12 @@ func Login(event map[string]interface{}, vars map[string]interface{}) map[string
 			hub.Send(map[string]interface{}{
 				"type": "notify_login",
 				"to":   "all",
-				"from": to,
+				"from": me["username"],
 			}, "", false)
 			// info: user logged in
-			if event["i"] == nil {
+			if _, ok := event["i"]; !ok {
 				event["i"] = "logged in"
 			}
-			event["from"] = me["username"]
 			return event
 		} else {
 			// error: user not found or wrong password

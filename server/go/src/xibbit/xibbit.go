@@ -49,13 +49,12 @@ import (
  * @author DanielWHoward
  **/
 type XibbitHub struct {
-	socketio    *socketio.Server
-	config      map[string]interface{}
-	prefix      string
-	onfn        map[string]func(event map[string]interface{}, vars map[string]interface{}) map[string]interface{}
-	apifn       map[string]func(event map[string]interface{}, vars map[string]interface{}) map[string]interface{}
-	impersonate bool
-	Sessions    []map[string]interface{}
+	socketio *socketio.Server
+	config   map[string]interface{}
+	onfn     map[string]func(event map[string]interface{}, vars map[string]interface{}) map[string]interface{}
+	apifn    map[string]func(event map[string]interface{}, vars map[string]interface{}) map[string]interface{}
+	prefix   string
+	Sessions []map[string]interface{}
 }
 
 /**
@@ -70,7 +69,6 @@ func NewXibbitHub(config map[string]interface{}) *XibbitHub {
 	self.prefix = ""
 	self.onfn = make(map[string]func(event map[string]interface{}, vars map[string]interface{}) map[string]interface{})
 	self.apifn = make(map[string]func(event map[string]interface{}, vars map[string]interface{}) map[string]interface{})
-	self.impersonate = false
 	self.socketio = config["socketio"].(*socketio.Server)
 	self.Sessions = make([]map[string]interface{}, 0)
 	mysql, ok := self.config["mysql"].(map[string]interface{})
@@ -87,7 +85,7 @@ func NewXibbitHub(config map[string]interface{}) *XibbitHub {
 /**
  * Return the socket associated with a socket ID.
  *
- * @param $sid string The socket ID.
+ * @param sid string The socket ID.
  * @return A socket.
  *
  * @author DanielWHoward
@@ -377,6 +375,19 @@ func (self *XibbitHub) ReorderJson(s string, first []string, last []string) stri
 }
 
 /**
+ * Return a JSON string with keys in a specific order.
+ *
+ * @param s map A JSON string with keys in random order.
+ * @param first slice An array of key names to put in order at the start.
+ * @param last slice An array of key names to put in order at the end.
+ *
+ * @author DanielWHoward
+ **/
+func (self *XibbitHub) ReorderArray(source string, first []string, last []string) string {
+	return source
+}
+
+/**
  * Start the Xibbit server system.
  *
  * @param method string An event handling strategy.
@@ -399,18 +410,19 @@ func (self *XibbitHub) Start(method string) {
 				fmt.Println(e)
 			}
 		}()
+		allowedKeys := []string{"_id"}
+		allowedTypes := []string{"_instance"}
 		session := self.GetSession(sock)
 		// process the event
 		events := []map[string]interface{}{}
 		handled := false
 		if !handled {
-			reserved := []string{"_id"}
 			// verify that the event is well formed
 			for key, _ := range event {
 				malformed := true
 				// _id is a special property so sender can invoke callbacks
 				if key[0:1] == "_" {
-					for _, r := range reserved {
+					for _, r := range allowedKeys {
 						if key == r {
 							malformed = false
 						}
@@ -425,31 +437,11 @@ func (self *XibbitHub) Start(method string) {
 					break
 				}
 			}
-			if handled {
-				// output any waiting events
-				sock.Emit("client", events[0])
-			} else {
-				// override the from property
-				if session["username"] == nil {
-					if event["from"] != nil {
-						delete(event, "from")
-					}
-				} else {
-					event["from"] = session["username"]
-				}
-				// add _session and _conn properties for convenience
-				event["_session"] = session["session_data"]
-				event["_conn"] = map[string]interface{}{
-					"sockets": sock,
-					"user":    session,
-				}
+			if !handled {
 				// check event type exists
 				if _, ok := event["type"]; !ok {
 					event["e"] = "malformed--type"
-					delete(event, "_session")
-					delete(event, "_conn")
 					events = append(events, event)
-					sock.Emit("client", events[0])
 					handled = true
 				}
 				// check event type is string and has valid value
@@ -457,8 +449,7 @@ func (self *XibbitHub) Start(method string) {
 					typeStr, _ := event["type"].(string)
 					typeValidated, _ := regexp.MatchString(`^[a-z][a-z_]*$`, typeStr)
 					if !typeValidated {
-						typesAllowed := []string{"_instance"}
-						for _, v := range typesAllowed {
+						for _, v := range allowedTypes {
 							if typeStr == v {
 								typeValidated = true
 							}
@@ -466,11 +457,16 @@ func (self *XibbitHub) Start(method string) {
 					}
 					if !typeValidated {
 						event["e"] = "malformed--type:" + event["type"].(string)
-						delete(event, "_session")
-						delete(event, "_conn")
 						events = append(events, event)
-						sock.Emit("client", events[0])
 						handled = true
+					}
+				}
+				if !handled {
+					// add _session and _conn properties for convenience
+					event["_session"] = session["session_data"]
+					event["_conn"] = map[string]interface{}{
+						"sockets": sock,
+						"user":    session,
 					}
 				}
 				// handle _instance event
@@ -526,10 +522,6 @@ func (self *XibbitHub) Start(method string) {
 					if eventReply["_conn"] != nil {
 						delete(eventReply, "_conn")
 					}
-					// update the "from" property
-					if session["username"] != nil {
-						eventReply["from"] = session["username"]
-					}
 					// _instance event does not require an implementation; it's optional
 					ee, ok := eventReply["e"].(string)
 					if (eventReply["type"].(string) == "_instance") && ok && (ee == "unimplemented") {
@@ -540,28 +532,9 @@ func (self *XibbitHub) Start(method string) {
 				}
 			}
 		}
-		// output any waiting events
-		sess, _ := session["session_data"].(map[string]interface{})
-		if sess == nil {
-			sess = map[string]interface{}{}
-		}
-		events = self.Receive(events, sess, false)
 		// emit all events
 		for i := 0; i < len(events); i++ {
-			b, _ := json.Marshal(events[i])
-			s := string(b)
-			s = self.ReorderJson(s, []string{
-				"type",
-				"from",
-				"to",
-				"_id",
-			}, []string{
-				"i",
-				"e",
-			})
-			clone := make(map[string]interface{})
-			json.Unmarshal([]byte(s), &clone)
-			sock.Emit("client", clone)
+			sock.Emit("client", events[i])
 		}
 	})
 	// socket disconnected
@@ -800,14 +773,12 @@ func (self *XibbitHub) Connect(event map[string]interface{}, username string, co
 	//	connected := 0
 	user := event["_conn"].(map[string]interface{})["user"].(map[string]interface{})
 	// update username variables
-	if impersonate, _ := user["impersonate"].(bool); !impersonate {
-		if connect {
-			user["username"] = username
-			user["session_data"].(map[string]interface{})["username"] = username
-		} else {
-			delete(user["session_data"].(map[string]interface{}), "username")
-			delete(user, "username")
-		}
+	if connect {
+		user["username"] = username
+		user["session_data"].(map[string]interface{})["username"] = username
+	} else {
+		delete(user["session_data"].(map[string]interface{}), "username")
+		delete(user, "username")
 	}
 }
 
@@ -886,16 +857,20 @@ func (self *XibbitHub) GetUsers() []map[string]interface{} {
 }
 
 /**
- * Return the names of logged in users who have not pinged the server in
- * a number of seconds.
+ * Update rows that have not been touched recently.
  *
  * @param secs int A number of seconds.
- * @return array An array of disconnected users.
  *
  * @author DanielWHoward
  **/
-func (self *XibbitHub) getDisconnectedUsers(secs int) []string {
-	return []string{}
+func (self *XibbitHub) UpdateExpired(table string, secs int, clause string) {
+	expiration := time.Now().Add(time.Second * time.Duration(secs)).Format("2006-01-02 15:04:05")
+	nullDateTime := "1970-01-01 00:00:00"
+	q := "UPDATE `" + self.prefix + table + "` SET "
+	q += "connected='" + nullDateTime + "', "
+	q += "touched='" + nullDateTime + "' "
+	q += "WHERE (`touched` < '" + expiration + "'" + clause + ");"
+	self.Mysql_query(q)
 }
 
 /**
@@ -957,8 +932,8 @@ func (self *XibbitHub) Cmp(a map[string]interface{}, b map[string]interface{}) i
  * that are better to remove or copy manually to
  * the clone.
  *
- * @param event array An event to clone.
- * @param keysToSkip An array of keys to not copy to the clone.
+ * @param event map An event to clone.
+ * @param keysToSkip slice An array of keys to not copy to the clone.
  *
  * @author DanielWHoward
  **/
@@ -1133,6 +1108,8 @@ func (self *XibbitHub) ReadGlobalVars() map[string]interface{} {
 
 /**
  * Write global variables to database.
+ *
+ * @param vars map The JSON-friendly vars to save.
  *
  * @author DanielWHoward
  **/

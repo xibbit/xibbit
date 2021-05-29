@@ -493,8 +493,8 @@ class XibbitHub {
   var $config;
   var $onfn;
   var $apifn;
-  var $session;
   var $prefix;
+  var $session;
   var $socket;
   var $useSocketIO;
   var $socketSession;
@@ -683,9 +683,9 @@ class XibbitHub {
   /**
    * Return a JSON string with keys in a specific order.
    *
-   * @param s string A JSON string with keys in random order.
-   * @param first array An array of key names to put in order at the start.
-   * @param last array An array of key names to put in order at the end.
+   * @param $s string A JSON string with keys in random order.
+   * @param $first array An array of key names to put in order at the start.
+   * @param $last array An array of key names to put in order at the end.
    *
    * @author DanielWHoward
    **/
@@ -730,7 +730,7 @@ class XibbitHub {
   }
 
   /**
-   * Start the xibbit system.
+   * Start the xibbit server system.
    *
    * @param $method string An event handling strategy.
    *
@@ -754,6 +754,8 @@ class XibbitHub {
       });
       // decode the event
       $socket->on('server', function($event) use ($self, &$socket) {
+        $allowedKeys = array('_id');
+        $allowedTypes = array('_instance');
         $session = &$self->getSession($socket);
         // process the event
         $events = array();
@@ -768,7 +770,8 @@ class XibbitHub {
           // verify that the event is well formed
           foreach ($event as $key=>$value) {
             // _id is a special property so sender can invoke callbacks
-            if ((substr($key, 0, 1) === '_') && !in_array($key, array('_id'))) {
+            $malformed = (substr($key, 0, 1) === '_') && !in_array($key, $allowedKeys);
+            if ($malformed) {
               $event['e'] = 'malformed--property';
               $events[] = $event;
               $handled = true;
@@ -776,24 +779,9 @@ class XibbitHub {
             }
           }
           if (!$handled) {
-            // override the from property
-            if (isset($self->session['username'])) {
-              $event['from'] = $self->session['username'];
-            } else {
-              if (isset($event['from'])) {
-                unset($event['from']);
-              }
-            }
-            // add _session and _conn properties for convenience
-            $event['_session'] = $self->session;
-            $event['_conn'] = array(
-              'socket'=>$socket
-            );
             // check event type exists
             if (!isset($event['type'])) {
               $event['e'] = 'malformed--type';
-              unset($event['_session']);
-              unset($event['_conn']);
               $events[] = $event;
               $handled = true;
             }
@@ -802,16 +790,20 @@ class XibbitHub {
               $typeStr = is_string($event['type'])? $event['type']: '';
               $typeValidated = preg_match('/[a-z][a-z_]*/', $typeStr) === 1;
               if (!$typeValidated) {
-                $typesAllowed = array('_instance');
-                $typeValidated = in_array($typeStr, $typesAllowed);
+                $typeValidated = in_array($typeStr, $allowedTypes);
               }
               if (!$typeValidated) {
                 $event['e'] = 'malformed--type:'.$event['type'];
-                unset($event['_session']);
-                unset($event['_conn']);
                 $events[] = $event;
                 $handled = true;
               }
+            }
+            if (!$handled) {
+              // add _session and _conn properties for convenience
+              $event['_session'] = $self->session;
+              $event['_conn'] = array(
+                'socket'=>$socket
+              );
             }
             // handle _instance event
             if (!$handled && ($event['type'] === '_instance')) {
@@ -870,10 +862,6 @@ class XibbitHub {
                 if (isset($eventsReply[$e]['_conn'])) {
                   unset($eventsReply[$e]['_conn']);
                 }
-                // update the "from" property
-                if (isset($self->session['username'])) {
-                  $eventsReply[$e]['from'] = $self->session['username'];
-                }
                 // _instance event does not require an implementation; it's optional
                 if (($eventsReply[$e]['type'] === '_instance') && isset($eventsReply[$e]['e'])
                     && ($eventsReply[$e]['e'] === 'unimplemented')) {
@@ -885,8 +873,8 @@ class XibbitHub {
                   array('i', 'e')
                 );
                 $events[] = array('client', $ret_reorder);
+                $handled = true;
               }
-              $handled = true;
             }
           }
         }
@@ -1852,6 +1840,8 @@ class XibbitHub {
 
   /**
    * Write global variables to database.
+   *
+   * @param $vars array The JSON-friendly vars to save.
    *
    * @author DanielWHoward
    **/

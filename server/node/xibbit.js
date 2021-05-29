@@ -46,7 +46,6 @@ module.exports = function() {
     this.config = config;
     this.onfn = {};
     this.apifn = {};
-    this.impersonate = false;
     this.sessions = {};
     this.prefix = '';
     this.socketio = config.socketio;
@@ -177,8 +176,51 @@ module.exports = function() {
    * @author DanielWHoward
    **/
   XibbitHub.prototype.reorderJson = function(s, first, last) {
+    var i = 0;
+    var targets = [];
+    var sMap = JSON.parse(s);
+    // separate into an array of objects/maps
+    for (i=0; i < (first.length + last.length + 1); ++i) {
+      var k = '';
+      targets.push({});
+      if (i < first.length) {
+        k = first[i];
+      } else if (i > first.length) {
+        k = last[i - first.length + 1];
+      }
+      if ((k !== '') && (typeof sMap[k] !== 'undefined')) {
+        targets[i][k] = sMap[k];
+        delete sMap[k];
+      }
+    }
+    targets[first.length] = sMap;
+    // build JSON string from array of objects/maps
+    s = '';
+    for (i=0; i < targets.length; ++i) {
+      var target = targets[i];
+      if (Object.keys(target).length > 0) {
+        var sTarget = JSON.stringify(target);
+        if (s === '') {
+          s = sTarget;
+        } else {
+          s = s.substring(0, s.length-1) + "," + sTarget.substring(1);
+        }
+      }
+    }
+    return s;
+  };
+
+  /**
+   * Return a JSON string with keys in a specific order.
+   *
+   * @param s string A JSON string with keys in random order.
+   * @param first array An array of key names to put in order at the start.
+   * @param last array An array of key names to put in order at the end.
+   *
+   * @author DanielWHoward
+   **/
+  XibbitHub.prototype.reorderArray = function(source, first, last) {
     // create JSON maps
-    var source = JSON.parse(s);
     var target = {};
     // save the first key-value pairs
     for (var f=0; f < first.length; ++f) {
@@ -198,12 +240,12 @@ module.exports = function() {
     }
     // save the last key-value pairs
     for (var l=0; l < last.length; ++l) {
-      var key = first[f];
+      var key = last[l];
       if (typeof source[key] !== 'undefined') {
         target[key] = source[key];
       }
     }
-    return JSON.stringify(target);
+    return target;
   };
 
   /**
@@ -234,6 +276,8 @@ module.exports = function() {
       };
       // decode the event
       socket.on('server', function(event) {
+        var allowedKeys = ['_id'];
+        var allowedTypes = ['_instance'];
         var sess = self.getSession(socket);
         // process the event
         var events = [];
@@ -242,43 +286,24 @@ module.exports = function() {
           event = {};
           event.e = 'malformed--json';
           events.push(event);
-          socket.emit('client', events[0]);
           handled = true;
         }
         if (!handled && (Object.keys(event).length > 0)) {
           // verify that the event is well formed
           for (var key in event) {
             // _id is a special property so sender can invoke callbacks
-            if ((key.substring(0, 1) === '_') && (['_id'].indexOf(key) === -1)) {
+            if ((key.substring(0, 1) === '_') && (allowedKeys.indexOf(key) === -1)) {
               event['e'] = 'malformed--property';
               events.push(event);
-              socket.emit('client', events[0]);
               handled = true;
               break;
             }
           }
           if (!handled) {
-            // override the from property
-            if (session.username !== null) {
-              event.from = session.username;
-            } else {
-              if (event.from) {
-                delete event.from;
-              }
-            }
-            // add _session and _conn properties for convenience
-            event['_session'] = session.session_data;
-            event['_conn'] = {
-              socket: socket,
-              user: session
-            };
             // check event type exists
             if (!event.type) {
               event.e = 'malformed--type';
-              delete event._session;
-              delete event._conn;
               events.push(event);
-              socket.emit('client', events[0]);
               handled = true;
             }
             // check event type is string and has valid value
@@ -286,17 +311,21 @@ module.exports = function() {
               var typeStr = (typeof event.type === 'string')? event.type: '';
               var typeValidated = typeStr.match(/[a-z][a-z_]*/) !== null;
               if (!typeValidated) {
-                var typesAllowed = ['_instance'];
                 typeValidated = (typesAllowed.indexOf(typeStr) !== -1);
               }
               if (!typeValidated) {
                 event.e = 'malformed--type:'+event['type'];
-                delete event._session;
-                delete event._conn;
                 events.push(event);
-                socket.emit('client', events[0]);
                 handled = true;
               }
+            }
+            if (!handled) {
+              // add _session and _conn properties for convenience
+              event['_session'] = session.session_data;
+              event['_conn'] = {
+                socket: socket,
+                user: session
+              };
             }
             // handle _instance event
             if (!handled && (event.type === '_instance')) {
@@ -319,7 +348,6 @@ module.exports = function() {
                 }
                 // create a new instance for every tab even though they share session cookie
                 event.instance = instance;
-                // update request with instance for convenience
                 session.instance = instance;
                 self.setSession(socket, session);
               }
@@ -345,38 +373,28 @@ module.exports = function() {
               if (eventReply['_conn']) {
                 delete eventReply['_conn'];
               }
-              // update the "from" property
-              if (session.username !== null) {
-                eventReply['from'] = session.username;
-              }
-              // reorder the properties so they look pretty
-              var ret_reorder = {'type': eventReply['type']};
-              if (eventReply['from']) {
-                ret_reorder['from'] = eventReply['from'];
-              }
-              if (eventReply['to']) {
-                ret_reorder['to'] = eventReply['to'];
-              }
-              // _id is the sender's id so sender can invoke callbacks
-              if (eventReply['_id']) {
-                ret_reorder['_id'] = eventReply['_id'];
-              }
               // _instance event does not require an implementation; it's optional
               if ((eventReply['type'] === '_instance') && eventReply['e']
                   && (eventReply['e'] === 'unimplemented')) {
                 delete eventReply['e'];
               }
-              ret_reorder = Object.assign(ret_reorder, eventReply);
+              // reorder the properties so they look pretty
+              var ret_reorder = self.reorderArray(eventReply,
+                ['type', 'from', 'to', '_id'],
+                ['i', 'e']
+              );
               events.push(ret_reorder);
               handled = true;
-              // output any waiting events
-              self.receive(events, session.session_data, false, function(events) {
-                for (e=0; e < events.length; ++e) {
-                  //events[e] = self.reorderJson(events[e]);
-                  socket.emit('client', events[e]);
-                }
+              // emit all events
+              for (var e=0; e < events.length; ++e) {
+                socket.emit('client', events[e]);
+              }
               });
-              });
+            } else {
+              // emit all events
+              for (var e=0; e < events.length; ++e) {
+                socket.emit('client', events[e]);
+              }
             }
           }
         }
@@ -711,7 +729,7 @@ module.exports = function() {
                   break;
                 }
               }
-              if (misnamed === null) {
+              if ((misnamed === null) || (['__receive', '__send'].indexOf(eventType) !== -1)) {
                 // did not find a file with an event handler
                 event['e'] = 'unimplemented';
               } else {
@@ -866,14 +884,12 @@ module.exports = function() {
     var connected = 0;
     var user = event._conn.user;
     // update username variables
-    if (!user.impersonate) {
-        if (connect) {
-          user.username = username;
-          user.session_data['username'] = username;
-        } else {
-          user.session_data['username'] = null;
-          user.username = null;
-        }
+    if (connect) {
+      user.username = username;
+      user.session_data['username'] = username;
+    } else {
+      user.session_data['username'] = null;
+      user.username = null;
     }
   };
 
@@ -975,17 +991,22 @@ module.exports = function() {
   };
 
   /**
-   * Return the names of logged in users who have not pinged the server in
-   * a number of seconds.
+   * Update rows that have not been touched recently.
    *
-   * @param secs int A number of seconds.
-   * @return array An array of disconnected users.
+   * @param $secs int A number of seconds.
    *
    * @author DanielWHoward
    **/
-  XibbitHub.prototype.getDisconnectedUsers = function(secs) {
-    return [];
-  };
+  XibbitHub.prototype.updateExpired = function(table, secs, clause, callback) {
+    var self = this;
+    var nullDateTime = '1970-01-01 00:00:00';
+    var expiration = moment(new Date(new Date().getTime() - (secs * 1000))).tz(self.config.time_zone).format('YYYY-MM-DD HH:mm:ss');
+    var q = 'UPDATE `'+self.prefix+table+'` SET '
+      +'connected=\''+nullDateTime+'\', '
+      +'touched=\''+nullDateTime+'\' '
+      +'WHERE (`touched` < \''+expiration+'\''+clause+');';
+    self.mysql_query(q, callback? callback: function() {});
+  }
 
   /**
    * Delete rows that have not been touched recently.
@@ -1007,10 +1028,10 @@ module.exports = function() {
    *
    * This is a way to manually enforce a foreign key constraint.
    *
-   * @param $table string A table to delete rows from.
-   * @param $column string A column to try to match to a column in the other table.
-   * @param $table2 string The other table that should have a corresponding row.
-   * @param $column2 string A column of the other table to match against.
+   * @param table string A table to delete rows from.
+   * @param column string A column to try to match to a column in the other table.
+   * @param table2 string The other table that should have a corresponding row.
+   * @param column2 string A column of the other table to match against.
    *
    * @author DanielWHoward
    **/

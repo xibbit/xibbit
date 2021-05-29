@@ -25,7 +25,7 @@
 // @license http://opensource.org/licenses/MIT
 require_once('./asserte.php');
 /**
- * Handle __send event.  Process 'all' and user
+ * Handle __send event.  Process "all" and user
  * aliases to send this event to multiple
  * instances.
  *
@@ -35,15 +35,17 @@ $self = $this;
 $self->api('__send', function($event, $vars) {
   $hub = $vars['hub'];
   $pf = $vars['pf'];
+  $useInstances = isset($vars['useInstances']) && $vars['useInstances'];
 
   // assume that this event does not need special handling
   $event['e'] = 'unimplemented';
 
-  if (isset($vars['useInstances']) && $vars['useInstances']) {
+  if (useInstances) {
     if (!isset($event['event']) || !isset($event['event']['to'])) {
       print '__send did not get event.to';
     }
-    $now = date('Y-m-d H:i:s');
+    $toStr = $event['event']['to'];
+    $now = date('Y-m-d H:i:s', time());
     $sent = false;
     // get the sender
     $eventFrom = isset($event['event']['from'])? $event['event']['from']: 'x';
@@ -56,13 +58,13 @@ $self->api('__send', function($event, $vars) {
     $to = $pf->readOneRow(array(
       'table'=>'users',
       'where'=>array(
-        'username'=>$event['event']['to']
+        'username'=>$toStr
     )));
     // resolve the "to" address to instances
     $q = array(
       'table'=>'instances'
     );
-    if (($to !== null) && ($event['event']['to'] !== 'all')) {
+    if (($to !== null) && ($toStr !== 'all')) {
       $q = array(
         'table'=>'instances',
         'where'=>array(
@@ -72,9 +74,10 @@ $self->api('__send', function($event, $vars) {
     $instances = $pf->readRows($q);
     // send an event to each instance
     for ($i=0; $i < count($instances); ++$i) {
+      $keysToSkip = array('_conn');
       $sent = true;
       // clone the event so we can safely modify it
-      $evt = $event['event'];
+      $evt = $hub->cloneEvent($event['event'], $keysToSkip);
       // "to" is an instance ID in events table
       $instanceId = $instances[$i]['instance'];
       // overwrite "from" and add "fromid" field
@@ -82,12 +85,13 @@ $self->api('__send', function($event, $vars) {
         $evt['from'] = $from['username'];
         $evt['fromid'] = $from['uid'];
       }
+      $evtStr = json_encode($evt);
       $pf->insertRow(array(
         'table'=>'sockets_events',
         'values'=>array(
           'id'=>0,
           'sid'=>$instanceId,
-          'event'=>json_encode($evt),
+          'event'=>$evtStr,
           'touched'=>$now
       )));
     }

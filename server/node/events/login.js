@@ -117,7 +117,7 @@ self.api('login', (event, {hub, pf}, callback) => {
             hub.send({
               type: 'notify_login',
               to: 'all',
-              from: to
+              from: me.username
             });
             // info: user logged in
             if (!event.i) {
@@ -129,7 +129,7 @@ self.api('login', (event, {hub, pf}, callback) => {
           hub.send({
             type: 'notify_login',
             to: 'all',
-            from: to
+            from: me.username
           });
           // info: user logged in
           if (!event.i) {

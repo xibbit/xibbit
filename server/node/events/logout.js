@@ -36,19 +36,21 @@ self.on('logout', (event, {hub, pf}, callback) => {
 
   noAsserte(event);
 
+  const {username, instance} = event._session;
+
   // broadcast this instance logged out
   hub.send({
     type: 'notify_logout',
     to: 'all',
-    from: event.from
+    from: username
   });
   // logout this instance
-  hub.connect(event, event._session.username, false);
+  hub.connect(event, username, false);
   // remove UID from the instance
   pf.readOneRow({
     table: 'instances',
     'where': {
-      instance: event._session.instance
+      instance: instance
   }}, function(e, row) {
   if (row !== null) {
     var values = {
@@ -58,7 +60,7 @@ self.on('logout', (event, {hub, pf}, callback) => {
       table: 'instances',
       values: values,
       where: {
-        instance: event._session.instance
+        instance: instance
     }}, function() {
       // remove UID and user info from the session
       delete event._session.uid;

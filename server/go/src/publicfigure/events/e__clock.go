@@ -74,8 +74,6 @@ func E__clock(event map[string]interface{}, vars map[string]interface{}) map[str
 			"to":   "all",
 			"from": randomUser,
 		}, "", false)
-
-		event["globalVars"] = globalVars
 	}
 
 	return event
