@@ -48,7 +48,7 @@ $self->api('user_create', function($event, $vars) {
   $email = $event['email'];
   $hashedPwd = pwd_hash($event['pwd']);
 
-  $now = date('Y-m-d H:i:s');
+  $now = date('Y-m-d H:i:s', time());
   $nullDateTime = '1970-01-01 00:00:00';
   // see if the user is already in the database
   $me = $pf->readOneRow(array(

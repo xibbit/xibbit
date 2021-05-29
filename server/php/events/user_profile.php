@@ -38,6 +38,8 @@ $self->on('user_profile', function($event, $vars) {
 
   // get the current user
   $uid = $event['_session']['uid'];
+  asserte(is_int($uid), 'current user not found');
+  asserte($uid > 0, 'current user not found');
   $me = $pf->readOneRow(array(
     'table'=>'users',
     'where'=>array(

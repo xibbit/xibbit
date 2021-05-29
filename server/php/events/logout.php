@@ -36,32 +36,38 @@ $self->on('logout', function($event, $vars) {
 
   noAsserte($event);
 
+  $username = $event['_session']['username'];
+  $instance = $event['_session']['instance'];
+
   // broadcast this instance logged out
   $hub->send(array(
     'type'=>'notify_logout',
     'to'=>'all',
-    'from'=>$event['from']
+    'from'=>$username
   ));
   // logout this instance
-  $hub->connect($event, $event['_session']['username'], false);
+  $hub->connect($event, $username, false);
   // remove UID from the instance
   $row = $pf->readOneRow(array(
     'table'=>'instances',
     'where'=>array(
-      'instance'=>$event['_session']['instance']
+      'instance'=>$instance
   )));
   if ($row !== null) {
+    if (isset($_REQUEST['XIO'])) {
+      $values['sid'] = '';
+    }
     $values = array(
       'uid'=>0
     );
-    if (isset($_REQUEST['XIO'])) {
+    if ($row['sid'] === $username) {
       $values['sid'] = '';
     }
     $pf->updateRow(array(
       'table'=>'instances',
       'values'=>$values,
       'where'=>array(
-        'instance'=>$event['_session']['instance']
+        'instance'=>$instance
     )));
   }
   // remove UID and user info from the session

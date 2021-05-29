@@ -33,11 +33,12 @@ require_once('./asserte.php');
 $self = $this;
 $self->api('__receive', function($event, $vars) {
   $pf = $vars['pf'];
+  $useInstances = isset($vars['useInstances']) && $vars['useInstances'];
 
   // assume that this event does not need special handling
   $event['e'] = 'unimplemented';
 
-  if (isset($vars['useInstances']) && $vars['useInstances']) {
+  if ($useInstances) {
     if (!isset($event['_session']) || !isset($event['_session']['instance'])) {
       print '__receive did not get _session.instance';
     }

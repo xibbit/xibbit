@@ -33,8 +33,9 @@ $self = $this;
 $self->api('_instance', function($event, $vars) {
   $hub = $vars['hub'];
   $pf = $vars['pf'];
+  $useInstances = isset($vars['useInstances']) && $vars['useInstances'];
 
-  if (isset($vars['useInstances']) && $vars['useInstances']) {
+  if ($useInstances) {
     $now = date('Y-m-d H:i:s', time());
     $localSid = isset($_REQUEST['sid'])? $_REQUEST['sid']: '';
     $uid = isset($event['_session']['uid'])? $event['_session']['uid']: 0;
@@ -69,11 +70,13 @@ $self->api('_instance', function($event, $vars) {
       // if the browser page is reloaded, a new socket is
       //  created with an existing instance
       $values = array(
-        'sid'=>$localSid,
         'uid'=>$uid,
         'instance'=>$instance,
         'touched'=>$now
       );
+      if ($localSid !== '') {
+        $values['sid'] = $localSid;
+      }
       $pf->updateRow(array(
         'table'=>'instances',
         'values'=>$values,

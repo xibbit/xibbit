@@ -120,7 +120,7 @@ $self->api('login', function($event, $vars) {
       $hub->send(array(
         'type'=>'notify_login',
         'to'=>'all',
-        'from'=>$to
+        'from'=>$me['username']
       ));
       // info: user logged in
       if (!isset($event['i'])) {

@@ -44,11 +44,18 @@ self.api('__send', function(event, vars, callback) {
   var pf = vars.pf;
   var useInstances = vars.useInstances;
 
+  // assume that this event does not need special handling
+  event.e = 'unimplemented';
+
   if (useInstances) {
+    if (!event.event || !event.event.to) {
+      console.error('__send did not get event.to');
+    }
+    var toStr = event.event.to;
     var now = moment(new Date()).tz(config.time_zone).format('YYYY-MM-DD HH:mm:ss');
     var sent = false;
     // get the sender
-    eventFrom = event['event']['from']? event['event']['from']: 'x';
+    eventFrom = event.event.from? event.event.from: 'x';
     pf.readOneRow({
       'table': 'users',
       'where': {
@@ -58,14 +65,14 @@ self.api('__send', function(event, vars, callback) {
     pf.readOneRow({
       'table': 'users',
       'where': {
-        'username': event['event']['to']
+        'username': toStr
     }}, function(e, to) {
     // resolve the "to" address to instances
     var instances = hub.sessions;
     var q = {
       'table': 'instances'
     };
-    if ((to !== null) && (event['event']['to'] !== 'all')) {
+    if ((to !== null) && (toStr !== 'all')) {
       q = {
         'table': 'instances',
         'where': {
@@ -76,9 +83,10 @@ self.api('__send', function(event, vars, callback) {
       var promises = promise.map([]);
     // send an event to each instance
     for (var i=0; i < instances.length; ++i) {
+      var keysToSkip = ['_conn'];
       sent = true;
       // clone the event so we can safely modify it
-      var evt = event.event;
+      var evt = hub.cloneEvent(event.event, keysToSkip);
       // "to" is an instance ID in events table
       var instanceId = instances[i].instance;
       // overwrite "from" and add "fromid" field
@@ -88,12 +96,13 @@ self.api('__send', function(event, vars, callback) {
       }
       promises.push((function(evt, instanceId) {
         return function promise() {
+          var evtStr = JSON.stringify(evt);
           pf.insertRow({
             table: 'sockets_events',
             values: {
               id: 0,
               sid: instanceId,
-              event: JSON.stringify(evt),
+              event: evtStr,
               touched: now
             }
           }, function() {
@@ -104,17 +113,16 @@ self.api('__send', function(event, vars, callback) {
     }
     if (sent) {
       promises.resolve(function() {
+        delete event.e;
         callback(null, event);
       });
     } else {
-      event.e = 'unimplemented';
       callback(null, event);
     }
     });
     });
     });
   } else {
-    event['e'] = 'unimplemented';
     callback(null, event);
   }
 });

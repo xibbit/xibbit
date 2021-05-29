@@ -150,8 +150,12 @@ class Hub extends XibbitHub {
   function touch() {
     global $pf;
 
+    $vars = &$this->config['vars'];
+    $useInstances = isset($vars['useInstances']) && $vars['useInstances'];
+
     parent::touch();
-    if ($this->session !== null && isset($this->session['instance'])) {
+
+    if ($useInstances) {
       $row = $pf->readOneRow(array(
         'table'=>'instances',
         'where'=>array(

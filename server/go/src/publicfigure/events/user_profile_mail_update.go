@@ -43,7 +43,9 @@ func User_profile_mail_update(event map[string]interface{}, vars map[string]inte
 	asserte.Asserte(func() bool { return array.HasStringKeys(event["user"].(map[string]interface{})) }, "typeof:user")
 
 	// get the current user
-	uid := event["_session"].(map[string]interface{})["uid"].(int)
+	uid, ok := event["_session"].(map[string]interface{})["uid"].(int)
+	asserte.Asserte(func() bool { return ok }, "current user not found")
+	asserte.Asserte(func() bool { return uid > 0 }, "current user not found")
 	me, _ := pf.ReadOneRow(map[string]interface{}{
 		"table": "users",
 		"where": map[string]interface{}{

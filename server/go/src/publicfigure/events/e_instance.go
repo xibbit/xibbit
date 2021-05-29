@@ -39,9 +39,9 @@ import (
 func E_instance(event map[string]interface{}, vars map[string]interface{}) map[string]interface{} {
 	hub := vars["hub"].(*xibbit.XibbitHub)
 	pf := vars["pf"].(*pfapp.Pfapp)
-
 	useInstances, ok := vars["useInstances"].(bool)
-	if useInstances && ok {
+
+	if ok && useInstances {
 		now := time.Now().Format("2006-01-02 15:04:05")
 		localSid := ""
 		uid, _ := event["_session"].(map[string]interface{})["uid"].(int)
@@ -64,7 +64,7 @@ func E_instance(event map[string]interface{}, vars map[string]interface{}) map[s
 				"connected": now,
 				"touched":   now,
 			}
-			event["_session"].(map[string]interface{})["instance"] = event["instance"]
+			event["_session"].(map[string]interface{})["instance"] = instance
 			pf.InsertRow(map[string]interface{}{
 				"table":  "instances",
 				"values": values,

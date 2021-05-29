@@ -41,6 +41,8 @@ module.exports = on('user_profile_mail_update', (event, {pf}) =>
 
   // get the current user
   const uid = event._session.uid;
+  asserte(uid === parseInt(uid, 10), 'current user not found');
+  asserte(uid > 0, 'current user not found');
   const me = await pf.readOneRow({
     table: 'users',
     where: {

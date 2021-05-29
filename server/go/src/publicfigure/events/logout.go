@@ -41,19 +41,22 @@ func Logout(event map[string]interface{}, vars map[string]interface{}) map[strin
 
 	asserte.NoAsserte(event)
 
+	username := event["_session"].(map[string]interface{})["username"].(string)
+	instance := event["_session"].(map[string]interface{})["instance"].(string)
+
 	// broadcast this instance logged out
 	hub.Send(map[string]interface{}{
 		"type": "notify_logout",
 		"to":   "all",
-		"from": event["from"],
+		"from": username,
 	}, "", false)
 	// logout this instance
-	hub.Connect(event, event["_session"].(map[string]interface{})["username"].(string), false)
+	hub.Connect(event, username, false)
 	// remove UID from the instance
 	row, _ := pf.ReadOneRow(map[string]interface{}{
 		"table": "instances",
 		"where": map[string]interface{}{
-			"instance": event["_session"].(map[string]interface{})["instance"],
+			"instance": instance,
 		},
 	})
 	if row != nil {
@@ -64,7 +67,7 @@ func Logout(event map[string]interface{}, vars map[string]interface{}) map[strin
 			"table":  "instances",
 			"values": values,
 			"where": map[string]interface{}{
-				"instance": event["_session"].(map[string]interface{})["instance"],
+				"instance": instance,
 			},
 		})
 	}
@@ -72,5 +75,6 @@ func Logout(event map[string]interface{}, vars map[string]interface{}) map[strin
 	delete(event["_session"].(map[string]interface{}), "uid")
 	delete(event["_session"].(map[string]interface{}), "user")
 	event["i"] = "logged out"
+
 	return event
 }

@@ -42,7 +42,8 @@ func User_profile(event map[string]interface{}, vars map[string]interface{}) map
 	asserte.NoAsserte(event)
 
 	// get the current user
-	uid, _ := event["_session"].(map[string]interface{})["uid"].(int)
+	uid, ok := event["_session"].(map[string]interface{})["uid"].(int)
+	asserte.Asserte(func() bool { return ok }, "current user not found")
 	asserte.Asserte(func() bool { return uid > 0 }, "current user not found")
 	me, _ := pf.ReadOneRow(map[string]interface{}{
 		"table": "users",
