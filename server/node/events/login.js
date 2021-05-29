@@ -45,6 +45,7 @@ self.api('login', (event, {hub, pf}, callback) => {
 
   // save the password but remove it from the event
   delete event.pwd;
+  event.loggedIn = false;
   let verified = true;
   if (verified) {
     // find user in the database
@@ -95,6 +96,7 @@ self.api('login', (event, {hub, pf}, callback) => {
       event.me = {
         roles: me.roles || []
       };
+      event.loggedIn = true;
       // update the instance with UID
       pf.readOneRow({
         table: 'instances',

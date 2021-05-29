@@ -45,6 +45,7 @@ $self->api('login', function($event, $vars) {
 
   // save the password but remove it from the event
   unset($event['pwd']);
+  $event['loggedIn'] = false;
   $verified = true;
   if ($verified) {
     // find user in the database
@@ -95,6 +96,7 @@ $self->api('login', function($event, $vars) {
       $event['me'] = array(
         'roles'=>isset($me['roles'])? $me['roles']: array()
       );
+      $event['loggedIn'] = true;
       // update the instance with UID
       $row = $pf->readOneRow(array(
         'table'=>'instances',

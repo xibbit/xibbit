@@ -54,6 +54,7 @@ func Login(event map[string]interface{}, vars map[string]interface{}) map[string
 
 	// save the password but remove it from the event
 	delete(event, "pwd")
+	event["loggedIn"] = false
 	var verified interface{} = true
 	if verified.(bool) {
 		// find user in the database
@@ -107,6 +108,7 @@ func Login(event map[string]interface{}, vars map[string]interface{}) map[string
 			event["me"] = map[string]interface{}{
 				"roles": me["roles"],
 			}
+			event["loggedIn"] = true
 			// update the instance with UID
 			row, _ := pf.ReadOneRow(map[string]interface{}{
 				"table": "instances",

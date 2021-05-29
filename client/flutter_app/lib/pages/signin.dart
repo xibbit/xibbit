@@ -118,7 +118,7 @@ class _SigninPage extends State<SigninPage> {
                                 utf8.encode(email + 'xibbit.github.io' + pwd))
                             .toString()
                       }, (event) {
-                        if (event['from'] != null) {
+                        if (event['loggedIn']) {
                           store.dispatch(login({}));
                           Navigator.of(context).pop();
                         } else {

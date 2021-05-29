@@ -59,7 +59,7 @@ class SignIn extends Component {
       pwd: Pwd.encrypt(email, pwd)
     }, event => {
       var path = '/';
-      if (event.from) {
+      if (event.loggedIn) {
 //        xibbitObject.setSessionValue('me', event.me);
         this.props.model('loggedIn', true)
         // collect additional user settings if needed
