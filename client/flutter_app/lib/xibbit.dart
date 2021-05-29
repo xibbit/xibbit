@@ -341,7 +341,11 @@ class Xibbit {
     } else {
       event['_id'] = self.eventId++;
       if (self.config['log'] is String || event.containsKey('_log')) {
-        self.log(jsonEncode(event), self.logColors['request']);
+        var msg = this.reorderJson(jsonEncode(event),
+          ['type', 'to', 'from', '_id'],
+          ['i', 'e']
+        );
+        self.log(msg, self.logColors['request']);
       }
       if (callback != null) {
         // shallow clone
@@ -717,6 +721,45 @@ class Xibbit {
   }
 
   ///
+  /// Reorder keys in a JSON string.
+  /// @author DanielWHoward
+  ///
+  String reorderJson(s, first, last) {
+    var i = 0;
+    var targets = [];
+    var sMap = jsonDecode(s);
+    // separate into an array of objects/maps
+    for (i=0; i < (first.length + last.length + 1); ++i) {
+      var k = '';
+      targets.add({});
+      if (i < first.length) {
+        k = first[i];
+      } else if (i > first.length) {
+        k = last[i - first.length - 1];
+      }
+      if ((k != '') && sMap.containsKey(k)) {
+        targets[i][k] = sMap[k];
+        sMap.remove(k);
+      }
+    }
+    targets[first.length] = sMap;
+    // build JSON string from array of objects/maps
+    s = '';
+    for (i=0; i < targets.length; ++i) {
+      var target = targets[i];
+      if (target.length > 0) {
+        var sTarget = jsonEncode(target);
+        if (s == '') {
+          s = sTarget;
+        } else {
+          s = s.substring(0, s.length-1) + "," + sTarget.substring(1);
+        }
+      }
+    }
+    return s;
+  }
+
+  ///
   /// Logging colors.
   /// @author DanielWHoward
   ///
@@ -749,7 +792,7 @@ class Xibbit {
         // log colored text to the console
         print(msg);
       } else {
-        if (event['e'] != null) {
+        if (event.containsKey('e')) {
           // response errors are pink; notification errors are brown
           color = event['_id'] != null
               ? this.logColors['response_error']
@@ -761,7 +804,6 @@ class Xibbit {
           }
           // log the event without the stack trace
           msg = jsonEncode(event);
-          this.log(msg, color);
           // restore the stack trace
           if (stacktrace != null) {
             event['e_stacktrace'] = stacktrace;
@@ -772,8 +814,12 @@ class Xibbit {
               ? this.logColors['response']
               : this.logColors['notification'];
           msg = jsonEncode(event);
-          this.log(msg, color);
         }
+        msg = this.reorderJson(msg,
+          ['type', 'to', 'from', '_id'],
+          ['i', 'e']
+        );
+        this.log(msg, color);
       }
     }
   }
