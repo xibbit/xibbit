@@ -15,7 +15,7 @@ final Logger _logger = Logger('socket_io_client:transport.XHRTransport');
 // The MIT License (MIT)
 //
 // FlutterHttpRequestStreamSubscription, FlutterHttpRequestStream, FlutterHttpRequest
-// xibbit 1.50 Copyright (c) © 2021 Daniel W. Howard and Sanjana A. Joshi Partnership
+// xibbit 1.5.1 Copyright (c) © 2021 Daniel W. Howard and Sanjana A. Joshi Partnership
 //
 // Permission is hereby granted, free of charge, to any person obtaining a copy
 // of this software and associated documentation files (the "Software"), to deal
@@ -35,7 +35,7 @@ final Logger _logger = Logger('socket_io_client:transport.XHRTransport');
 // OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 // SOFTWARE.
 //
-// @copyright xibbit 1.50 Copyright (c) © 2021 Daniel W. Howard and Sanjana A. Joshi Partnership
+// @copyright xibbit 1.5.1 Copyright (c) © 2021 Daniel W. Howard and Sanjana A. Joshi Partnership
 // @license http://opensource.org/licenses/MIT
 class FlutterHttpRequestStreamSubscription extends StreamSubscription {
   @override

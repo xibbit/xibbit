@@ -55,7 +55,9 @@ PHP was chosen as the default server because it is the easiest to set up and the
 
 ## current status
 
-xibbit is under active development.  Version 1.50 is the current version.
+xibbit is under active development.  Version 1.5.1 is the current version.
+
+Version 1.5.1 adds easier installation and removes "from" key (breaking change).
 
 Version 1.50 is the initial version released into open source.  It is of alpha quality: suitable for development but you may need to fix additional minor bugs to bring it to production quality.
 
