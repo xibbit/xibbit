@@ -1,7 +1,7 @@
 {
   "name": "marko-public-figure",
   "private": true,
-  "version": "1.5.0",
+  "version": "1.5.1",
   "description": "Public Figure webapp using Marko",
   "repository": "github:xibbit/xibbit",
   "license": "MIT",
