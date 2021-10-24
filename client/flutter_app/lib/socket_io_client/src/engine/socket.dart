@@ -107,7 +107,10 @@ class Socket extends EventEmitter {
     upgrade = opts['upgrade'] != false;
     path = opts['path'] ?? '/engine.io';
     if (path is String) {
-      path = path.toString().replaceFirst(RegExp(r'\/$'), '') + '/';
+      path = path
+              .toString()
+              .replaceFirst(RegExp(r'\/$'), '') +
+          '/';
     }
     forceJSONP = opts['forceJSONP'] == true;
     jsonp = opts['jsonp'] != false;
@@ -467,7 +470,7 @@ class Socket extends EventEmitter {
           break;
       }
     } else {
-      _logger.fine('packet received with socket readyState "${readyState}"');
+      _logger.fine('packet received with socket readyState "$readyState"');
     }
   }
 

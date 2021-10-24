@@ -380,7 +380,10 @@ class Xibbit {
     if ((method == 'socket.io') && !self.config['socketio']['start']) {
       var query = {};
       if ((self.config['socketio']['transports'] == 'polling')) {
-        query['instance'] = await self.getInstanceValue();
+        String instanceValue = await self.getInstanceValue();
+        if (instanceValue != null) {
+          query['instance'] = instanceValue;
+        }
       }
       var url = self.config['socketio']['url'];
       var sampleUrl = url;
@@ -481,8 +484,9 @@ class Xibbit {
   initInstance(String method) async {
     var self = this;
     Map<String, Object> instanceEvent = {'type': '_instance'};
-    if (await self.getInstanceValue() != null) {
-      instanceEvent['instance'] = await self.getInstanceValue();
+    String instanceValue = await self.getInstanceValue();
+    if (instanceValue != null) {
+      instanceEvent['instance'] = instanceValue;
       if (self.config['socketio']['transports'] == 'polling') {
         self.socket.io.engine.transport.query['instance'] =
             instanceEvent['instance'];

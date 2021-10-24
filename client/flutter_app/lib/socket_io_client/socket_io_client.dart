@@ -89,7 +89,7 @@ Socket _lookup(uri, opts) {
       false == opts['multiplex'] ||
       sameNamespace;
 
-  var io;
+  Manager io;
 
   if (newConnection) {
     _logger.fine('ignoring socket cache for $uri');

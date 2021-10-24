@@ -299,7 +299,7 @@ class Request extends EventEmitter {
     var self = this;
 
     try {
-      _logger.fine('xhr open ${method}: ${uri}');
+      _logger.fine('xhr open $method: $uri');
       xhr.open(method, uri, asynch: asynch);
 
       try {
@@ -372,7 +372,7 @@ class Request extends EventEmitter {
       });
       /*}*/
 
-      _logger.fine('xhr data ${data}');
+      _logger.fine('xhr data $data');
       xhr.send(data);
     } catch (e) {
 // Need to defer since .create() is called directly fhrom the constructor

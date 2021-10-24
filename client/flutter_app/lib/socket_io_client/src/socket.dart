@@ -156,7 +156,7 @@ class Socket extends EventEmitter {
       // event ack callback
       if (ack != null) {
         _logger.fine('emitting packet with ack id $ids');
-        acks['${ids}'] = ack;
+        acks['$ids'] = ack;
         packet['id'] = '${ids++}';
       }
 
@@ -355,7 +355,7 @@ class Socket extends EventEmitter {
   ///
   /// @api private
   void ondisconnect() {
-    _logger.fine('server disconnect (${nsp})');
+    _logger.fine('server disconnect ($nsp)');
     destroy();
     onclose('io server disconnect');
   }
@@ -388,7 +388,7 @@ class Socket extends EventEmitter {
 
   Socket disconnect() {
     if (connected == true) {
-      _logger.fine('performing disconnect (${nsp})');
+      _logger.fine('performing disconnect ($nsp)');
       packet({'type': DISCONNECT});
     }
 
