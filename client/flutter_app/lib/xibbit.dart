@@ -132,10 +132,6 @@ class Xibbit {
   /// @author DanielWHoward
   ///
   Xibbit(Map<String, Object> config) {
-    Logger.root.level = Level.ALL; // defaults to Level.INFO
-    Logger.root.onRecord.listen((record) {
-      print('${record.level.name}: ${record.message}');
-    });
     /* jshint validthis: true */
     var self = this;
     self.config = config;
@@ -341,7 +337,7 @@ class Xibbit {
       self.seqEvents.add({'event': event, 'callback': callback});
     } else {
       event['_id'] = self.eventId++;
-      if (self.config['log'] is String || event.containsKey('_log')) {
+      if (self.config['log'] || event.containsKey('_log')) {
         var msg = this.reorderJson(jsonEncode(event),
           ['type', 'to', 'from', '_id'],
           ['i', 'e']

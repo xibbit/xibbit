@@ -23,6 +23,7 @@
 // @version 1.5.2
 // @copyright xibbit 1.5.2 Copyright (c) © 2021 Daniel W. Howard and Sanjana A. Joshi Partnership
 // @license http://opensource.org/licenses/MIT
+import 'package:logging/logging.dart';
 import 'package:flutter/material.dart';
 import 'package:redux/redux.dart';
 import './modules/store.dart';
@@ -30,6 +31,11 @@ import './modules/services/hello.dart';
 import './pages/home.dart';
 
 void main() {
+  Logger.root.level = Level.OFF; // defaults to Level.INFO
+  Logger.root.onRecord.listen((record) {
+    print('${record.level.name}: ${record.message}');
+  });
+
   runApp(MyApp(store: store));
 }
 
