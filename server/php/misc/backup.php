@@ -394,32 +394,43 @@ function auto_backup() {
   global $link;
 
 /*
-#!/bin/sh
-# Ubuntu Linux auto_backup
-BACKUP="/home/sysadmin/PublicFigureBackups"
+#!/bin/bash
+# Ubuntu Linux and Mac auto_backup
+DIR="/home/sysadmin/PublicFigureBackups"
 SCRIPT="http://xibbit.github.io/misc/backup.php"
-TMPFILE=$(mktemp /tmp/backup_php.XXXXXX)
+OUTDATE=$(date '+%Y%m%d_%H%M%S')
+OUTFILE="$DIR/backup_mt_$OUTDATE.php"
+TMPFILE=$(mktemp /tmp/auto_backup.XXXXXX)
+TMPFILE0="$TMPFILE.0"
 PH1="66:1"
-KEY=$(cat $BACKUP/auto_backup_key)
+KEY=$(cat $DIR/auto_backup_key)
+#KEY="3DE54A55E41D0519D5E822F7052C30404EA6920C8AD021C018CA1F59C277AF82"
 NEWKEY1=$(/usr/bin/hexdump -n 16 -e '4/4 "%08X" 1 "\n"' /dev/urandom)
 NEWKEY2=$(/usr/bin/hexdump -n 16 -e '4/4 "%08X" 1 "\n"' /dev/urandom)
 NEWKEY="$NEWKEY1$NEWKEY2"
+#NEWKEY="3DCC490863EC757F9EA597FEF4BEF4A96293BACA21AABFFBF1A50B307E6F26AE"
 PH2="37:2"
 SALT=$(/usr/bin/uuidgen)
 IV=$(/usr/bin/hexdump -n 16 -e '4/4 "%08X" 1 "\n"' /dev/urandom)
+#IV="FBDE3B2C2DC7C10DBE56B61F91B18316"
 C="$PH1$NEWKEY"
-E=$(echo -n $C | /usr/bin/openssl enc -aes-256-cbc -nosalt -K $KEY -iv $IV -a)
+E=$(echo -n $C | /usr/bin/openssl enc -aes-256-cbc -e -nosalt -K $KEY -iv $IV -a)
+#E="knNdyQP4Nq9hUyuPiZn4eHnaSaik4FaaBFihfzucEEgOGwxIhWyc3s2NTAKsJopk IbJnGjamY00OXt4WUik/RGCenaO+/AQi33bwPdSLwVQ="
 S=$(echo -n "\$aes-256-cbc\$$IV\$$E" | /usr/bin/base64)
-/usr/bin/curl -s --data-urlencode "c=$S" $SCRIPT > $TMPFILE
+URL=http://xibbit.github.io/misc/backup.php?c=JGFlcy0yNTYtY2JjJEZCREUzQjJDMkRDN0MxMERCRTU2QjYxRjkxQjE4MzE2JGtuTmR5UVA0TnE5aFV5dVBpWm40ZUhuYVNhaWs0RmFhQkZpaGZ6dWNFRWdPR3d4SWhXeWMzczJOVEFLc0pvcGsgSWJKbkdqYW1ZMDBPWHQ0V1Vpay9SR0NlbmFPKy9BUWkzM2J3UGRTTHdWUT0=&dryRun=true"
+/usr/bin/curl -s --data-urlencode "c=$S" --data-urlencode "dryRun=false" $SCRIPT > $TMPFILE
 SZ=$(/usr/bin/wc -c < $TMPFILE)
-if [ $SZ -gt 10000 ]; then
+HEAD=$(/usr/bin/cut -b -13 < $TMPFILE)
+if [[ $SZ -gt 10000 && $HEAD == "\$aes-256-cbc\$" ]]; then
 IV=$(/usr/bin/cut -b 14-45 < $TMPFILE)
-/bin/cat < $TMPFILE | /usr/bin/cut -b 47- | /usr/bin/base64 -d | /usr/bin/openssl aes-256-cbc -d -nosalt -K $NEWKEY -iv $IV -out $BACKUP/backup_pf_`date '+%Y%m%d_%H%M%S'`.php
-echo $NEWKEY > $BACKUP/auto_backup_key
+/usr/bin/cut -b 47- < $TMPFILE | /usr/bin/base64 -d > $TMPFILE0
+/usr/bin/openssl enc -aes-256-cbc -d -nosalt -K $NEWKEY -iv $IV -in $TMPFILE0 -out $OUTFILE
+echo $NEWKEY > $DIR/auto_backup_key
 else
 /usr/bin/curl -s --data-urlencode "m=decrypt failed" $SCRIPT > /dev/null
 fi
 /bin/rm $TMPFILE
+/bin/rm $TMPFILE0
 */
   $shadow = '';
   $q = 'SELECT pwd FROM '.$sql_prefix.'backups WHERE id>=2 AND id<=3 ORDER BY id;';
@@ -439,13 +450,20 @@ fi
 $shadow = '';
 //$shadow = auto_backup();
 if (isset($_REQUEST['c']) && ($shadow === '')) {
+  $dryRun = isset($_REQUEST['dryRun']) && ($_REQUEST['dryRun'] === 'true');
   $c = $_REQUEST['c'];
+  if ($dryRun) {
+    $shadow .= 'c='.$c."\n";
+  }
   $c = base64_decode($c);
+  if ($dryRun) {
+    $shadow .= 'c='.$c."\n";
+  }
   // detect replay attacks
   $hc = hash('crc32b', $c);
   $q = 'SELECT id FROM '.$sql_prefix.'backups WHERE pwd=\''.$hc.'\';';
   $result = mysqli_query($link, $q);
-  if (mysqli_num_rows($result) === 0) {
+  if ((mysqli_num_rows($result) === 0) || $dryRun) {
     // get current and new encryption keys
     $q = 'SELECT pwd FROM '.$sql_prefix.'backups WHERE id>=2 AND id<=3 ORDER BY id;';
     $result = mysqli_query($link, $q);
@@ -456,6 +474,9 @@ if (isset($_REQUEST['c']) && ($shadow === '')) {
       }
       mysqli_free_result($result);
       // try to decrypt using both keys
+      if ($dryRun) {
+        $ks[0] = '3DE54A55E41D0519D5E822F7052C30404EA6920C8AD021C018CA1F59C277AF82';
+      }
       $d1 = crypt_shadow_decrypt($c, hex2bin($ks[0]));
       $d2 = crypt_shadow_decrypt($c, hex2bin($ks[1]));
       $d = ($d1 !== false)? $d1: $d2;
@@ -475,20 +496,34 @@ if (isset($_REQUEST['c']) && ($shadow === '')) {
         }
         // key rotation: update the current key with the new key if new key was used
         $q = 'UPDATE '.$sql_prefix.'backups SET pwd=\''.$k.'\', dt=\''.$now.'\' WHERE id=2;';
-        $result = mysqli_query($link, $q);
+        if ($dryRun) {
+          $shadow .= $q."\n";
+        } else {
+          $result = mysqli_query($link, $q);
+        }
         // update new key if we got a "new key" command
         if ($newk !== '') {
           $q = 'UPDATE '.$sql_prefix.'backups SET pwd=\''.$newk.'\', dt=\''.$now.'\' WHERE id=3;';
-          $result = mysqli_query($link, $q);
+          if ($dryRun) {
+            $shadow .= $q."\n";
+          } else {
+            $result = mysqli_query($link, $q);
+          }
           $k = $newk;
         }
-        // save crc32b for replay attack detection
-        $q = 'INSERT INTO '.$sql_prefix.'backups VALUES(0, \''.$hc.'\', \''.$now.'\');';
-        $result = mysqli_query($link, $q);
-        // create encrypted MySQL installation PHP file
-        $data = backup();
-        $encryption_key = hex2bin($k);
-        $shadow = crypt_shadow_encrypt($data, $encryption_key);
+        if ($dryRun) {
+          $shadow .= "success\n";
+        } else {
+          // save crc32b for replay attack detection
+          $q = 'INSERT INTO '.$sql_prefix.'backups VALUES(0, \''.$hc.'\', \''.$now.'\');';
+          $result = mysqli_query($link, $q);
+          // create encrypted MySQL installation PHP file
+          $data = backup();
+          $encryption_key = hex2bin($k);
+          $shadow = crypt_shadow_encrypt($data, $encryption_key);
+        }
+      } elseif ($dryRun) {
+        $shadow .= "invalid\n";
       }
     }
   }
