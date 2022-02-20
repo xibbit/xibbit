@@ -13,12 +13,12 @@ class Command(RunCommand):
             # deploy with eventlet
             import eventlet
             import eventlet.wsgi
-            from django_example.wsgi import application
+            from publicfigure.wsgi import application
             eventlet.wsgi.server(eventlet.listen(('', 8000)), application)
         elif sio.async_mode == 'gevent':
             # deploy with gevent
             from gevent import pywsgi
-            from django_example.wsgi import application
+            from publicfigure.wsgi import application
             try:
                 from geventwebsocket.handler import WebSocketHandler
                 websocket = True
@@ -33,7 +33,7 @@ class Command(RunCommand):
         elif sio.async_mode == 'gevent_uwsgi':
             print('Start the application through the uwsgi server. Example:')
             print('uwsgi --http :5000 --gevent 1000 --http-websockets '
-                  '--master --wsgi-file django_example/wsgi.py --callable '
+                  '--master --wsgi-file publicfigure/wsgi.py --callable '
                   'application')
         else:
             print('Unknown async_mode: ' + sio.async_mode)
