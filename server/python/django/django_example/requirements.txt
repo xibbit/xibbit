@@ -1,0 +1,9 @@
+django
+enum-compat
+eventlet
+greenlet
+python-engineio
+python-socketio
+pytz
+six
+dnspython

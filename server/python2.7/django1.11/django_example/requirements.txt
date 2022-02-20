@@ -1,0 +1,8 @@
+django==1.11.29
+enum-compat==0.0.3
+eventlet==0.30.0
+greenlet==0.4.17
+pytz==2018.7
+six==1.10.0
+python2-secrets==1.0.5
+bidict==0.18.4
