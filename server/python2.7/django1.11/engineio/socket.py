@@ -155,6 +155,7 @@ class Socket(object):
             # the selected async mode does not support websocket
             return self.server._bad_request()
         ws = self.server._async['websocket'](self._websocket_handler)
+        self.server.logger.info('%s: Created websocket', self.sid)
         return ws(environ, start_response)
 
     def _websocket_handler(self, ws):
@@ -184,7 +185,7 @@ class Socket(object):
                     '%s: Failed websocket upgrade, no PING packet', self.sid)
                 self.upgrading = False
                 return []
-            ws.send(packet.Packet(packet.PONG, data='probe').encode())
+            ws.send(packet.Packet(packet.PONG, data='probe').encode().decode('utf-8'))
             self.queue.put(packet.Packet(packet.NOOP))  # end poll
 
             pkt = websocket_wait()
@@ -210,14 +211,31 @@ class Socket(object):
                 try:
                     packets = self.poll()
                 except exceptions.QueueEmpty:
+                    self.server.logger.info(
+                        'QueueEmpty exception in writer thread')
                     break
                 if not packets:
                     # empty packet list returned -> connection closed
+                    self.server.logger.info(
+                        '"not packets" exception in writer thread')
                     break
+                pktToSend = None
                 try:
                     for pkt in packets:
-                        ws.send(pkt.encode())
-                except:
+                        pktToSend = pkt
+                        data = pkt.encode()
+                        if isinstance(data, str):
+                            data = data.decode('utf-8')
+                        ws.send(data)
+                        self.server.logger.info('%s: Sent packet of type "%s"',
+                            self.sid, packet.packet_names[pkt.packet_type])
+                except Exception, e:
+                    if pktToSend is not None:
+                        self.server.logger.info(
+                            'ws.send(pktToSend) exception in writer thread')
+                    else:
+                        self.server.logger.info(
+                            'ws.send(None) exception in writer thread')
                     break
         writer_task = self.server.start_background_task(writer)
 
@@ -240,6 +258,8 @@ class Socket(object):
                 # connection closed by client
                 break
             pkt = packet.Packet(encoded_packet=p)
+            self.server.logger.info('%s: Received packet of type "%s"',
+                self.sid, packet.packet_names[pkt.packet_type])
             try:
                 self.receive(pkt)
             except exceptions.UnknownPacketError:  # pragma: no cover

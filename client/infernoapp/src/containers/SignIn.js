@@ -31,6 +31,11 @@ import { model } from '../reducers/app'
 import { signIn } from '../actions/signin'
 import Pwd from '../modules/pwd';
 import xibbitObject from '../modules/xibbitobject';
+import url_config from '../modules/url_config';
+
+// if the 'basename' attribute on BrowserRouter worked, the 'basename'
+// variable should not be needed at all in this file
+const basename = url_config.server_platform === 'django'? '/static': '';
 
 class SignIn extends Component {
   state = {
@@ -59,7 +64,7 @@ class SignIn extends Component {
       to: email,
       pwd: Pwd.encrypt(email, pwd)
     }, event => {
-      var path = '/';
+      var path = `${basename}/`;
       if (event.loggedIn) {
         xibbitObject.addSessionValue('me', event.me);
         this.props.model('loggedIn', true)

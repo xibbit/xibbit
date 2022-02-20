@@ -8,13 +8,20 @@ https://docs.djangoproject.com/en/4.0/howto/deployment/wsgi/
 """
 
 import os
+from app import app
 
 from django.core.wsgi import get_wsgi_application
+from django.contrib.staticfiles.handlers import StaticFilesHandler
 import socketio
+from xibbit.xibbithub import sioGlobalObject
 
-from socketio_app.views import sio
+app.main()
 
 os.environ.setdefault('DJANGO_SETTINGS_MODULE', 'publicfigure.settings')
 
-django_app = get_wsgi_application()
-application = socketio.WSGIApp(sio, django_app)
+django_app = StaticFilesHandler(get_wsgi_application())
+application = socketio.Middleware(sioGlobalObject, wsgi_app=django_app, socketio_path='socket.io')
+
+import eventlet
+import eventlet.wsgi
+eventlet.wsgi.server(eventlet.listen(('', 8000)), application)

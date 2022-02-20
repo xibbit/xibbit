@@ -30,12 +30,17 @@ import configureStore from './store'
 import './index.css';
 import App from './App';
 import * as serviceWorker from './serviceWorker';
+import url_config from './modules/url_config';
+
+// the 'basename' attribute on BrowserRouter doesn't seem to work
+// but do it anyway
+const basename = url_config.server_platform === 'django'? '/static': '';
 
 const store = configureStore(/* provide initial state if any */)
 
 render(
   <Provider store={store}>
-    <BrowserRouter>
+    <BrowserRouter basename={ basename }>
       <App />
     </BrowserRouter>
   </Provider>,

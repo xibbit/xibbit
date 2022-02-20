@@ -29,11 +29,42 @@ import url_config from './url_config';
 class XibbitService extends Xibbit {
 
   upload(url, event, callback) {
-    this.uploadEvent(url, event, function(evt) {
-      if (callback) {
-        callback(evt);
-      }
-    });
+    if (url_config.server_platform === 'django') {
+      // get Cross-Site Request Forgery security token
+      this.getUploadForm(url, (html) => {
+        var csrfmiddlewaretoken = '';
+        var quote = '';
+        var attribName = '';
+        var pos = html.indexOf('csrfmiddlewaretoken');
+        if (pos !== -1) {
+          quote = html[pos-1];
+          attribName = html.substring(pos-6);
+        }
+        if (attribName.startsWith('name=') && (['"', "'"].indexOf(quote) >= 0)) {
+          attribName = 'value=' + quote;
+          pos = html.indexOf(attribName, pos);
+        }
+        if (pos !== -1) {
+          csrfmiddlewaretoken = html.substring(pos + attribName.length);
+          pos = csrfmiddlewaretoken.indexOf(quote);
+        }
+        if (pos !== -1) {
+          csrfmiddlewaretoken = csrfmiddlewaretoken.substring(0, pos);
+        }
+        event.csrfmiddlewaretoken = csrfmiddlewaretoken;
+        this.uploadEvent(url, event, function(evt) {
+          if (callback) {
+            callback(evt);
+          }
+        });
+      });
+    } else {
+      this.uploadEvent(url, event, function(evt) {
+        if (callback) {
+          callback(evt);
+        }
+      });
+    }
   }
 }
 

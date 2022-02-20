@@ -39,7 +39,7 @@ class {
         this.state.loggedIn = false;
         global.xibbitObject.addSessionValue('loggedIn', false);
         // explicitly return to the front page
-        if (window.location.href === '/') {
+        if (window.location.href === '/' || true) {
           window.location.reload();
         } else {
           window.location = '/';
@@ -52,8 +52,8 @@ class {
 <nav.menu>
   <a href="/">/</a>
   <if(!state.loggedIn)>
-    <a href="/signin">signin</a>
-    <a href="/signup">signup</a>
+    <a href="./signin/index.html">signin</a>
+    <a href="./signup/index.html">signup</a>
   </if>
   <else>
     <a on-click("handleClick") href="/">signout</a>

@@ -47,6 +47,9 @@ class {
         const username = xibbitObject.getSessionValue('me').username;
         const publicFolder = global.url_config.server_base[global.url_config.server_platform]+'/public/images';
         this.profile_image = publicFolder+'/'+username+'.png';
+        if (global.url_config.server_platform === 'django') {
+          this.profile_image = '/public/images/'+username+'.png';
+        }
         this.state.profile = event.profile;
         this.state.profile_image = this.profile_image + '?r=' + Math.floor(Math.random() * 1000);
       }
@@ -85,6 +88,7 @@ class {
       go: '/user/profile/upload_photo',
       node: '/user/profile/upload_photo',
       php: global.url_config.server_base[global.url_config.server_platform]+'/app.php', // /user_profile_upload_photo.php
+      django: '/upload_photo/image_upload',
     };
     const url = urls[global.url_config.server_platform];
     xibbitObject.upload(url, {

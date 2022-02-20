@@ -5,6 +5,9 @@ import io
 import logging
 import secrets
 # import urllib
+# try:
+#    from urllib.parse import urlparse
+# except ImportError:
 from urlparse import urlparse, parse_qs
 import zlib
 

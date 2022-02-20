@@ -52,8 +52,11 @@ class Packet(object):
         """
         encoded_packet = str(self.packet_type)
         if self.packet_type == BINARY_EVENT or self.packet_type == BINARY_ACK:
+            # TODO fix this
             data, attachments = self._deconstruct_binary(self.data)
             encoded_packet += str(len(attachments)) + '-'
+            # print(encoded_packet)
+            # print(attachments)
         else:
             data = self.data
             attachments = None
@@ -64,7 +67,12 @@ class Packet(object):
         if data is not None:
             encoded_packet += self.json.dumps(data, separators=(',', ':'))
         if attachments is not None:
-            encoded_packet = [encoded_packet] + attachments
+            # encoded_packet = [encoded_packet] + attachments
+            if self.packet_type == 5:
+                encoded_packet = [encoded_packet] + attachments
+                encoded_packet = '2' + self.json.dumps(self._reconstruct_binary_internal(data, attachments))
+            else:
+                encoded_packet = [encoded_packet] + attachments
         return encoded_packet
 
     def decode(self, encoded_packet):

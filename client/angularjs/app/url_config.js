@@ -32,5 +32,6 @@ var server_platform = 'php';
 var server_base = {
   go: '',
   node: '',
-  php: '/php'
+  php: '/php',
+  django: '/static'
 };

@@ -6,3 +6,4 @@ pytz==2018.7
 six==1.10.0
 python2-secrets==1.0.5
 bidict==0.18.4
+mysql-connector-python==8.0.23
