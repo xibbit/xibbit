@@ -116,7 +116,7 @@ angular.module('myApp')
         url: server_platform === 'php'? function() {
           return server_base.php+'/app.php';
         } : server_base[server_platform],
-        js_location: server_base[server_platform]
+        js_location: server_platform === 'django'? '': server_base[server_platform]
       },
       log: client_debug
     });
@@ -198,7 +198,34 @@ angular.module('myApp')
       var promise0 = defer0.promise;
       var defer = $q.defer();
       var promise = defer.promise;
-      defer0.resolve();
+      if (server_platform === 'django') {
+        // get Cross-Site Request Forgery security token
+        events.getUploadForm(url, function(html) {
+          var csrfmiddlewaretoken = '';
+          var quote = '';
+          var attribName = '';
+          var pos = html.indexOf('csrfmiddlewaretoken');
+          if (pos !== -1) {
+            quote = html[pos-1];
+            attribName = html.substring(pos-6);
+          }
+          if (attribName.startsWith('name=') && (['"', "'"].indexOf(quote) >= 0)) {
+            attribName = 'value=' + quote;
+            pos = html.indexOf(attribName, pos);
+          }
+          if (pos !== -1) {
+            csrfmiddlewaretoken = html.substring(pos + attribName.length);
+            pos = csrfmiddlewaretoken.indexOf(quote);
+          }
+          if (pos !== -1) {
+            csrfmiddlewaretoken = csrfmiddlewaretoken.substring(0, pos);
+          }
+          event.csrfmiddlewaretoken = csrfmiddlewaretoken;
+          defer0.resolve();
+        });
+      } else {
+        defer0.resolve();
+      }
       promise0.then(function() {
         events.uploadEvent(url, event, function(evt) {
           if (callback) {

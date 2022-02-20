@@ -15,6 +15,25 @@ from pathlib import Path
 # Build paths inside the project like this: BASE_DIR / 'subdir'.
 BASE_DIR = Path(__file__).resolve().parent.parent
 
+clientRootFolder = Path(BASE_DIR / '..' / '..' / '..' / 'client').resolve()
+clientFolders = {
+  'django': '.',
+  'react': clientRootFolder / 'reactapp' / 'build',
+  'angularjs': clientRootFolder / 'angularjs' / 'app',
+  'inferno': clientRootFolder / 'infernoapp' / 'build',
+  'marko': clientRootFolder / 'marko' / 'dist',
+  'mithril': clientRootFolder / 'mithril' / 'dist'
+}
+clientFolder = BASE_DIR / 'static'
+CLIENT_FOLDER = clientFolders['angularjs']
+
+STATICFILES_DIRS = (
+  Path(BASE_DIR / 'static').resolve(),
+  CLIENT_FOLDER,
+)
+
+MEDIA_URL = '/public/'
+MEDIA_ROOT = BASE_DIR / 'public'
 
 # Quick-start development settings - unsuitable for production
 # See https://docs.djangoproject.com/en/4.0/howto/deployment/checklist/
@@ -31,7 +50,9 @@ ALLOWED_HOSTS = []
 # Application definition
 
 INSTALLED_APPS = [
-    'socketio_app',
+    'app',
+    'install',
+    'upload_photo',
     'django.contrib.admin',
     'django.contrib.auth',
     'django.contrib.contenttypes',
@@ -116,7 +137,8 @@ USE_TZ = True
 # Static files (CSS, JavaScript, Images)
 # https://docs.djangoproject.com/en/4.0/howto/static-files/
 
-STATIC_URL = 'static/'
+STATIC_URL = '/static/'
+STATIC_ROOT = Path(clientRootFolder / '..' / '..').resolve()
 
 # Default primary key field type
 # https://docs.djangoproject.com/en/4.0/ref/settings/#default-auto-field

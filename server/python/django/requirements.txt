@@ -7,3 +7,4 @@ python-socketio
 pytz
 six
 dnspython
+mysql-connector-python

@@ -1,0 +1,21 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <style>
+  .code { font-family: monospace; font-weight: bold; font-size: larger; }
+  </style>
+</head>
+<body>
+  <p>The Django development server uses <span class="code">static/index.html</span>
+  instead of <span class="code">/</span> (or <span class="code">/index.html</span>)
+  to deliver static content.</p>
+  <p>You can look at the actual <span class="code">static/</span> serving Django
+  source code at a path like:</p>
+  <p><span class="code">/Library/Frameworks/Python.framework/Versions/3.10/lib/python3.10/site-packages/django/views/static.py</span></p>
+  <p>and see that there is no way to serve <span class="code">index.html</span> by
+  default; it is hardcoded to <span class="code">directory_index.html.</span></p>
+  <p>Click <a class="code" href="static/index.html">static/index.html</a> to start.</p>
+  <p>Click <a class="code" href="http://localhost:8000/admin/login/?next=/admin/">http://localhost:8000/admin/login/?next=/admin/</a> to see the Django admin panel</p>
+</body>
+</html>

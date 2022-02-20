@@ -23,6 +23,16 @@
 // @version 1.5.3
 // @copyright xibbit 1.5.3 Copyright (c) © 2021 Daniel W. Howard and Sanjana A. Joshi Partnership
 // @license http://opensource.org/licenses/MIT
+const url_config = require('./src/modules/url_config');
+
+const basename = url_config.server_platform === 'django'? '/static': '';
+
 module.exports = require("marko-starter").projectConfig({
-  name: "marko-public-figure" // Optional, but added here for demo purposes
+  name: "marko-public-figure", // Optional, but added here for demo purposes
+  routePathPrefix: '.',
+  lassoConfig: {
+    urlPrefix: basename,
+    relativeUrlsEnabled: true,
+    bundleReadTimeout: 10002,
+  }
 });

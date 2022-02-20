@@ -35,7 +35,12 @@ import { model } from './reducers/app'
 import Logo from './logo';
 import './App.css';
 import xibbitObject from './modules/xibbitobject';
+import url_config from './modules/url_config';
 import './modules/hello';
+
+// if the 'basename' attribute on BrowserRouter worked, the 'basename'
+// variable should not be needed at all in this file
+const basename = url_config.server_platform === 'django'? '/static': '';
 
 class App extends Component {
   signOut = () => {
@@ -55,15 +60,16 @@ class App extends Component {
         <header className="App-header">
           <ul className="menu">
             <li><Link to="/">Home</Link></li>
-            { !signedIn ? <li><Link to="/signin">Sign In</Link></li> : null }
-            { !signedIn ? <li><Link to="/signup">Sign Up</Link></li> : null }
-            { signedIn ? <li><Link to="/" onClick={this.signOut}>Sign Out</Link></li> : null }
+            { !signedIn ? <li><Link to={`${basename}/signin`}>Sign In</Link></li> : null }
+            { !signedIn ? <li><Link to={`${basename}/signup`}>Sign Up</Link></li> : null }
+            { signedIn ? <li><Link to={`${basename}/`} onClick={this.signOut}>Sign Out</Link></li> : null }
           </ul>
           <hr style={{width: '100%'}} />
           <div>
-            <Route exact path="/" render={() => (<Home />)} />
-            <Route exact path="/signin" render={() => (<SignIn />)} />
-            <Route exact path="/signup" render={() => (<SignUp />)} />
+            <Route path={`${basename}/index.html`} render={() => (<Home />)} />
+            <Route exact path={`${basename}/`} render={() => (<Home />)} />
+            <Route path={`${basename}/signin`} render={() => (<SignIn />)} />
+            <Route path={`${basename}/signup`} render={() => (<SignUp />)} />
           </div>
           <Logo width="80" height="80" />
           <p>{`Welcome to Inferno ${version}`}</p>

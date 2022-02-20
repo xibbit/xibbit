@@ -28,8 +28,11 @@ import { routerMiddleware } from 'connected-react-router'
 import { createBrowserHistory } from 'history'
 import thunk from 'redux-thunk';
 import createRootReducer from './reducers'
+import url_config from './modules/url_config';
 
-export const history = createBrowserHistory()
+const basename = url_config.server_platform === 'django'? '/static': '';
+
+export const history = createBrowserHistory({ basename })
 
 export default function configureStore(preloadedState) {
   const store = createStore(

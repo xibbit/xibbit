@@ -23,6 +23,8 @@
 // @version 1.5.3
 // @copyright xibbit 1.5.3 Copyright (c) © 2021 Daniel W. Howard and Sanjana A. Joshi Partnership
 // @license http://opensource.org/licenses/MIT
+var url_config = require('../../../../../src/modules/url_config');
+
 class {
   onCreate() {
     this.state = {
@@ -39,6 +41,7 @@ class {
   }
   handleFormSubmit(event) {
     event.preventDefault();
+    const basename = url_config.server_platform === 'django'? '/static': '';
     const { email, pwd } = this.state;
     event.preventDefault();
     global.xibbitObject.send({
@@ -53,9 +56,9 @@ class {
         // collect additional user settings if needed
         if (event.i && (event.i.substring(0, 8) === 'collect:')) {
           path = event.i.substring(8).split(':');
-          path = '/'+path[0];
+          path = basename+path[0]+'/index.html';
         }
-        window.location = path;
+        window.location = basename+path+'index.html';
       } else {
         this.state.error = event.i || event.e;
       }

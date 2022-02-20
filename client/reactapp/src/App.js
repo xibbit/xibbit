@@ -62,6 +62,7 @@ class App extends React.Component {
         </ul>
         <hr style={{width: '100%'}} />
         <Switch>
+          <Route exact path="/index.html" render={() => (<Home />)} />
           <Route exact path="/" render={() => (<Home />)} />
           <Route exact path="/signin" render={() => (<SignIn />)} />
           <Route exact path="/signup" render={() => (<SignUp />)} />" +

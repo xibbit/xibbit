@@ -35,5 +35,6 @@ const String server_host =
 const Map server_base = {
   'go': 'http://${server_host}:8080',
   'node': 'http://${server_host}:8000',
-  'php': 'http://${server_host}/xibbit/server/php'
+  'php': 'http://${server_host}/xibbit/server/php',
+  'django': 'http://${server_host}:8000'
 };

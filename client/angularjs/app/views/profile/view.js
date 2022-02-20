@@ -70,12 +70,16 @@ angular.module('myApp.views')
     var username = XibbitService.session.me.username;
     var publicFolder = server_base[server_platform]+'/public/images';
     var profile_image = publicFolder+'/'+username+'.png';
+    if (server_platform === 'django') {
+      profile_image = '/public/images/'+username+'.png';
+    }
     ProfileView.profile_image = profile_image + '?r=' + Math.floor(Math.random() * 1000);
     ProfileView.uploadProfileImage = function(element) {
       var urls = {
         go: '/user/profile/upload_photo',
         node: '/user/profile/upload_photo',
-        php: server_base[server_platform]+'/app.php' // /user_profile_upload_photo.php
+        php: server_base[server_platform]+'/app.php', // /user_profile_upload_photo.php
+        django: '/upload_photo/image_upload'
       };
       var url = urls[server_platform];
       XibbitService.upload(url, {

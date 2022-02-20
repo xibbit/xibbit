@@ -38,6 +38,9 @@ class Profile extends React.Component {
         const username = xibbitObject.getSessionValue('me').username;
         const publicFolder = url_config.server_base[url_config.server_platform]+'/public/images';
         this.profile_image = publicFolder+'/'+username+'.png';
+        if (url_config.server_platform === 'django') {
+          this.profile_image = '/public/images/'+username+'.png';
+        }
         this.setState({
           profile: event.profile,
           profile_image: this.profile_image + '?r=' + Math.floor(Math.random() * 1000)
@@ -117,7 +120,8 @@ class Profile extends React.Component {
     const urls = {
       go: '/user/profile/upload_photo',
       node: '/user/profile/upload_photo',
-      php: url_config.server_base[url_config.server_platform]+'/app.php' // /user_profile_upload_photo.php
+      php: url_config.server_base[url_config.server_platform]+'/app.php', // /user_profile_upload_photo.php
+      django: '/upload_photo/image_upload'
     };
     var url = urls[url_config.server_platform];
     xibbitObject.upload(url, {
