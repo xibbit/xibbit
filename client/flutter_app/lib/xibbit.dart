@@ -29,7 +29,7 @@ import 'package:flutter/material.dart';
 import 'package:http/http.dart' as http;
 import 'package:logging/logging.dart';
 import 'package:shared_preferences/shared_preferences.dart';
-import './socket_io_client/socket_io_client.dart';
+import 'package:socket_io_client_flutter/socket_io_client_flutter.dart';
 
 final Logger _logger = Logger('xibbit');
 
