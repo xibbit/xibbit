@@ -26,7 +26,6 @@
 /* global _, _events, client_debug, client_poll, client_socketio, client_transports, server_platform, server_base */
 //'use strict';
 
-import 'dart:math';
 import '../../xibbit.dart';
 import '../../url_config.dart';
 import '../store.dart';
@@ -219,6 +218,33 @@ class XibbitService {
       resolve(evt);
     });
     return retVal;
+  }
+
+  ///
+  /// Upload a file to the backend.
+  /// @author DanielWHoward
+  ///
+  upload(url, event, callback) {
+    var self = this;
+    Future promise = Future<bool>.value(true);
+    if (server_platform == 'django') {
+      // get Cross-Site Request Forgery security token
+      promise = self.xibbit.getUploadForm(url, (html) {
+        var csrfmiddlewaretoken = '';
+        var start = '<input type="hidden" name="csrfmiddlewaretoken" value="';
+        var end = '">';
+        start = html.indexOf(start) + start.length;
+        end = html.indexOf(end, start);
+        csrfmiddlewaretoken = html.substring(start, end);
+        event.csrfmiddlewaretoken = csrfmiddlewaretoken;
+        return true;
+      });
+    }
+    promise.then((b) {
+      self.xibbit.uploadEvent(url, event, (evt) {
+        callback(evt);
+      });
+    });
   }
 
   /**

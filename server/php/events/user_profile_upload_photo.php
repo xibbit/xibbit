@@ -1,6 +1,7 @@
+<?php
 // The MIT License (MIT)
 //
-// xibbit 1.5.3 Copyright (c) © 2021 Daniel W. Howard and Sanjana A. Joshi Partnership
+// xibbit 1.5.1 Copyright (c) © 2021 Daniel W. Howard and Sanjana A. Joshi Partnership
 //
 // Permission is hereby granted, free of charge, to any person obtaining a copy
 // of this software and associated documentation files (the "Software"), to deal
@@ -20,34 +21,28 @@
 // OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 // SOFTWARE.
 //
-// @version 1.5.3
-// @copyright xibbit 1.5.3 Copyright (c) © 2021 Daniel W. Howard and Sanjana A. Joshi Partnership
+// @version 1.5.1
+// @copyright xibbit 1.5.1 Copyright (c) © 2021 Daniel W. Howard and Sanjana A. Joshi Partnership
 // @license http://opensource.org/licenses/MIT
-import Xibbit from './xibbit';
-import url_config from './url_config';
+require_once('./asserte.php');
+/**
+ * Handle user_profile event.  Get this user's
+ * profile.
+ *
+ * @author Daniel Howard
+ **/
+$self = $this;
+$self->on('user_profile_upload_photo', function($event, $vars) {
+  $pf = $vars['pf'];
 
-class XibbitService extends Xibbit {
-
-  upload(url, event, callback) {
-    this.uploadEvent(url, event, function(evt) {
-      if (callback) {
-        callback(evt);
-      }
-    });
+  $username = $event['_session']['username'];
+  $perm_fn = dirname(__DIR__).'/public/images/'.$username.'.png';
+  $success = move_uploaded_file($event['image']['tmp_name'], $perm_fn);
+  if ($success) {
+    $event['i'] = 'uploaded';
+  } else {
+    $event['e'] = 'upload failed';
   }
-}
-
-export default new XibbitService({
-  preserveSession: true,
-  seq: true,
-  socketio: {
-    start: true,
-    transports: url_config.client_transports,
-    min: (url_config.client_transports.indexOf('xio') !== -1)? 3000: null,
-    url: url_config.server_platform === 'php'? function() {
-      return url_config.server_base.php+'/app.php';
-    } : url_config.server_base[url_config.server_platform],
-    js_location: url_config.server_base[url_config.server_platform]
-  },
-  log: url_config.client_debug
+  return $event;
 });
+?>

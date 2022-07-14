@@ -426,6 +426,18 @@ module.exports = function() {
   }
 
   /**
+   * Package events, execute them and return response events.
+   *
+   * @param array fileEvents
+   * @return NULL[]
+   *
+   * @author DanielWHoward
+   **/
+  XibbitHub.prototype.readAndWriteUploadEvent = function(typ, fn) {
+    this.onfn[typ] = fn;
+  };
+
+  /**
    * Provide an authenticated callback for an event.
    *
    * @param typ string The event to handle.

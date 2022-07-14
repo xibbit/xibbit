@@ -95,6 +95,7 @@ $self->api('login', function($event, $vars) {
       $event['_session']['user'] = $me;
       // return user info
       $event['me'] = array(
+        'username'=>$me['username'],
         'roles'=>isset($me['roles'])? $me['roles']: array()
       );
       $event['loggedIn'] = true;

@@ -120,6 +120,7 @@ class _SigninPage extends State<SigninPage> {
                             .toString()
                       }, (event) {
                         if (event['loggedIn']) {
+                          xibbitService.setSessionValue('me', event['me']);
                           store.dispatch(login({}));
                           Navigator.of(context).pop();
                         } else {

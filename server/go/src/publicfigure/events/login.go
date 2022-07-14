@@ -107,6 +107,7 @@ func Login(event map[string]interface{}, vars map[string]interface{}) map[string
 			event["_session"].(map[string]interface{})["user"] = me
 			// return user info
 			event["me"] = map[string]interface{}{
+				"username": me["username"],
 				"roles": me["roles"],
 			}
 			event["loggedIn"] = true

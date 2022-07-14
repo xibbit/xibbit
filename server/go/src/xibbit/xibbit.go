@@ -573,6 +573,18 @@ func (self *XibbitHub) Start(method string) {
 }
 
 /**
+ * Package events, execute them and return response events.
+ *
+ * @param array fileEvents
+ * @return NULL[]
+ *
+ * @author DanielWHoward
+ **/
+func (self *XibbitHub) readAndWriteUploadEvent(event []map[string]interface{}) []map[string]interface{} {
+	return event
+}
+
+/**
  * Provide an authenticated callback for an event.
  *
  * @param typ string The event to handle.
@@ -604,7 +616,7 @@ func (self *XibbitHub) Api(typ string, fn func(event map[string]interface{}, var
  * @author DanielWHoward
  **/
 func (self *XibbitHub) Trigger(event map[string]interface{}) ([]map[string]interface{}, error) {
-	keysToSkip := []string{"_conn", "_session"}
+	keysToSkip := []string{"_conn", "_session", "image"}
 	var eventType = event["type"].(string)
 	//	var pluginsFolder = nil;
 	//	var handlerFile = nil;
@@ -628,11 +640,10 @@ func (self *XibbitHub) Trigger(event map[string]interface{}) ([]map[string]inter
 		// clone the event
 
 		var eventReply = self.CloneEvent(event, keysToSkip)
-		if _, ok := event["_conn"]; ok {
-			eventReply["_conn"] = event["_conn"]
-		}
-		if _, ok := event["_session"]; ok {
-			eventReply["_session"] = event["_session"]
+		for _, key := range keysToSkip {
+			if _, exists := event[key]; exists {
+				eventReply[key] = event[key]
+			}
 		}
 		// authenticate
 		if self.onfn[eventType] != nil && event["from"] == nil && event["_session"] == nil {

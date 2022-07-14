@@ -23,9 +23,13 @@
 // @version 1.5.3
 // @copyright xibbit 1.5.3 Copyright (c) © 2021 Daniel W. Howard and Sanjana A. Joshi Partnership
 // @license http://opensource.org/licenses/MIT
+import 'dart:io';
+import 'dart:math';
 import 'package:flutter/material.dart';
+import 'package:image_picker/image_picker.dart';
 import 'package:redux/redux.dart';
 import 'package:flutter_redux/flutter_redux.dart';
+import '../url_config.dart';
 import '../modules/services/xibbitservice.dart';
 import '../actions/login.dart';
 import '../actions/profile.dart';
@@ -34,7 +38,8 @@ import '../reducers/index.dart';
 class ProfilePage extends StatefulWidget {
   final Store<dynamic> store;
 
-  ProfilePage({Key? key, required this.store}) : super(key: key);
+  const ProfilePage({Key? key, required this.store})
+      : super(key: key);
 
   @override
   _ProfilePage createState() => _ProfilePage(store: store);
@@ -45,15 +50,52 @@ class _ProfilePage extends State<ProfilePage> {
 
   final _formKey = GlobalKey<FormState>();
 
-  String _msg = '';
+  final ImagePicker picker = ImagePicker();
+
+  String _userProfileImageUrl = '';
+
+  String _profileImageUrl = '';
+
+  XFile? _fileToUpload;
+
+  Random _rnd = Random();
+
+  String _error = '';
 
   _ProfilePage({required this.store}) {
     nameController = TextEditingController(
         text: rootSelectors(store.state).getProfileSelectors().getName());
-    xibbitService.send({'type': 'user_profile'}, (event) {
+    String username = (xibbitService.session['me'] as Map)['username'];
+    var publicFolder = server_base[server_platform] + '/public/images';
+    _userProfileImageUrl = publicFolder + '/' + username + '.png';
+    _profileImageUrl = '$_userProfileImageUrl?r=${_rnd.nextInt(1000)}';
+    xibbitService.send({
+      'type': 'user_profile'
+    }, (event) {
       if (event['i'] != null) {
         store.dispatch(setprofile({'profile': event['profile']}));
       }
+    });
+  }
+
+  //
+  // Upload a profile image.
+  //
+  void uploadProfileImage() {
+    Map urls = {
+      'go': '/user/profile/upload_photo',
+      'node': '/user/profile/upload_photo',
+      'php': '/app.php' // /user_profile_upload_photo.php
+    };
+    String url = server_base[server_platform] + urls[server_platform];
+    xibbitService.upload(url, {
+      'type': 'user_profile_upload_photo',
+      'image': _fileToUpload
+    }, (event) {
+      setState(() {
+        _profileImageUrl = '$_userProfileImageUrl?r=${_rnd.nextInt(1000)}';
+        _error = event['i'] ?? event['e'];
+      });
     });
   }
 
@@ -77,15 +119,34 @@ class _ProfilePage extends State<ProfilePage> {
 
   @override
   Widget build(BuildContext context) {
-    return new StoreProvider<dynamic>(
+    return StoreProvider<dynamic>(
       store: store,
       child: Form(
         key: _formKey,
         child: Padding(
-          padding: EdgeInsets.all(24.0),
+          padding: const EdgeInsets.all(24.0),
           child: Column(
             children: <Widget>[
-              new StoreConnector<dynamic, String>(
+              Row(
+                mainAxisAlignment: MainAxisAlignment.spaceAround,
+                children: <Widget>[
+                  const Text('Upload image'),
+                  ElevatedButton(
+                    onPressed: () {
+                      picker.pickImage(source: ImageSource.gallery).then((img) {
+                        setState(() {
+                          _fileToUpload = img;
+                        });
+                        uploadProfileImage();
+                      });
+                    },
+                    child: const Text('Choose Photo'),
+                  ),
+                  const Text('no file selected'),
+                ],
+              ),
+              Image.network(_profileImageUrl),
+              StoreConnector<dynamic, String>(
                   converter: (store) => rootSelectors(store.state)
                       .getProfileSelectors()
                       .getName(),
@@ -108,7 +169,7 @@ class _ProfilePage extends State<ProfilePage> {
                         .getProfileSelectors()
                         .getName();
                   }),
-              new StoreConnector<dynamic, String>(
+              StoreConnector<dynamic, String>(
                   converter: (store) => rootSelectors(store.state)
                       .getProfileSelectors()
                       .getAddress(),
@@ -131,7 +192,7 @@ class _ProfilePage extends State<ProfilePage> {
                         .getProfileSelectors()
                         .getAddress();
                   }),
-              new StoreConnector<dynamic, String>(
+              StoreConnector<dynamic, String>(
                   converter: (store) => rootSelectors(store.state)
                       .getProfileSelectors()
                       .getAddress2(),
@@ -150,7 +211,7 @@ class _ProfilePage extends State<ProfilePage> {
                         .getProfileSelectors()
                         .getAddress2();
                   }),
-              new StoreConnector<dynamic, String>(
+              StoreConnector<dynamic, String>(
                   converter: (store) => rootSelectors(store.state)
                       .getProfileSelectors()
                       .getCity(),
@@ -175,7 +236,7 @@ class _ProfilePage extends State<ProfilePage> {
                   }),
               Row(children: <Widget>[
                 Expanded(
-                  child: new StoreConnector<dynamic, String>(
+                  child: StoreConnector<dynamic, String>(
                       converter: (store) => rootSelectors(store.state)
                           .getProfileSelectors()
                           .getState(),
@@ -200,7 +261,7 @@ class _ProfilePage extends State<ProfilePage> {
                       }),
                 ),
                 Expanded(
-                  child: new StoreConnector<dynamic, String>(
+                  child: StoreConnector<dynamic, String>(
                       converter: (store) => rootSelectors(store.state)
                           .getProfileSelectors()
                           .getZip(),
@@ -248,19 +309,13 @@ class _ProfilePage extends State<ProfilePage> {
                         'type': 'user_profile_mail_update',
                         'user': user,
                       }, (event) {
-                        if (event.containsKey('i')) {
-                          setState(() {
-                            _msg = 'Saved.';
-                          });
-                        } else {
-                          setState(() {
-                            _msg = event['e'];
-                          });
-                        }
+                        setState(() {
+                          _error = event['i'] ?? event['e'];
+                        });
                       });
                     }
                   },
-                  child: Text('Save'),
+                  child: const Text('Save'),
                 ),
               ),
               Padding(
@@ -275,7 +330,7 @@ class _ProfilePage extends State<ProfilePage> {
                       }
                     });
                   },
-                  child: Text('Sign out'),
+                  child: const Text('Sign out'),
                 ),
               ),
             ],

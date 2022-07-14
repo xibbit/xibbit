@@ -26,6 +26,7 @@
 import { Component } from 'inferno';
 import '../App.css';
 import xibbitObject from '../modules/xibbitobject';
+import url_config from '../modules/url_config';
 
 class Profile extends Component {
   constructor(props) {
@@ -34,8 +35,12 @@ class Profile extends Component {
       type: 'user_profile'
     }, event => {
       if (event.i) {
+        const username = xibbitObject.getSessionValue('me').username;
+        const publicFolder = url_config.server_base[url_config.server_platform]+'/public/images';
+        this.profile_image = publicFolder+'/'+username+'.png';
         this.setState({
-          profile: event.profile
+          profile: event.profile,
+          profile_image: this.profile_image + '?r=' + Math.floor(Math.random() * 1000)
         })
       }
       this.setState({
@@ -53,8 +58,11 @@ class Profile extends Component {
       state: '',
       zip: ''
     },
+    profile_image: '',
     error: ''
   }
+
+  profile_image = '';
 
   onNameChange = event => {
     this.setState({
@@ -105,10 +113,35 @@ class Profile extends Component {
     });
   }
 
+  uploadProfileImage = event => {
+    const urls = {
+      go: '/user/profile/upload_photo',
+      node: '/user/profile/upload_photo',
+      php: url_config.server_base[url_config.server_platform]+'/app.php' // /user_profile_upload_photo.php
+    };
+    var url = urls[url_config.server_platform];
+    xibbitObject.upload(url, {
+      type: 'user_profile_upload_photo',
+      image: event.target.files[0]
+    }, event => {
+      this.setState({
+        profile_image: this.profile_image + '?r=' + Math.floor(Math.random() * 1000),
+        error: event.i || event.e
+      })
+    });
+  }
+
   render() {
-    const { profile, error } = this.state;
+    const { profile, profile_image, error } = this.state;
     return (
       <div className="profile-view">
+        <div class="form-control">
+          <label>Upload image</label>
+          <input className="form-control" type="file" onChange={this.uploadProfileImage} />
+        </div>
+        <div>
+          <img alt="Profile" src={profile_image} />
+        </div>
         <form name="ProfileView.form" onSubmit={this.submit}>
           <div className="form-control">
             <label>Name</label>

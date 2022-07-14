@@ -628,7 +628,7 @@ var xibbit = (function() {
    * Return a file upload structure.
    * @author DanielWHoward
    **/
-  xibbit.prototype.createUploadFormData = function(event) {
+  xibbit.prototype.createUploadFormData = function(method, url, event) {
     var fd = new FormData();
     fd.append('sid', this.socket.io.engine.id);
     fd.append('instance', this.instance);
@@ -642,6 +642,136 @@ var xibbit = (function() {
       }
     }
     return fd;
+  };
+
+  /**
+   * Return the contents of a web page.
+   * @author DanielWHoward
+   **/
+  xibbit.prototype.getUploadForm = function(url, callback) {
+    var self = this;
+    // get the submit form
+    $.ajax({
+      method: 'GET', // support $.ajax and $http
+      type: 'GET',
+      url: url,
+      cache: false,
+      contentType: false,
+      processData: false,
+      headers: {
+        'Content-Type': undefined
+      }
+    }).done(function(response, statusText, jqXHR) {
+      var resp = response || jqXHR;
+      var responseData = typeof response === 'string'? resp: resp.data;
+      callback(responseData);
+    }).fail(function(jqXHR, typ, response) {
+      var color = self.logColors.app_error;
+      var resp = response || jqXHR;
+      var responseData = typeof response === 'string'? resp: resp.data;
+      if (typeof responseData !== 'string') {
+        try {
+          responseData = JSON.stringify(responseData);
+        } catch (e) {
+          // do nothing
+        }
+      }
+      //HACK add a response ID so the event will have the right color
+      event._id = self.eventId++;
+      self.log('getUploadForm() HTTP error:', color);
+      callback(responseData);
+    });
+  };
+
+  /**
+   * Upload a file to the backend.
+   */
+  xibbit.prototype.uploadEvent = function(url, event, callback) {
+    var self = this;
+    function copyOddClasses(o) {
+      var odd = {};
+      for (var k in o) {
+        if (Object.prototype.hasOwnProperty.call(event, k)) {
+          if (event[k] && event[k].constructor && event[k].constructor.name === 'File') {
+            odd[k] = {};
+            for (var kk in o[k]) {
+              odd[k][kk] = o[k][kk];
+            }
+          } else {
+            odd[k] = o[k];
+          }
+        }
+      }
+      return odd;
+    }
+    var fd = this.createUploadFormData('POST', url, event);
+    // log the upload event to the console
+    self.log(JSON.stringify(copyOddClasses(event)), self.logColors.request);
+    // upload the file
+    $.ajax({
+      method: 'POST', // support $.ajax and $http
+      type: 'POST',
+      url: url,
+      data: fd,
+      cache: false,
+      contentType: false,
+      processData: false,
+      headers: {
+        'Content-Type': undefined
+      }
+    }).done(function(response, statusText, jqXHR) {
+      var color = self.logColors.response;
+      var data = jqXHR? response: response.data;
+      if (typeof data === 'string') {
+        try {
+          data = JSON.parse(data);
+        } catch (e) {
+          // do nothing
+        }
+      }
+      if (Array.isArray(data)) {
+        event = data[0];
+      } else {
+        color = self.logColors.app_error;
+        if (typeof data === 'string') {
+          event.e = 'Backend Error';
+          event.e_stacktrace = self.getStringFromDirtyHtml(data);
+        } else {
+          event.e = 'Format Error';
+          event.e_stacktrace = 'response is not an array or an HTML string';
+          event.e_data = data;
+        }
+      }
+      //HACK add a response ID so the event will have the right color
+      event._id = self.eventId++;
+      self.log(copyOddClasses(event), color);
+      callback(event);
+    }).fail(function(jqXHR, typ, response) {
+      var color = self.logColors.response;
+      var resp = response || jqXHR;
+      var responseData = typeof response === 'string'? resp: resp.data;
+      var evt = responseData;
+      if (typeof evt === 'string') {
+        try {
+          evt = JSON.parse(responseData);
+        } catch (e) {
+          // do nothing
+        }
+      }
+      if (Array.isArray(evt)) {
+        event = evt[0];
+      } else {
+        color = self.logColors.app_error;
+        event.e = 'Error';
+        event.e_stacktrace = typeof responseData === 'string'?
+          self.getStringFromDirtyHtml(responseData):
+          'response is not a string';
+      }
+      //HACK add a response ID so the event will have the right color
+      event._id = self.eventId++;
+      self.log(copyOddClasses(event), color);
+      callback(event);
+    });
   };
 
   /**

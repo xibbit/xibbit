@@ -1025,6 +1025,58 @@ class XibbitHub {
   }
 
   /**
+   * Package events, execute them and return response events.
+   *
+   * @param array $fileEvents
+   * @return NULL[]
+   */
+  function readAndWriteUploadEvent($fileEvents) {
+    $fileKeys = array_keys($_FILES);
+    $fileEventKeys = array_keys($fileEvents);
+    $filesToIgnore = array();
+    // map files/properties to one or more events
+    for ($k=0; $k < count($fileKeys); ++$k) {
+      $matched = false;
+      for ($e=0; $e < count($fileEventKeys); ++$e) {
+        $event = $fileEventKeys[$e];
+        if (substr($fileKeys[$k], 0, strlen($event)) === $event) {
+          $prop = substr($fileKeys[$k], strlen($event));
+          if (substr($prop, 0, 1) === '_') {
+            $prop = substr($prop, 1);
+          }
+          $fileEvents[$event][$prop] = $_FILES[$fileKeys[$k]];
+          $matched = true;
+        }
+      }
+      // ignore files that don't match expected event types
+      if (!$matched) {
+        $filesToIgnore[] = $_FILES[$fileKeys[$k]]['tmp_name'];
+      }
+    }
+    // trigger all the events
+    $events = array();
+    foreach ($fileEvents as $event=>$files) {
+      if (count($files) > 0) {
+        $event = array(
+          '_session'=>$this->session,
+          'type'=>$event
+        );
+        $event = array_merge($event, $files);
+        $event = array_merge($event, $_REQUEST);
+        unset($event['instance']);
+        $event = $this->trigger($event);
+        for ($i=0; $i < count($event); ++$i) {
+          if (isset($event[$i]['_session'])) {
+            unset($event[$i]['_session']);
+          }
+        }
+        $events = array_concat($events, $event);
+      }
+    }
+    return $events;
+  }
+
+  /**
    * Provide an authenticated callback for an event.
    *
    * @param $typ string The event to handle.

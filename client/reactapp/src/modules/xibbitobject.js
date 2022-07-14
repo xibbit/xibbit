@@ -26,7 +26,18 @@
 import Xibbit from './xibbit';
 import url_config from './url_config';
 
-export default new Xibbit({
+class XibbitService extends Xibbit {
+
+  upload(url, event, callback) {
+    this.uploadEvent(url, event, function(evt) {
+      if (callback) {
+        callback(evt);
+      }
+    });
+  }
+}
+
+export default new XibbitService({
   preserveSession: true,
   seq: true,
   socketio: {

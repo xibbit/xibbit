@@ -35,10 +35,12 @@ var server_base = {
   php: '/php'
 };
 
-module.exports = {
+global.url_config = {
   client_base,
   client_debug,
   client_transports,
   server_platform,
   server_base
 };
+
+module.exports = global.url_config;

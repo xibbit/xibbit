@@ -24,6 +24,7 @@
 // @copyright xibbit 1.5.3 Copyright (c) © 2021 Daniel W. Howard and Sanjana A. Joshi Partnership
 // @license http://opensource.org/licenses/MIT
 import xibbitObject from '../../modules/xibbitobject';
+import url_config from '../../modules/url_config';
 
 export default function() {
     let state = {
@@ -35,13 +36,19 @@ export default function() {
             state: '',
             zip: '',
         },
+        profile_image: '',
         error: '',
     };
+    let profile_image = '';
     xibbitObject.send({
         type: 'user_profile',
     }, event => {
         if (event.i) {
+            const username = xibbitObject.getSessionValue('me').username;
+            const publicFolder = url_config.server_base[url_config.server_platform]+'/public/images';
+            profile_image = publicFolder+'/'+username+'.png';
             state.profile = event.profile;
+            state.profile_image = profile_image + '?r=' + Math.floor(Math.random() * 1000);
         }
         state.error = event.i || event.e;
         m.redraw();
@@ -57,10 +64,33 @@ export default function() {
             m.redraw();
         });
     };
+    const uploadProfileImage = event => {
+        const urls = {
+            go: '/user/profile/upload_photo',
+            node: '/user/profile/upload_photo',
+            php: url_config.server_base[url_config.server_platform]+'/app.php', // /user_profile_upload_photo.php
+        };
+        const url = urls[url_config.server_platform];
+        xibbitObject.upload(url, {
+            type: 'user_profile_upload_photo',
+            image: event.target.files[0],
+        }, event => {
+            state.profile_image = profile_image + '?r=' + Math.floor(Math.random() * 1000);
+            state.error = event.i || event.e;
+            m.redraw();
+        });
+    };
     return {        
         view() {
             return (
                 <div class="profile-view">
+                    <div class="form-control">
+                        <label>Upload image</label>
+                        <input class="form-control" type="file" onchange={ uploadProfileImage }></input>
+                    </div>
+                    <div>
+                        <img alt="Profile" src={state.profile_image} />
+                    </div>
                     <form name="profile" onsubmit={submit}>
                         <div class="form-control">
                             <div>Name</div>
