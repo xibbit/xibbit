@@ -26,8 +26,11 @@
 package main
 
 import (
+	"encoding/json"
+	"fmt"
 	"log"
 	"net/http"
+	"os"
 	"strings"
 
 	"database/sql"
@@ -96,6 +99,7 @@ func main() {
 	hub.On("logout", events.Logout)
 	hub.Api("user_create", events.User_create)
 	hub.On("user_profile_mail_update", events.User_profile_mail_update)
+	hub.On("user_profile_upload_photo", events.User_profile_upload_photo)
 	hub.On("user_profile", events.User_profile)
 
 	// start the _events system
@@ -120,10 +124,36 @@ func main() {
 			context.FileFromFS("socket.io/socket.io.js.map", http.Dir("./static"))
 		} else if strings.HasPrefix(filepath, "/socket.io/socket.io.js") {
 			context.FileFromFS("socket.io/socket.io.js", http.Dir("./static"))
+		} else if strings.HasPrefix(filepath, "/user/profile/upload_photo") {
+			file, _, err := context.Request.FormFile("user_profile_upload_photo_image")
+			if err != nil {
+				context.String(http.StatusBadRequest, fmt.Sprintf("file err : %s", err.Error()))
+				return
+			}
+			sid := context.PostForm("sid")
+			fmt.Println("sid")
+			fmt.Println(sid)
+			instance := context.PostForm("instance")
+			session := hub.GetSessionByInstance(instance)
+			//filename := header.Filename
+			eventsReply, _ := hub.Trigger(map[string]interface{}{
+				"type": "user_profile_upload_photo",
+				"image": map[string]interface{}{
+					"tmp_name": file,
+				},
+				"_session": session,
+			})
+			delete(eventsReply[0], "_session")
+			eventsReplyBytes, _ := json.Marshal(eventsReply)
+			context.String(http.StatusOK, string(eventsReplyBytes))
 		} else if strings.HasPrefix(filepath, "/socket.io/") {
 			socketioHandler(context)
-		} else {
+		} else if _, err := os.Stat(clientFolder + filepath); err == nil {
 			context.FileFromFS(filepath[1:], http.Dir(clientFolder))
+		} else if strings.HasPrefix(filepath, "/public/") {
+			context.FileFromFS(filepath[1:], http.Dir("."))
+		} else {
+			context.FileFromFS(filepath[1:], http.Dir("./static"))
 		}
 	})
 

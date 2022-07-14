@@ -95,6 +95,7 @@ self.api('login', (event, {hub, pf}, callback) => {
       event._session.user = me;
       // return user info
       event.me = {
+        username: me.username,
         roles: me.roles || []
       };
       event.loggedIn = true;

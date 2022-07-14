@@ -23,6 +23,7 @@
 // @version 1.5.3
 // @copyright xibbit 1.5.3 Copyright (c) © 2021 Daniel W. Howard and Sanjana A. Joshi Partnership
 // @license http://opensource.org/licenses/MIT
+/* global server_base, server_platform */
 'use strict';
 
 /**
@@ -60,6 +61,28 @@ angular.module('myApp.views')
         type: 'user_profile_mail_update',
         user: ProfileView.profile
       }, function(event) {
+        ProfileView.error = event.i || event.e;
+      });
+    };
+    /**
+     * Upload a profile image.
+     */
+    var username = XibbitService.session.me.username;
+    var publicFolder = server_base[server_platform]+'/public/images';
+    var profile_image = publicFolder+'/'+username+'.png';
+    ProfileView.profile_image = profile_image + '?r=' + Math.floor(Math.random() * 1000);
+    ProfileView.uploadProfileImage = function(element) {
+      var urls = {
+        go: '/user/profile/upload_photo',
+        node: '/user/profile/upload_photo',
+        php: server_base[server_platform]+'/app.php' // /user_profile_upload_photo.php
+      };
+      var url = urls[server_platform];
+      XibbitService.upload(url, {
+        'type': 'user_profile_upload_photo',
+        'image': element.files[0]
+      }, function(event) {
+        ProfileView.profile_image = profile_image + '?r=' + Math.floor(Math.random() * 1000);
         ProfileView.error = event.i || event.e;
       });
     };

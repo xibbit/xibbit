@@ -33,12 +33,6 @@ var express = require('express');
 var app = express();
 var http = require('http').Server(app);
 var multer = require('multer');
-var uploadStorage = multer.diskStorage({
-  filename: function (req, file, cb) {
-    cb(null, file.fieldname + '-' + Date.now());
-  }
-});
-var upload = multer({ storage: uploadStorage });
 var socketio = require('socket.io')(http, { // comment out to disable Socket.IO
 //  path: '/ws'
 });
@@ -96,10 +90,35 @@ var hub = new XibbitHub({
 hub.start();
 
 // serve url_config.js and socket.io from Node.js as top priorities
-app.use("/url_config.js", express.static(__dirname + '/public/url_config.js'));
-app.use("/socket.io", express.static(__dirname + '/public/socket.io'));
-app.use("/socket.io.js.map", express.static(__dirname + '/public/socket.io/socket.io.js.map'));
+app.use("/url_config.js", express.static(__dirname + '/static/url_config.js'));
+app.use("/socket.io", express.static(__dirname + '/static/socket.io'));
+app.use("/socket.io.js.map", express.static(__dirname + '/static/socket.io/socket.io.js.map'));
 app.use('/install', (req, res) => install.install((e, html) => res.send(html)))
+app.use("/public", express.static(__dirname + '/public'));
+app.use("/static", express.static(__dirname + '/static'));
+
+var upload = multer({
+  storage: multer.diskStorage({
+    filename: function (req, file, cb) {
+      cb(null, file.fieldname + '-' + Date.now());
+    }
+  })
+});
+app.post("/user/profile/upload_photo", upload.single('user_profile_upload_photo_image'), uploadFiles);
+function uploadFiles(req, res) {
+  let session = hub.getSessionByInstance(req.body.instance);
+  hub.trigger({
+    type: 'user_profile_upload_photo',
+    image: {
+      tmp_name: req.file
+    },
+    _session: session
+  }, function(e, eventsReply) {
+    delete eventsReply[0]._session;
+    res.set('Content-Type', 'text/plain');
+    res.send(JSON.stringify(eventsReply));
+  });
+}
 
 // serve the client folder and ignore their url_config.js and socket.io versions
 const clientFolders = {

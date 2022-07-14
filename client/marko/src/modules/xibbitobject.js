@@ -26,7 +26,18 @@
 const url_config = require('./url_config');
 const Xibbit = require('./xibbit');
 
-global.xibbitObject = new Xibbit({
+class XibbitService extends Xibbit {
+
+  upload(url, event, callback) {
+    this.uploadEvent(url, event, function(evt) {
+      if (callback) {
+        callback(evt);
+      }
+    });
+  }
+}
+
+global.xibbitObject = new XibbitService({
   preserveSession: true,
   seq: true,
   socketio: {

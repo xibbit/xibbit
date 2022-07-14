@@ -194,6 +194,16 @@ $hub = new Hub(array(
 // start the xibbit system
 try {
   $hub->start();
+
+  // handle file upload events; can be in app.php
+  //   but also possible in any PHP file
+  $fileEvents = array(
+    'user_profile_upload_photo'=>array()
+  );
+  $replyEvents = $hub->readAndWriteUploadEvent($fileEvents);
+  if (count($replyEvents) > 0) {
+    print json_encode($replyEvents);
+  }
 } catch (Exception $e) {
   // show a stack trace for uncaught PHP exceptions
   print $e->getTraceAsString();

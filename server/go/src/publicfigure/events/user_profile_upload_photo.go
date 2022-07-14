@@ -1,6 +1,6 @@
 // The MIT License (MIT)
 //
-// xibbit 1.5.3 Copyright (c) © 2021 Daniel W. Howard and Sanjana A. Joshi Partnership
+// xibbit 1.5.1 Copyright (c) © 2021 Daniel W. Howard and Sanjana A. Joshi Partnership
 //
 // Permission is hereby granted, free of charge, to any person obtaining a copy
 // of this software and associated documentation files (the "Software"), to deal
@@ -20,34 +20,46 @@
 // OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 // SOFTWARE.
 //
-// @version 1.5.3
-// @copyright xibbit 1.5.3 Copyright (c) © 2021 Daniel W. Howard and Sanjana A. Joshi Partnership
+// @version 1.5.1
+// @copyright xibbit 1.5.1 Copyright (c) © 2021 Daniel W. Howard and Sanjana A. Joshi Partnership
 // @license http://opensource.org/licenses/MIT
-import Xibbit from './xibbit';
-import url_config from './url_config';
+package events
 
-class XibbitService extends Xibbit {
+import (
+	"io"
+	"os"
+)
+	//"publicfigure/pfapp"
 
-  upload(url, event, callback) {
-    this.uploadEvent(url, event, function(evt) {
-      if (callback) {
-        callback(evt);
-      }
-    });
-  }
+/**
+ * Handle user_profile event.  Get this user's
+ * profile.
+ *
+ * @author DanielWHoward
+ **/
+func User_profile_upload_photo(event map[string]interface{}, vars map[string]interface{}) map[string]interface{} {
+	//pf := vars["pf"].(*pfapp.Pfapp)
+
+	username := event["_session"].(map[string]interface{})["username"].(string)
+	perm_fn, err := os.Create("./public/images/"+username+".png")
+	success := true
+	if err != nil {
+		success = false
+	}
+	if (success) {
+		defer perm_fn.Close()
+		_, err = io.Copy(perm_fn, event["image"].(map[string]interface{})["tmp_name"].(io.Reader))
+	}
+	if err != nil {
+		success = false
+	}
+	event["image"] = map[string]interface{}{
+		"tmp_name": "./public/images/"+username+".png",
+	}
+	if err == nil {
+		event["i"] = "uploaded"
+	} else {
+		event["e"] = "upload failed"
+	}
+	return event
 }
-
-export default new XibbitService({
-  preserveSession: true,
-  seq: true,
-  socketio: {
-    start: true,
-    transports: url_config.client_transports,
-    min: (url_config.client_transports.indexOf('xio') !== -1)? 3000: null,
-    url: url_config.server_platform === 'php'? function() {
-      return url_config.server_base.php+'/app.php';
-    } : url_config.server_base[url_config.server_platform],
-    js_location: url_config.server_base[url_config.server_platform]
-  },
-  log: url_config.client_debug
-});

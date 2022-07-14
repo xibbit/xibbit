@@ -193,30 +193,19 @@ angular.module('myApp')
      * Upload a file to the backend.
      * @author DanielWHoward
      */
-    this.upload = function(event, callback) {
+    this.upload = function(url, event, callback) {
+      var defer0 = $q.defer();
+      var promise0 = defer0.promise;
       var defer = $q.defer();
       var promise = defer.promise;
-      var fd = new FormData();
-      fd.append('instance', events.instance);
-      for (var k in event) {
-        if ((k !== 'type') && _.has(event, k)) {
-          if (event[k].constructor.name === 'File') {
-            fd.append(event.type+'_'+k, event[k]);
-          } else {
-            fd.append(k, event[k]);
+      defer0.resolve();
+      promise0.then(function() {
+        events.uploadEvent(url, event, function(evt) {
+          if (callback) {
+            callback(evt);
           }
-        }
-      }
-      promise = $http({
-        method: 'POST',
-        url: server_base.php+'/app.php',
-        data: fd,
-        headers: {
-          'Content-Type': undefined
-        }
-      }).then(function(response) {
-        var event = response.data[0][0];
-        callback(event);
+          defer.resolve(evt);
+        });
       });
       return promise;
     };
@@ -233,6 +222,15 @@ angular.module('myApp')
       // do $scope.$apply() in the callback
       obj.send = function(event, callback) {
         return p.send(event, function(evt) {
+          scope.$apply(function() {
+            if (callback) {
+              callback(evt);
+            }
+          });
+        });
+      };
+      obj.upload = function(url, event, callback) {
+        return p.upload(url, event, function(evt) {
           scope.$apply(function() {
             if (callback) {
               callback(evt);

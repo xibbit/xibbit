@@ -1,4 +1,11 @@
 <div class="profile-view">
+<div class="form-control">
+  <label>Upload image</label>
+  <input class="form-control" type="file" onchange="angular.element(this).scope().ProfileView.uploadProfileImage(this)">
+</div>
+<div>
+  <img data-ng-src="{{ ProfileView.profile_image }}" />
+</div>
 <form name="ProfileView.form" data-ng-submit="ProfileView.updateProfile()">
   <div class="form-control">
     <label>Name</label>

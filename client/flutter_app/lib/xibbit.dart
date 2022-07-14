@@ -23,13 +23,19 @@
 // @version 1.5.3
 // @copyright xibbit 1.5.3 Copyright (c) © 2021 Daniel W. Howard and Sanjana A. Joshi Partnership
 // @license http://opensource.org/licenses/MIT
+import 'dart:async';
+import 'dart:io';
 import 'dart:math';
 import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:http/http.dart' as http;
+import 'package:async/async.dart';
+import 'package:path/path.dart';
+import 'package:cross_file/cross_file.dart';
 import 'package:logging/logging.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:socket_io_client_flutter/socket_io_client_flutter.dart';
+import 'package:socket_io_client_flutter/src/engine/transport/xhr_transport.dart';
 
 final Logger _logger = Logger('xibbit');
 
@@ -702,9 +708,136 @@ class Xibbit {
   /// Return a file upload structure.
   /// @author DanielWHoward
   ///
-  Map<String, Object> createUploadFormData(event) {
-    var fd = {};
-    return fd as Map<String, Object>;
+  Future<http.MultipartRequest> createUploadFormData(String method, String url, Map event) async {
+    var uri = Uri.parse(url);
+    var fd = http.MultipartRequest(method, uri);
+
+    fd.fields['sid'] = socket.io.engine.id;
+    fd.fields['instance'] = (await getInstanceValue())!;
+    for (String k in event.keys) {
+      if (k != 'type') {
+        if (event[k] is XFile) {
+          var stream =
+            http.ByteStream(DelegatingStream.typed(event[k].openRead()));
+          var length = File(event[k].path).lengthSync();
+          var multipartFileSign = http.MultipartFile(
+            event['type'] + '_' + k,
+            stream,
+            length,
+            filename: basename(event[k].path)
+          );
+          fd.files.add(multipartFileSign);
+        } else {
+          fd.fields[k] = event[k];
+        }
+      }
+    }
+    return fd;
+  }
+
+  ///
+  /// Return the contents of a web page.
+  /// @author DanielWHoward
+  ///
+  Future getUploadForm(String url, Function callback) async {
+    var self = this;
+    // get the submit form
+    try {
+      final uri = Uri.parse(url);
+      final response = await http.get(uri);
+      if (response.statusCode != 200) {
+        throw HttpException('${response.statusCode}');
+      }
+      callback(response.body);
+    } on Exception catch (e) {
+      var color = self.logColors['app_error'];
+      var responseData = e.toString();
+      //HACK add a response ID so the event will have the right color
+      Map event = {};
+      event['_id'] = self.eventId++;
+      self.log('getUploadForm() HTTP error:', color);
+      callback(responseData);
+    }
+  }
+
+  ///
+  /// Upload a file to the backend.
+  ///
+  void uploadEvent(String url, Map event, Function callback) async {
+    Map copyOddClasses(Map o) {
+      var odd = {};
+      for (var k in o.keys) {
+        if (event[k] is XFile) {
+          XFile file = event[k];
+          odd[k] = {
+            'type': 'File',
+            'absolute': file.path
+          };
+        } else {
+          odd[k] = o[k];
+        }
+      }
+      return odd;
+    }
+    var fd = createUploadFormData('POST', url, event);
+    // log the upload event to the console
+    log(jsonEncode(copyOddClasses(event)), logColors['request']);
+
+    var request = await fd;
+    request.headers.addAll({
+      "Accept": "application/json"
+    });
+    request.headers.addAll(FlutterHttpRequest.headers);
+
+    var response = await request.send();
+
+    response.stream.transform(utf8.decoder).transform(json.decoder).listen((data) {
+      if (response.statusCode == 200) {
+        var color = logColors['response'];
+        if (data is List) {
+          event = data[0];
+        } else {
+          color = logColors['app_error'];
+          if (data is String) {
+            event['e'] = 'Backend Error';
+            event['e_stacktrace'] = getStringFromDirtyHtml(data);
+          } else {
+            event['e'] = 'Format Error';
+            event['e_stacktrace'] = 'response is not an array or an HTML string';
+            event['e_data'] = data;
+          }
+        }
+        //HACK add a response ID so the event will have the right color
+        event['_id'] = eventId++;
+        log(copyOddClasses(event), color);
+        callback(event);
+      } else {
+        var color = logColors['response'];
+        var resp = data;
+        String responseData = resp as String;
+        dynamic evt = responseData;
+        if (evt is String) {
+          try {
+            evt = jsonDecode(responseData);
+          } catch (e) {
+            // do nothing
+          }
+        }
+        if (evt is List) {
+          event = evt[0];
+        } else {
+          color = logColors['app_error'];
+          event['e'] = 'Error';
+          event['e_stacktrace'] = responseData is String?
+            getStringFromDirtyHtml(responseData):
+            'response is not a string';
+        }
+        //HACK add a response ID so the event will have the right color
+        event['_id'] = eventId++;
+        log(copyOddClasses(event), color);
+        callback(event);
+      }
+    });
   }
 
   ///

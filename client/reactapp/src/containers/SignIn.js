@@ -62,7 +62,7 @@ class SignIn extends React.Component {
     }, event => {
       var path = '/';
       if (event.loggedIn) {
-//        xibbitObject.setSessionValue('me', event.me);
+        xibbitObject.addSessionValue('me', event.me);
         this.props.model('loggedIn', true)
         // collect additional user settings if needed
         if (event.i && (event.i.substring(0, 8) === 'collect:')) {

@@ -34,15 +34,21 @@ class {
         state: '',
         zip: ''
       },
+      profile_image: '',
       error: ''
     };
+    this.profile_image = '';
   }
   onMount() {
     xibbitObject.send({
       type: 'user_profile'
     }, event => {
       if (event.i) {
+        const username = xibbitObject.getSessionValue('me').username;
+        const publicFolder = global.url_config.server_base[global.url_config.server_platform]+'/public/images';
+        this.profile_image = publicFolder+'/'+username+'.png';
         this.state.profile = event.profile;
+        this.state.profile_image = this.profile_image + '?r=' + Math.floor(Math.random() * 1000);
       }
       this.state.error = event.i || event.e;
     });
@@ -74,6 +80,21 @@ class {
       this.state.error = event.i || event.e;
     });
   }
+  uploadProfileImage(event) {
+    const urls = {
+      go: '/user/profile/upload_photo',
+      node: '/user/profile/upload_photo',
+      php: global.url_config.server_base[global.url_config.server_platform]+'/app.php', // /user_profile_upload_photo.php
+    };
+    const url = urls[global.url_config.server_platform];
+    xibbitObject.upload(url, {
+      type: 'user_profile_upload_photo',
+      image: event.target.files[0],
+    }, event => {
+      this.state.profile_image = this.profile_image + '?r=' + Math.floor(Math.random() * 1000);
+      this.state.error = event.i || event.e;
+    });
+  }
 }
 
 style {
@@ -88,6 +109,13 @@ style {
 }
 
 <div class="profile-view">
+  <div class="form-control">
+    <label>Upload image</label>
+    <input class="form-control" type="file" on-change('uploadProfileImage') />
+  </div>
+  <div>
+    <img alt="Profile" src=state.profile_image />
+  </div>
   <form name="profile" on-submit("handleFormSubmit")>
     <div class="form-control">
       <label>Name</label>
