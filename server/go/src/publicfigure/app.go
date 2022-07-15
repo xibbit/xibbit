@@ -121,9 +121,9 @@ func main() {
 		if filepath == "/url_config.js" {
 			context.FileFromFS("url_config.js", http.Dir("./static"))
 		} else if strings.HasPrefix(filepath, "/socket.io.js.map") {
-			context.FileFromFS("socket.io/socket.io.js.map", http.Dir("./static"))
-		} else if strings.HasPrefix(filepath, "/socket.io/socket.io.js") {
-			context.FileFromFS("socket.io/socket.io.js", http.Dir("./static"))
+			context.FileFromFS("socketio/socket.io.js.map", http.Dir("./static"))
+		} else if strings.HasPrefix(filepath, "/socketio/socket.io.js") {
+			context.FileFromFS("socketio/socket.io.js", http.Dir("./static"))
 		} else if strings.HasPrefix(filepath, "/user/profile/upload_photo") {
 			file, _, err := context.Request.FormFile("user_profile_upload_photo_image")
 			if err != nil {

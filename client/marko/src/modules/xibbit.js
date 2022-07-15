@@ -363,7 +363,7 @@ module.exports = (function() {
         if (!js_location) {
           js_location = host;
         }
-        $.getScript(js_location+'/socket.io/socket.io.js', function() {
+        $.getScript(js_location+'/socketio/socket.io.js', function() {
           var url = params.url;
           if (url) {
             delete params.url;

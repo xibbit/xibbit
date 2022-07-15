@@ -91,8 +91,8 @@ hub.start();
 
 // serve url_config.js and socket.io from Node.js as top priorities
 app.use("/url_config.js", express.static(__dirname + '/static/url_config.js'));
-app.use("/socket.io", express.static(__dirname + '/static/socket.io'));
-app.use("/socket.io.js.map", express.static(__dirname + '/static/socket.io/socket.io.js.map'));
+app.use("/socketio", express.static(__dirname + '/static/socketio'));
+app.use("/socket.io.js.map", express.static(__dirname + '/static/socketio/socket.io.js.map'));
 app.use('/install', (req, res) => install.install((e, html) => res.send(html)))
 app.use("/public", express.static(__dirname + '/public'));
 app.use("/static", express.static(__dirname + '/static'));
