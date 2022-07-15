@@ -38,6 +38,67 @@ function isTruthy($b) {
 }
 
 /**
+ * A LAMP-based Socket.IO long-polling socket
+ * compatible with any, even super lame, PHP hosting
+ * service.  Socket.IO sockets are recreated with a
+ * new SID every time that the browser page is
+ * refreshed.
+ *
+ * This socket uses a database to persist the socket.
+ * It uses the sockets and sockets_events database
+ * tables to maintain all the sockets.
+ *
+ * @package xibbit
+ * @author DanielWHoward
+ **/
+class SocketIOWrapper {
+  /**
+   * Constructor.
+   *
+   * @author DanielWHoward
+   **/
+  function __construct() {
+    $this->socket = null;
+  }
+
+  /**
+   * Add a handler for a message type.
+   *
+   * @param $msg string The message type.
+   * @param $fn function The handler invoke when this socket receives a message.
+   *
+   * @author DanielWHoward
+   **/
+  function &wrapSocket($sid, $config=array()) {
+    if ($this->socket === null) {
+      if ($config['impl']->useSocketIO) {
+        $localSid = isset($_REQUEST['sid'])? $_REQUEST['sid']: '';
+        $this->socket = new SocketWrapper($localSid, $config);
+      } else {
+        $this->socket = new ShortPollSocket('', $config);
+      }
+    }
+    $socket = null;
+    if ($config['impl']->useSocketIO) {
+      if (($sid === '') || ($this->socket->sid === $sid)) {
+        return $this->socket;
+      } else {
+        $socket = new SocketWrapper($sid, $config);
+      }
+    } else {
+      $username = isset($this->session['username'])? $this->session['username']: '';
+      if (($sid === '') || ($sid === $username)) {
+        return $this->socket;
+      } else {
+        $sid = ($username === '')? $sid: $username;
+        $socket = new ShortPollSocket($sid, $config);
+      }
+    }
+    return $socket;
+  }
+}
+
+/**
  * A private class for emulating the broadcast object
  * inside a Socket.IO socket.
  *
@@ -68,12 +129,12 @@ class SocketBroadcast {
     $emitted = false;
     $impl = &$this->owner->config['impl'];
     $ownerClassName = get_class($this->owner);
-    if ($ownerClassName === 'SocketIO') {
+    if ($ownerClassName === 'SocketWrapper') {
       $q = 'SELECT `sid`, `props` FROM `'.$impl->prefix.'sockets`;';
       $qr = &$impl->mysql_query($q);
       while ($row = &$impl->mysql_fetch_assoc($qr)) {
         $sid = $row['sid'];
-        $socket = &$impl->getSocket($sid);
+        $socket = &$impl->socketio->wrapSocket($sid, array('impl'=>$impl));
         $socket->emit($typ, $data);
         $emitted = true;
       }
@@ -86,13 +147,13 @@ class SocketBroadcast {
       $qr = &$impl->mysql_query($q);
       while ($row = &$impl->mysql_fetch_assoc($qr)) {
         $sid = $row['username'];
-        $socket = &$impl->getSocket($sid);
+        $socket = &$impl->socketio->wrapSocket($sid, array('impl'=>$impl));
         $socket->emit($typ, $data);
         $emitted = true;
       }
       $impl->mysql_free_query($qr);
       if ($username === null) {
-        $socket = &$impl->getSocket('');
+        $socket = &$impl->socketio->wrapSocket('', array('impl'=>$impl));
         $socket->emit($typ, $data);
         $emitted = true;
       }
@@ -115,7 +176,7 @@ class SocketBroadcast {
  * @package xibbit
  * @author DanielWHoward
  **/
-class SocketIO {
+class SocketWrapper {
   var $sid;
   var $localSid;
   var $loaded;
@@ -510,6 +571,7 @@ class XibbitHub {
   function __construct($config) {
     $config['vars']['hub'] = $this;
     $this->config = $config;
+    $this->socketio = isset(config['socketio'])? config['socketio']: new SocketIOWrapper();
     $this->onfn = array();
     $this->apifn = array();
     $this->session = array();
@@ -549,43 +611,6 @@ class XibbitHub {
       $this->config['poll'] = array();
     }
     $this->touch();
-  }
-
-  /**
-   * Return the socket associated with a socket ID.
-   *
-   * @param $sid string The socket ID.
-   * @return A socket.
-   *
-   * @author DanielWHoward
-   **/
-  function &getSocket($sid, $config=array()) {
-    $config['impl'] = $this;
-    if ($this->socket === null) {
-      if ($this->useSocketIO) {
-        $localSid = isset($_REQUEST['sid'])? $_REQUEST['sid']: '';
-        $this->socket = new SocketIO($localSid, $config);
-      } else {
-        $this->socket = new ShortPollSocket('', $config);
-      }
-    }
-    $socket = null;
-    if ($this->useSocketIO) {
-      if (($sid === '') || ($this->socket->sid === $sid)) {
-        return $this->socket;
-      } else {
-        $socket = new SocketIO($sid, $config);
-      }
-    } else {
-      $username = isset($this->session['username'])? $this->session['username']: '';
-      if (($sid === '') || ($sid === $username)) {
-        return $this->socket;
-      } else {
-        $sid = ($username === '')? $sid: $username;
-        $socket = new ShortPollSocket($sid, $config);
-      }
-    }
-    return $socket;
   }
 
   /**
@@ -744,7 +769,7 @@ class XibbitHub {
         && ($_REQUEST['transport'] === 'polling'))
         || isset($_REQUEST['XIO'])) {
       // the connection values
-      $socket = &$this->getSocket('');
+      $socket = &$this->socketio->wrapSocket('', array('impl'=>$this));
 
       // socket connected
       $socket->on('connect', function($event) use ($socket) {
@@ -1330,10 +1355,10 @@ class XibbitHub {
         $socket = null;
         $clone = $this->cloneEvent($event, $keysToSkip);
         if ($address === 'all') {
-          $socket = &$this->getSocket('');
+          $socket = &$this->socketio->wrapSocket('', array('impl'=>$this));
           $sent = $socket->broadcast->emit('client', $clone);
         } else {
-          $socket = &$this->getSocket($address);
+          $socket = &$this->socketio->wrapSocket($address, array('impl'=>$this));
           $sent = $socket->emit('client', $clone);
         }
       }

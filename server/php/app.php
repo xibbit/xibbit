@@ -74,8 +74,8 @@ require_once('xibbit.php');
 /**
  * A class with XibbitHub broadcast method overrides.
  *
- * This is for demonstration only; SocketBroadcast
- * does nothing.
+ * This is for demonstration only; HubBroadcast
+ * does not modify or improve SocketBroadcast.
  *
  * @author DanielWHoward
  **/
@@ -92,8 +92,8 @@ class HubBroadcast extends SocketBroadcast {
   /**
    * Send a message to every socket.
    *
-   * This is for demonstration only; SocketBroadcast
-   * does nothing.
+   * This is for demonstration only; HubBroadcast
+   * does not change SocketBroadcast.
    *
    * @param $typ string The message type.
    * @param $data string The message contents.
@@ -102,6 +102,43 @@ class HubBroadcast extends SocketBroadcast {
    **/
   function emit($typ, $data) {
     return parent::emit($typ, $data);
+  }
+}
+
+/**
+ * A class with SocketIOWrapper method overrides.
+ *
+ * This demonstrates how to hook in an enhanced
+ * SocketBroadcast object.
+ *
+ * @author DanielWHoward
+ **/
+class SocketIOWrapper2 extends SocketIOWrapper {
+  /**
+   * Constructor.
+   *
+   * @author DanielWHoward
+   **/
+  function __construct() {
+    parent::__construct();
+  }
+
+  /**
+   * Return the socket associated with a socket ID.
+   *
+   * Override broadcast object.
+   *
+   * @param $sid string The socket ID.
+   * @return A socket.
+   *
+   * @author DanielWHoward
+   **/
+  function &wrapSocket($sid, $config=array()) {
+    $socket = &parent::wrapSocket($sid, $config);
+    if (get_class($socket->broadcast) === 'SocketBroadcast') {
+      $socket->broadcast = new HubBroadcast($socket);
+    }
+    return $socket;
   }
 }
 
@@ -121,27 +158,6 @@ class Hub extends XibbitHub {
    **/
   function __construct($config) {
     parent::__construct($config);
-  }
-
-  /**
-   * Return the socket associated with a socket ID.
-   *
-   * Override broadcast object.
-   *
-   * This is for demonstration only; SocketBroadcast
-   * does nothing.
-   *
-   * @param $sid string The socket ID.
-   * @return A socket.
-   *
-   * @author DanielWHoward
-   **/
-  function &getSocket($sid, $config=array()) {
-    $socket = &parent::getSocket($sid, $config);
-    if (get_class($socket->broadcast) === 'SocketBroadcast') {
-      $socket->broadcast = new HubBroadcast($socket);
-    }
-    return $socket;
   }
 
   /**
@@ -181,6 +197,7 @@ class Hub extends XibbitHub {
 
 // create and configure the XibbitHub object
 $hub = new Hub(array(
+  'socketio'=>new SocketIOWrapper2(),
   'mysqli'=>array(
     'link'=>$link,
     'SQL_PREFIX'=>$sql_prefix
