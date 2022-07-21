@@ -71,7 +71,8 @@ func main() {
 		"link_identifier": link,
 	})
 
-	xdb.DumpSql = true
+	xdb.DumpSql = false
+	xdb.DryRun = false
 
 	// Public Figure specific database
 	pf := pfapp.NewPfapp(xdb, config.Sql_prefix)

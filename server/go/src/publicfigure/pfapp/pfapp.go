@@ -280,14 +280,9 @@ func (self Pfapp) UpdateRow(table map[string]interface{}) (map[string]interface{
  *
  * @author DanielWHoward
  */
-func (self Pfapp) MoveRow(table map[string]interface{}) (map[string]interface{}, error) {
+func (self Pfapp) MoveRow(table map[string]interface{}) error {
 	table = self.AddTableSpecifiers(table).(map[string]interface{})
-	s, e := self.xibdb.MoveRow(table, "", -1, -1)
-	row := make(map[string]interface{}, 0)
-	if e == nil {
-		e = json.Unmarshal([]byte(s), &row)
-	}
-	return row, e
+	return self.xibdb.MoveRow(table, "", -1, -1)
 }
 
 /**

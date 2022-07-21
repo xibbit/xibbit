@@ -56,7 +56,7 @@ class LogToClientOutput {
 $log = new LogToClientOutput();
 
 // map the MySQL database to arrays and JSON
-$xibdb = new XibDb(array(
+$xdb = new XibDb(array(
   'log'=>$log,
   'json_column'=>'json', // freeform JSON column name
   'sort_column'=>'n', // array index column name
@@ -65,8 +65,11 @@ $xibdb = new XibDb(array(
    )
 ));
 
+$xdb->dumpSql = false;
+$xdb->dryRun = false;
+
 // Public Profile specific object
-$pf = new pfapp($xibdb, $sql_prefix);
+$pf = new pfapp($xdb, $sql_prefix);
 
 // XibbitHub eventing system
 require_once('xibbit.php');

@@ -40,7 +40,7 @@
    * Configurations are arrays with keys like "sort_column",
    * "json_column", and "link_identifier" keys.
    *
-   * @param config A configuration.
+   * @param {Map} config A configuration.
    *
    * @author DanielWHoward
    */
@@ -48,6 +48,7 @@
     config = config || {};
     this.config = config;
     this.cache = {};
+    this.mapBool = true;
     this.checkConstraints = false;
     this.dryRun = false;
     this.dumpSql = false;
@@ -57,15 +58,17 @@
   /**
    * Get JSON table rows from the database.
    *
-   * The callback function is passed a JSON string of an
-   * array of columns and data.
+   * The callback function is passed an error argument and
+   * a JSON array of objects.
    *
    * If there is no sort column, the rows are in arbitrary
    * order.
    *
-   * @param {string} table A database table.
-   * @param {string} where A WHERE clause.
-   * @param {function} callback A callback function with one argument.
+   * @param {string} querySpec A database table.
+   * @param {Map} whereSpec A WHERE clause.
+   * @param {Array} columnsSpec A columns clause.
+   * @param {Map} onSpec An ON clause.
+   * @param {function} callback A callback function.
    *
    * @author DanielWHoward
    */
@@ -80,178 +83,217 @@
     columnsSpec = columnsSpec || '*';
     onSpec = onSpec || '';
     callback = callback || function() {};
-    var e = null;
 
     if (that.dumpSql || that.dryRun) {
       console.debug('readRowsNative()');
     }
 
     // check constraints
+    var e = null;
     if (that.checkConstraints) {
       e = that.checkSortColumnConstraint(querySpec, whereSpec);
       if (e === null) {
         e = that.checkJsonColumnConstraint(querySpec, whereSpec);
       }
       if (e !== null) {
-        callback("pre-check: " + e.Error());
+        callback('pre-check: ' + e.Error());
       }
     }
 
     // decode the arguments into variables
     var queryMap = querySpec;
-    if ((typeof queryMap !== 'object') || (queryMap.constructor.name !== 'Object')) {
+    if ((typeof queryMap !== 'object')
+        || (queryMap.constructor.name !== 'Object')) {
       queryMap = {};
     }
     queryMap = array3Merge({
       table: '',
       columns: '*',
       on: '',
-      where: ''
+      where: '',
+      'order by': ''
     }, {
       table: querySpec,
       columns: columnsSpec,
       on: onSpec,
-      where: whereSpec
+      where: whereSpec,
+      'order by': ''
     }, queryMap);
     var table = queryMap.table;
     var columns = queryMap.columns;
     var onVar = queryMap['on'];
     var where = queryMap.where;
+    var orderby = queryMap['order by'];
 
     // decode ambiguous table argument
-    var tableArr = [];
     var tableStr = '';
-    if (table instanceof Array) {
-      tableArr = table;
+    var tableArr = [];
+    if (((typeof table) === 'object')
+        && (table.constructor.name === 'Array')) {
       tableStr = table[0];
+      tableArr = table;
     } else if (typeof table === 'string') {
-      tableArr.push(table);
       tableStr = table;
+      tableArr.push(table);
     }
-    tablesStr = tableStr;
-    for (var t=0; t < tableArr.length; ++t) {
-      var tableName = tableArr[t];
-      if (tablesStr !== tableName) {
-        tablesStr += ',' + tableName;
+    if ((typeof onVar === 'object')
+        && (onVar.constructor.name === 'Object')
+        && (tableArr.length === 1)) {
+      for (var key in onVar) {
+        tableArr.push(key);
       }
     }
-    table = '`' + tableStr + '`';
 
     // cache the table description
     var dryRun = that.dryRun;
     var dumpSql = that.dumpSql;
     that.dryRun = false;
     that.dumpSql = false;
-    that.readDescNative(tableStr, function() {
+    var promises = promise_map([]);
+    for (var t=0; t < tableArr.length; ++t) {
+      promises.push((function(t) {
+        return function promise() {
+          that.readDescNative(t, function() {
+            promise.resolve(true);
+          });
+        };
+      })(tableArr[t]));
+    }
+    promises.resolve(function() {
       that.dryRun = dryRun;
       that.dumpSql = dumpSql;
       var descMap = that.cache[tableStr];
-      var desc = descMap.desc_a;
+      var desc = {};
+      for (var i=0; i < tableArr.length; ++i) {
+        var t = tableArr[i];
+        desc = arrayMerge(desc, that.cache[t].desc_a);
+      }
       var sort_field = descMap.sort_column || '';
       var json_field = descMap.json_column || '';
-      var orderby = '';
+      var orderByStr = '';
       if (sort_field !== '') {
-        orderby = ' ORDER BY `' + sort_field + '` ASC';
+        orderByStr = ' ORDER BY `' + sort_field + '` ASC';
+      }
+      if (orderby !== '') {
+        orderByStr = ' ORDER BY ' + orderby;
       }
 
       // decode remaining ambiguous arguments
+      var columnsStr = columns;
       if (columns instanceof Array) {
         var columnArr = columns;
-        columnStr = '';
         if (tableArr.length === 1) {
+          // only one table so it's simple
           for (var col in columnArr) {
             if (columnsStr !== '') {
-              columnsStr += ',';
+              columnsStr += ', ';
             }
             columnsStr += '`' + col + '`';
           }
-        } else if (tableArr.length > 1) {
-          // assume all columns from first table
+        } else if (tableArr.length >= 2) {
+          // assume '*' columns from first table
           columnsStr += '`' + tableStr + '`.*';
           for (var col in columnArr) {
             if (col.indexOf('.') === -1) {
               // assume column is from second table
-              columnsStr += ',`' + tableArr[1] + '`.`' + col + '`';
+              columnsStr += ', `' + tableArr[1] + '`.`' + col + '`';
             } else {
               // do not assume table; table is specified
               var parts = col.split('.', 2);
               var tablePart = parts[0];
               var colPart = parts[1];
-              columnStr += ',`' + tablePart + '`.`' + colPart + '`';
+              columnStr += ', `' + tablePart + '`.`' + colPart + '`';
             }
           }
         }
       }
-      if ((typeof onVar === 'object') && (onVar.constructor.name === 'Object')) {
+      var onVarStr = onVar;
+      if ((typeof onVar === 'object')
+          && (['Object', 'Array'].indexOf(onVar.constructor.name) >= 0)) {
         // "on" spec shortcut: assume second table
-        if (stringKeysOrArrayIntersect(tableArr, onVar).length === 0) {
+        var tableNamesInBoth = [];
+        var tableArrList = (tableArr.constructor.name === 'Object')? Object.keys(tableArr): tableArr;
+        var onVarList = (onVar.constructor.name === 'Object')? Object.keys(onVar): onVar;
+        tableNamesInBoth = tableArrList.filter(function(n){return onVarList.indexOf(n) !== -1;});
+        if (tableNamesInBoth.length === 0) {
           // explicitly specify the second table
           var newOnVar = {};
           newOnVar[tableArr[1]] = onVar;
           onVar = newOnVar;
         }
-        onVar = that.implementOn(onVar);
+        onVarStr = that.implementOn(onVar);
       }
-      if (onVar !== '') {
-        onVar = ' ' + onVar;
+      if (onVarStr !== '') {
+        onVarStr = ' ' + onVarStr;
       }
-      if ((typeof where === 'object') && (where.constructor.name === 'Object')) {
-        var whereMap = where;
-        whereMap = that.applyTablesToWhere(whereMap, tableStr);
-        where = that.implementWhere(whereMap);
+      var whereStr = where;
+      if ((typeof where === 'object')
+          && (where.constructor.name === 'Object')) {
+        var whereMap = that.applyTablesToWhere(where, tableStr);
+        whereStr = that.implementWhere(whereMap);
       }
-      if (where.substring(0, 1) === ' ') {
-        // add raw SQL
-      } else if (where.substring(0, 'WHERE '.length) === 'WHERE ') {
-        where = ' ' + where;
-      } else if (where !== '') {
-        $where = " WHERE " . $where;
+      if ((whereStr !== '') && !whereStr.startsWith(' ')) {
+        whereStr = ' WHERE ' + whereStr;
       }
 
       var config = that.config;
 
       // read the table
-      var q = 'SELECT ' + columns + ' FROM ' + table + ' '+where+' ' + onVar + orderby + ';';
+      var q = 'SELECT ' + columnsStr + ' FROM `' + tableStr + '`' + onVarStr + whereStr + orderByStr + ';';
       that.mysql_query(q, function(e, rows, f) {
         if (e) {
           callback(e, rows, f);
         } else {
+          // read result
           var objs = [];
           for (var r=0; r < rows.length; ++r) {
             var row = rows[r];
             var obj = {};
             // add the SQL data first
             for (var key in row) {
+              if (!row.hasOwnProperty(key)) {
+                continue;
+              }
               var value = row[key];
-              if (key == 'class') {
+              if (key === 'class') {
                 key = 'clazz';
               }
-              if (key == json_field) {
+              if (key === json_field) {
                 // add non-SQL JSON data later
-              } else if (key == config['sort_column']) {
+              } else if (key === config['sort_column']) {
                 // sort column isn't user data
               } else if (value === null) {
                 obj[key] = null;
-              } else if (is_numeric(value) && (strval(intval(value)) == value) && is_bool(desc[key])) {
+              } else if (that.mapBool && is_numeric(value) && (strval(intval(value)) == value) && ((typeof desc[key]) === 'boolean')) {
                 obj[key] = (intval(value) === 1);
               } else if (is_numeric(value) && (strval(intval(value)) == value) && is_int(desc[key])) {
                 obj[key] = intval(value);
               } else if (is_numeric(value) && is_float(desc[key])) {
                 obj[key] = floatval(value);
               } else {
+                var val = value;
                 try {
-                  var val = JSON.parse(value);
+                  if (['{', '['].indexOf(value[0]) >= 0) {
+                    val = JSON.parse(value);
+                  }
                   obj[key] = val;
                 } catch (e) {
-                  obj[key] = value;
+                  obj[key] = val;
                 }
               }
             }
             // add non-SQL JSON data
-            if ((json_field != '') && (row[json_field] !== null)) {
+            if ((json_field !== '') && (row[json_field] !== null)) {
               try {
                 var jsonMap = JSON.parse(row[json_field]);
+                if ((typeof jsonMap !== 'object')
+                    || (jsonMap.constructor.name !== 'Object')) {
+                  throw 'JSON.parse() error';
+                }
                 for (var key in jsonMap) {
+                  if (!jsonMap.hasOwnProperty(key)) {
+                    continue;
+                  }
                   var value = jsonMap[key];
                   obj[key] = value;
                 }
@@ -298,17 +340,17 @@
    * The callback function is passed a JSON string of
    * columns and default values.
    *
-   * @param table String A database table.
+   * @param {string} querySpec A database table.
    * @return A string containing a JSON object with columns and default values.
    *
    * @author DanielWHoward
    */
-  XibDb.prototype.readDescNative = function(table, callback) {
+  XibDb.prototype.readDescNative = function(querySpec, callback) {
     var that = this;
-    if (is_object(table)) {
-      var args = array_merge({
-      }, table);
-      table = args['table'];
+    if (Object.prototype.toString.call(querySpec) === '[object Object]') {
+      var args = arrayMerge({
+      }, querySpec);
+      querySpec = args['table'];
     }
     var config = this.config;
 
@@ -317,27 +359,36 @@
     }
 
     // check constraints
-/*    if (that.checkConstraints) {
-      e = that.checkSortColumnConstraint(querySpec, whereSpec);
-      if (e === null) {
-        e = that.checkJsonColumnConstraint(querySpec, whereSpec);
-      }
-      if (e !== null) {
-        callback("pre-check: " + e.Error());
-      }
-    }*/
-
     var e = null;
+//    if (that.checkConstraints) {
+//      e = that.checkSortColumnConstraint(querySpec, whereSpec);
+//      if (e === null) {
+//        e = that.checkJsonColumnConstraint(querySpec, whereSpec);
+//      }
+//      if (e !== null) {
+//        callback('pre-check: ' + e.Error());
+//        return;
+//      }
+//    }
+
+    var tableStr = querySpec;
+    if ((typeof querySpec === 'object')
+        && (querySpec.constructor.name === 'Object')) {
+      var queryMap = arrayMerge({}, querySpec);
+      tableStr = queryMap.table;
+    }
+    config = that.config;
+
     var desc = {};
-    if (isset(this.cache[table]) && isset(this.cache[table]['desc'])) {
-      desc = this.cache[table]['desc'];
+    if (this.cache.hasOwnProperty(tableStr) && this.cache[tableStr].hasOwnProperty('desc')) {
+      desc = this.cache[tableStr]['desc'];
       callback(e, desc);
     } else {
       // read the table description
       var sort_column = '';
       var json_column = '';
       var auto_increment_column = '';
-      var q = 'DESCRIBE `'+table+'`;';
+      var q = 'DESCRIBE `' + tableStr + '`;';
       this.mysql_query(q, function(e, rows, f) {
         if (e) {
           console.error(q);
@@ -345,19 +396,20 @@
         for (var r=0; r < rows.length; ++r) {
           var rowdesc = rows[r];
           var field = rowdesc['Field'];
+          var typ = rowdesc['Type'];
           var extra = rowdesc['Extra'];
           if (field === config['sort_column']) {
             sort_column = field;
           } else if (field === config['json_column']) {
             json_column = field;
-          } else if (strpos(rowdesc['Type'], 'tinyint(1)') !== false) {
+          } else if (that.mapBool && (typ.indexOf('tinyint(1)') >= 0)) {
             desc[field] = false;
-          } else if (strpos(rowdesc['Type'], 'int') !== false) {
+          } else if (typ.indexOf('int') >= 0) {
             desc[field] = 0;
-          } else if (strpos(rowdesc['Type'], 'float') !== false) {
-            desc[field] = floatval(0);
-          } else if (strpos(rowdesc['Type'], 'double') !== false) {
-            desc[field] = floatval(0);
+          } else if (typ.indexOf('float') >= 0) {
+            desc[field] = floatval(0.001);
+          } else if (typ.indexOf('double') >= 0) {
+            desc[field] = doubleval(0.000001);
           } else {
             desc[field] = '';
           }
@@ -365,22 +417,36 @@
             auto_increment_column = field;
           }
         }
+
         // cache the description
-        if (!isset(that.cache[table])) {
-          that.cache[table] = {};
+        if (!that.cache.hasOwnProperty(tableStr)) {
+          that.cache[tableStr] = {};
         }
-        that.cache[table]['desc_a'] = desc;
-        desc = JSON.stringify(desc);
-        that.cache[table]['desc'] = desc;
+        that.cache[tableStr]['desc_a'] = desc;
+        var descStr = JSON.stringify(desc);
+        that.cache[tableStr]['desc'] = descStr;
         if (sort_column !== '') {
-          that.cache[table]['sort_column'] = sort_column;
+          that.cache[tableStr]['sort_column'] = sort_column;
         }
         if (json_column !== '') {
-          that.cache[table]['json_column'] = json_column;
+          that.cache[tableStr]['json_column'] = json_column;
         }
         if (auto_increment_column !== '') {
-          that.cache[table]['auto_increment_column'] = auto_increment_column;
+          that.cache[tableStr]['auto_increment_column'] = auto_increment_column;
         }
+
+        // check constraints
+//        if (that.checkConstraints) {
+//          e = that.checkSortColumnConstraint(querySpec, whereSpec);
+//          if (e === null) {
+//            e = that.checkJsonColumnConstraint(querySpec, whereSpec);
+//          }
+//          if (e !== null) {
+//            callback('post-check: ' + e.Error());
+//            return;
+//          }
+//        }
+
         callback(e, desc);
       });
     }
@@ -406,10 +472,10 @@
    *
    * If there is no sort column, it inserts the row, anyway.
    *
-   * @param {string} table A database table.
-   * @param {string} where A WHERE clause.
-   * @param {number} n The place to insert the row before; -1 means the end.
-   * @param {mixed} json A JSON string (string) or JSON array (array).
+   * @param {string} querySpec A database table.
+   * @param {string} whereSpec A WHERE clause.
+   * @param {mixed} valuesSpec A JSON string (string) or JSON array (array).
+   * @param {number} nSpec The place to insert the row before; -1 means the end.
    * @param {function} callback A callback function.
    *
    * @author DanielWHoward
@@ -425,26 +491,27 @@
     valuesSpec = valuesSpec || '{}';
     nSpec = nSpec || -1;
     callback = callback || function() {};
-    var e = null;
 
     if (that.dumpSql || that.dryRun) {
       console.debug('insertRowNative()');
     }
 
     // check constraints
+    var e = null;
     if (that.checkConstraints) {
       e = that.checkSortColumnConstraint(querySpec, whereSpec);
       if (e === null) {
         e = that.checkJsonColumnConstraint(querySpec, whereSpec);
       }
       if (e !== null) {
-        callback("pre-check: " + e.Error());
+        callback('pre-check: ' + e.Error());
       }
     }
 
     // decode the arguments into variables
     var queryMap = querySpec;
-    if ((typeof queryMap !== 'object') || (queryMap.constructor.name !== 'Object')) {
+    if ((typeof queryMap !== 'object')
+        || (queryMap.constructor.name !== 'Object')) {
       queryMap = {};
     }
     queryMap = array3Merge({
@@ -465,7 +532,6 @@
 
     // decode ambiguous table argument
     var tableStr = table;
-    table = '`' + tableStr + '`';
 
     // cache the table description
     var dryRun = that.dryRun;
@@ -479,38 +545,43 @@
       var desc = descMap.desc_a;
       var sort_field = descMap.sort_column || '';
       var json_field = descMap.json_column || '';
-      var orderby = '';
+      var auto_increment_field = descMap.auto_increment_column || '';
+      var orderByStr = '';
       if (sort_field !== '') {
-        orderby = ' ORDER BY `' + sort_field + '` DESC';
+        orderByStr = ' ORDER BY `' + sort_field + '` DESC';
       }
 
       // decode remaining ambiguous arguments
-      var valuesMap = {};
+      var valuesStr = values;
+      var valuesMap = values;
       var sqlValuesMap = {}; // SET clause
-      var jsonMap = arrayMerge(valuesMap, values);
-      if (is_string(values)) {
-        values = ' SET ' + values;
+      var jsonMap = {}; // 'json' field
+      if (typeof values === 'string') {
+        valuesStr = ' ' + values;
+        valuesMap = {};
       } else {
-        valuesMap = arrayMerge(valuesMap, values);
+        valuesStr = '';
+        valuesMap = arrayMerge({}, values);
+        jsonMap = arrayMerge({}, values);
         // copy SQL columns to sqlValuesMap
         for (var col in desc) {
-          var colValue = desc[col];
-          if (array_key_exists(col, jsonMap)) {
+          if (!desc.hasOwnProperty(col)) {
+            continue;
+          }
+          if (jsonMap.hasOwnProperty(col)) {
             var compat = false;
-            if (array_key_exists(col, desc)) {
-              if (gettype(desc[col]) === gettype(jsonMap[col])) {
-                compat = true;
-              }
-              if (is_float(desc[col]) && is_int(jsonMap[col])) {
-                compat = true;
-              }
-              if (is_string(desc[col])) {
-                compat = true;
-              }
-              if (compat) {
-                sqlValuesMap[col] = jsonMap[col];
-                delete jsonMap[col];
-              }
+            if (gettype(desc[col]) === gettype(jsonMap[col])) {
+              compat = true;
+            }
+            if (is_float(desc[col]) && is_int(jsonMap[col])) {
+              compat = true;
+            }
+            if (typeof desc[col] === 'string') {
+              compat = true;
+            }
+            if (compat) {
+              sqlValuesMap[col] = jsonMap[col];
+              delete jsonMap[col];
             }
           }
         }
@@ -520,15 +591,17 @@
         }
       }
       var nInt = n;
-      if ((typeof where === 'object') && (where.constructor.name === 'Object')) {
-        where = that.implementWhere(where);
+      var whereStr = where;
+      if ((typeof where === 'object')
+          && (where.constructor.name === 'Object')) {
+        whereStr = that.implementWhere(where);
       }
-      if (where.substring(0, 1) === ' ') {
-        // add raw SQL
-      } else if (where.substring(0, 'WHERE '.length) === 'WHERE ') {
-        where = ' ' + where;
-      } else if (where !== '') {
-        where = " WHERE " + where;
+      if ((whereStr !== '') && !whereStr.startsWith(' ')) {
+        whereStr = ' WHERE ' + whereStr;
+      }
+      var limitStr = '';
+      if (that.opt || (nInt === -1)) {
+        limitStr = ' LIMIT 1';
       }
 
       var qa = [];
@@ -537,14 +610,10 @@
       var promises = promise_mapSeries([]);
       if (sort_field !== '') {
         var nLen = 0;
-        var limit = '';
-        if (that.opt || (nInt === -1)) {
-          limit = ' LIMIT 1';
-        }
         promises.push((function() {
           return function promise() {
-            var qu = 'SELECT `' + sort_field + '` FROM ' + table + where + orderby + limit + ';';
-            that.mysql_query(qu, function(e, rows) {
+            var q = 'SELECT `' + sort_field + '` FROM `' + tableStr + '`' + whereStr + orderByStr + limitStr + ';';
+            that.mysql_query(q, function(e, rows) {
               for (var r=0; r < rows.length; ++r) {
                 var row = rows[r];
                 nValue = row[sort_field];
@@ -552,41 +621,40 @@
                   nLen = nValue + 1;
                 }
                 if (nInt === -1) {
-                  n = nValue + 1;
-                  nInt = n;
+                  nInt = nValue + 1;
                 }
                 if (nInt > nValue) {
                   break;
                 }
-                var and_clause = ' WHERE ';
-                if (where !== '') {
-                  and_clause = ' AND ';
+                var setStr = '';
+                var andStr = ' WHERE ';
+                if (whereStr !== '') {
+                  andStr = ' AND ';
                 }
                 if (that.opt) {
-                  set_clause = ' `' + sort_field + '`=`' + sort_field + '`+1';
-                  and_clause += '`' + sort_field + '`>=' + nInt;
-                  var qu = 'UPDATE ' + table + ' SET' + set_clause + where + and_clause + ';';
-                  qa.push(qu);
+                  setStr += ' SET `' + sort_field + '`=`' + sort_field + '`+1';
+                  andStr += '`' + sort_field + '`>=' + nInt;
+                  q = 'UPDATE `' + tableStr + '`' + setStr + whereStr + andStr + ';';
+                  qa.push(q);
                   break;
                 } else {
-                  set_clause = ' `' + sort_field + '`=' + (nValue+1);
-                  and_clause += ' `' + sort_field + '`=' + nValue;
-                  qu = 'UPDATE ' + table + ' SET' + set_clause + where + and_clause + ';';
-                  qa.push(qu);
+                  setStr += ' SET `' + sort_field + '`=' + (nValue+1);
+                  andStr += ' `' + sort_field + '`=' + nValue;
+                  q = 'UPDATE `' + tableStr + '`' + setStr + whereStr + andStr + ';';
+                  qa.push(q);
                 }
               }
               that.mysql_free_query(rows);
               if (nInt === -1) {
-                n = 0;
-                nInt = n;
+                nInt = 0;
               }
               if (nInt > nLen) {
                 throw new Exception('`n` value out of range');
               }
 
-              // add sort field to valuesMap
+              // add sort field to sqlValuesMap
               if (Object.keys(sqlValuesMap).length > 0) {
-                sqlValuesMap[sort_field] = n;
+                sqlValuesMap[sort_field] = nInt;
               }
               promise.resolve(true);
             });
@@ -594,10 +662,13 @@
         })());
       }
       promises.resolve(function() {
-        // finally, generate values.(string) from valuesMap
-        if (Object.keys(valuesMap).length > 0) {
+        // finally, generate valuesStr from valuesMap
+        if (Object.keys(sqlValuesMap).length > 0) {
           var valuesStr = '';
           for (var col in sqlValuesMap) {
+            if (!sqlValuesMap.hasOwnProperty(col)) {
+              continue;
+            }
             var value = sqlValuesMap[col];
             if (valuesStr !== '') {
               valuesStr += ',';
@@ -610,8 +681,8 @@
                 jsonStr = '{}';
               }
               valueStr = '"' + that.mysql_real_escape_string(jsonStr) + '"';
-            } else if (is_bool(value)) {
-              valueBool = value;
+            } else if (typeof value === 'boolean') {
+              var valueBool = !!value;
               if (valueBool) {
                 valueStr = '1';
               } else {
@@ -619,25 +690,27 @@
               }
             } else if (is_int(value)) {
               valueStr = value;
-            } else if (is_null(value)) {
+            } else if (value === null) {
               valueStr = 'NULL';
             } else {
               valueStr = '"' + that.mysql_real_escape_string(value) + '"';
             }
             valuesStr += '`' + that.mysql_real_escape_string(col) + '`=' + valueStr;
           }
-          values = ' SET ' + valuesStr;
+          valuesStr = ' SET ' + valuesStr;
         }
 
-        var q = 'INSERT INTO ' + table + values + ';';
+        var q = 'INSERT INTO `' + tableStr + '`' + valuesStr + ';';
         qa.push(q);
 
         var promises = promise_mapSeries([]);
-        for (var qi in qa) {
-          var q = qa[qi];
+        var qr = null;
+        for (var i=0; i < qa.length; ++i) {
+          var q = qa[i];
           promises.push((function(q) {
             return function promise() {
               that.mysql_query(q, function(e, rows) {
+                qr = rows;
                 if (rows) {
                   that.mysql_free_query(rows);
                 }
@@ -647,6 +720,10 @@
           })(q));
         }
         promises.resolve(function() {
+          if ((auto_increment_field !== '') && qr) {
+            valuesMap[auto_increment_field] = that.mysql_insert_id(qr);
+          }
+
           // check constraints
           if (that.checkConstraints) {
             e = that.checkSortColumnConstraint(querySpec, whereSpec);
@@ -654,7 +731,7 @@
               e = that.checkJsonColumnConstraint(querySpec, whereSpec);
             }
             if (e !== null) {
-              callback("post-check: " + e, valuesMap);
+              callback('post-check: ' + e, valuesMap);
             }
           }
 
@@ -692,9 +769,9 @@
    *
    * If there is no sort column, it deletes the first row.
    *
-   * @param {string} table A database table.
-   * @param {string} where A WHERE clause.
-   * @param {mixed} n The row to delete (int) or JSON data to select the row (string).
+   * @param {string} querySpec A database table.
+   * @param {string} whereSpec A WHERE clause.
+   * @param {mixed} nSpec The row to delete (int) or JSON data to select the row (string).
    * @param {function} callback A callback function.
    *
    * @author DanielWHoward
@@ -722,13 +799,14 @@
         e = that.checkJsonColumnConstraint(querySpec, whereSpec);
       }
       if (e !== null) {
-        callback("pre-check: " + e.Error());
+        callback('pre-check: ' + e.Error());
       }
     }
 
     // decode the arguments into variables
     var queryMap = querySpec;
-    if ((typeof queryMap !== 'object') || (queryMap.constructor.name !== 'Object')) {
+    if ((typeof queryMap !== 'object')
+        || (queryMap.constructor.name !== 'Object')) {
       queryMap = {};
     }
     queryMap = array3Merge({
@@ -746,7 +824,6 @@
 
     // decode ambiguous table argument
     var tableStr = table;
-    table = '`' + tableStr + '`';
 
     // cache the table description
     var dryRun = that.dryRun;
@@ -759,64 +836,87 @@
       var descMap = that.cache[tableStr];
       var sort_field = descMap.sort_column || '';
       var json_field = descMap.json_column || '';
-      var and_clause = '';
 
       // decode remaining ambiguous arguments
+      var params = {};
+      var nInt = n;
+      var nStr = n;
+      var whereStr = where;
+      if ((typeof where === 'object')
+          && (where.constructor.name === 'Object')) {
+        whereStr = that.implementWhere(where);
+      }
+      if ((whereStr !== '') && !whereStr.startsWith(' ')) {
+        whereStr = ' WHERE ' + whereStr;
+      }
+      var andStr = '';
+
       var promises = promise_mapSeries([]);
       promises.push((function() {
         return function promise() {
-          if ((typeof where === 'object') && (where.constructor.name === 'Object')) {
-            where = that.implementWhere(where);
-          }
-          if (where.substring(0, 1) === ' ') {
-            // add raw SQL
-          } else if (where.substring(0, 'WHERE '.length) === 'WHERE ') {
-            where = ' ' + where;
-          } else if (where !== '') {
-            where = " WHERE " + where;
-          }
-          if ((sort_field !== '') && is_int(n)) {
-            var sort_start = ' AND ';
-            if (where === '') {
-              sort_start = ' WHERE ';
+          if ((sort_field !== '') && is_int(n) && (n !== -1)) {
+            var opStr = ' WHERE ';
+            if (whereStr !== '') {
+              opStr = ' AND ';
             }
-            and_clause += sort_start + '`' + sort_field + '`=' + n;
+            andStr += opStr + '`' + sort_field + '`=' + nInt;
             promise.resolve(true);
           } else {
-            if (is_string(n) && (n !== '')) {
-              var nMap = JSON.parse(n);
-              if (nMap !== null) {
-                for (var col in nMap) {
-                  var value = nMap[col];
-                  if ((and_clause === '') && (where === '')) {
-                    and_clause += ' WHERE ';
-                  } else {
-                    and_clause += ' AND ';
-                  }
-                  and_clause += col + '=\'' + value + '\'';
+            if (nInt === -1) {
+              andStr = '';
+            }
+            if ((typeof n === 'string') && (nStr !== '')) {
+              try {
+                var nMap = JSON.parse(nStr);
+                if ((typeof nMap !== 'object')
+                    || (nMap.constructor.name !== 'Object')) {
+                  throw 'JSON.parse() error';
                 }
-              } else {
-                and_clause += n;
+                for (var col in nMap) {
+                  if (!nMap.hasOwnProperty(col)) {
+                    continue;
+                  }
+                  var value = nMap[col];
+                  if ((andStr === '') && (whereStr === '')) {
+                    andStr += ' WHERE ';
+                  } else {
+                    andStr += ' AND ';
+                  }
+                  andStr += col + "='" + value + "'";
+                }
+              } catch (e) {
+                andStr += nStr;
               }
             }
             var field = sort_field;
             if (sort_field === '') {
               field = '*';
             }
-            var orderby_clause = '';
+            var orderByStr = '';
             if (sort_field !== '') {
-              orderby_clause = ' ORDER BY ' + sort_field + ' DESC';
+              orderByStr = ' ORDER BY `' + sort_field + '` DESC';
             }
-            var q = 'SELECT COUNT(*) AS num_rows FROM ' + table + ' ' + where + and_clause + orderby_clause + ';';
+            var q = 'SELECT COUNT(*) AS num_rows FROM `' + tableStr + '`' + whereStr + andStr + orderByStr + ';';
             that.mysql_query(q, function(e, rows) {
+              if (e) {
+                return callback(e);
+              }
               var num_rows = 0;
               for (var r=0; r < rows.length; ++r) {
                 var row = rows[r];
                 num_rows = row.num_rows;
               }
+              if (nInt === -1) {
+                nInt = num_rows - 1;
+              }
               that.mysql_free_query(rows);
+              var quotedField = field;
+              if (field !== '*') {
+                quotedField = '`' + field + '`';
+              }
+              q = 'SELECT ' + quotedField + ' FROM `' + tableStr + '`' + whereStr + andStr + orderByStr + ';';
+              // verify that non-standard n var yields valid rows
               if ((num_rows === 1) || ((num_rows > 1) && (sort_field !== ''))) {
-                q = 'SELECT ' + field + ' FROM ' + table + ' ' + where + ' ' + and_clause + orderby_clause + ';';
                 that.mysql_query(q, function(e, rows) {
                   var row = rows[0];
                   if (num_rows === 1) {
@@ -825,12 +925,12 @@
                     }
                   } else if ((num_rows > 1) && (sort_field !== '')) {
                     n = row[sort_field];
-                    if ((and_clause === '') && (where === '')) {
-                      and_clause += 'WHERE ';
+                    if ((andStr === '') && (whereStr === '')) {
+                      andStr += ' WHERE ';
                     } else {
-                      and_clause += ' AND ';
+                      andStr += ' AND ';
                     }
-                    and_clause += sort_field + '="' + n + '"';
+                    andStr += '`' + sort_field + '`=' + nInt;
                   }
                   that.mysql_free_query(rows);
                   promise.resolve(true);
@@ -844,56 +944,44 @@
         };
       })());
       promises.resolve(function() {
-        var nInt = n;
-        if ((typeof where === 'object') && (where.constructor.name === 'Object')) {
-          var whereMap = where;
-          where = that.implementWhere(whereMap);
-        }
-        if (where.substring(0, 1) === ' ') {
-          // add raw SQL
-        } else if (where.substring(0, 'WHERE '.length) === 'WHERE ') {
-          where = ' ' + where;
-        } else if (where !== '') {
-          $where = " WHERE " . $where;
-        }
-
         var qa = [];
 
         // update the positions
         var promises = promise_mapSeries([]);
         if (sort_field !== '') {
           var nLen = 0;
-          var orderby = ' ORDER BY `' + sort_field + '` ASC';
-          var limit = '';
-          if (that.opt || (nInt === -1)) {
-            orderby = ' ORDER BY `' + sort_field + '` DESC';
-            limit = ' LIMIT 1';
+          var orderByStr = ' ORDER BY `' + sort_field + '` ASC';
+          var limitStr = '';
+          if (that.opt) {
+            orderByStr = ' ORDER BY `' + sort_field + '` DESC';
+            limitStr = ' LIMIT 1';
           }
           promises.push((function() {
             return function promise() {
-              var qu = 'SELECT `' + sort_field + '` FROM ' + table + where + orderby + limit + ';';
-              that.mysql_query(qu, function(e, rows) {
+              var q = 'SELECT `' + sort_field + '` FROM `' + tableStr + '`' + whereStr + orderByStr + limitStr + ';';
+              that.mysql_query(q, function(e, rows) {
                 for (var r=0; r < rows.length; ++r) {
                   var row = rows[r];
                   nValue = row[sort_field];
                   if (nValue >= nLen) {
                     nLen = nValue + 1;
                   }
-                  var and_where = ' WHERE ';
-                  if (where !== '') {
-                    and_where = ' AND ';
+                  var setStr = '';
+                  var andSetStr = ' WHERE ';
+                  if (whereStr !== '') {
+                    andSetStr = ' AND ';
                   }
                   if (that.opt) {
-                    set_clause = ' `' + sort_field + '`=`' + sort_field + '`+1';
-                    and_where += '`' + sort_field + '`>=' + nInt;
-                    var qu = 'UPDATE ' + table + ' SET' + set_clause + where + and_where + ';';
-                    qa.push(qu);
+                    setStr += ' SET `' + sort_field + '`=`' + sort_field + '`-1';
+                    andSetStr += '`' + sort_field + '`>=' + nInt;
+                    q = 'UPDATE `' + tableStr + '`' + setStr + whereStr + andSetStr + ';';
+                    qa.push(q);
                     break;
                   } else {
-                    set_clause = ' `' + sort_field + '`=' + (nValue+1);
-                    and_where += ' `' + sort_field + '`=' + nValue;
-                    qu = 'UPDATE ' + table + ' SET' + set_clause + where + and_where + ';';
-                    qa.push(qu);
+                    setStr += ' SET `' + sort_field + '`=' + (nValue-1);
+                    andSetStr += '`' + sort_field + '`=' + nValue;
+                    q = 'UPDATE `' + tableStr + '`' + setStr + whereStr + andSetStr + ';';
+                    qa.push(q);
                   }
                 }
                 that.mysql_free_query(rows);
@@ -909,12 +997,12 @@
         }
 
         promises.resolve(function() {
-          var q = 'DELETE FROM ' + table + where + and_clause + ';';
+          var q = 'DELETE FROM `' + tableStr + '`' + whereStr + andStr + ';';
           qa.unshift(q);
 
           var promises = promise_mapSeries([]);
-          for (var qi in qa) {
-            var q = qa[qi];
+          for (var i=0; i < qa.length; ++i) {
+            var q = qa[i];
             promises.push((function(q) {
               return function promise() {
                 that.mysql_query(q, function(e, rows) {
@@ -934,7 +1022,7 @@
                 e = that.checkJsonColumnConstraint(querySpec, whereSpec);
               }
               if (e !== null) {
-                callback("post-check: " + e);
+                callback('post-check: ' + e);
               }
             }
             callback(null, true);
@@ -971,10 +1059,11 @@
    *
    * If there is no sort column, it updates the first row.
    *
-   * @param {string} table A database table.
-   * @param {string} where A WHERE clause.
-   * @param {mixed} n The row to update (int) or JSON data to select the row (string).
-   * @param {mixed} json A JSON string (string) or JavaScript object (object).
+   * @param {string} querySpec A database table.
+   * @param {Map} valuesSpec A JSON string (string) or JSON array (array).
+   * @param {mixed} nSpec The row to update (int) or JSON data to select the row (string).
+   * @param {Map} whereSpec A WHERE clause.
+   * @param {number} limitSpec A LIMIT value for number of rows to retrieve.
    * @param {function} callback A callback function.
    *
    * @author DanielWHoward
@@ -991,27 +1080,28 @@
     whereSpec = whereSpec || '';
     limitSpec = limitSpec || '';
     callback = callback || function() {};
-    var e = null;
 
     if (that.dumpSql || that.dryRun) {
       console.debug('updateRowNative()');
     }
 
     // check constraints
+    var e = null;
     if (that.checkConstraints) {
       e = that.checkSortColumnConstraint(querySpec, whereSpec);
       if (e === null) {
         e = that.checkJsonColumnConstraint(querySpec, whereSpec);
       }
       if (e !== null) {
-        callback("pre-check: " + e.Error());
+        callback('pre-check: ' + e.Error());
         return;
       }
     }
 
     // decode the arguments into variables
     var queryMap = querySpec;
-    if ((typeof queryMap !== 'object') || (queryMap.constructor.name !== 'Object')) {
+    if ((typeof queryMap !== 'object')
+        || (queryMap.constructor.name !== 'Object')) {
       queryMap = {};
     }
     queryMap = array3Merge({
@@ -1035,7 +1125,6 @@
 
     // decode ambiguous table argument
     var tableStr = table;
-    table = '`' + tableStr + '`';
 
     // cache the table description
     var dryRun = that.dryRun;
@@ -1049,78 +1138,80 @@
       var desc = descMap.desc_a;
       var sort_field = descMap.sort_column || '';
       var json_field = descMap.json_column || '';
-      var orderby = '';
+      var orderByStr = '';
       if (sort_field !== '') {
-        orderby = ' ORDER BY `' + sort_field + '` ASC';
+        orderByStr = ' ORDER BY `' + sort_field + '` ASC';
       }
 
       // decode remaining ambiguous arguments
-      var valuesMap = {};
+      var valuesStr = values;
+      var valuesMap = values;
       var sqlValuesMap = {}; // SET clause
-      var jsonMap = arrayMerge(valuesMap, values);
-      if (is_string(values)) {
-        values = ' SET ' + values;
+      var jsonMap = {}; // 'json' field
+      if (typeof values === 'string') {
+        valuesStr = ' SET ' + values;
+        valuesMap = {};
       } else {
-        valuesMap = arrayMerge(valuesMap, values);
+        valuesStr = '';
+        valuesMap = arrayMerge({}, valuesMap);
+        jsonMap = arrayMerge({}, valuesMap);
         // copy SQL columns to sqlValuesMap
         for (var col in desc) {
-          var colValue = desc[col];
-          if (array_key_exists(col, jsonMap)) {
-            var compat = false;
-            if (array_key_exists(col, desc)) {
-              if (gettype(desc[col]) === gettype(jsonMap[col])) {
-                compat = true;
-              }
-              if (is_float(desc[col]) && is_int(jsonMap[col])) {
-                compat = true;
-              }
-              if (is_string(desc[col])) {
-                compat = true;
-              }
-              if (compat) {
-                sqlValuesMap[col] = jsonMap[col];
-                delete jsonMap[col];
-              }
+          if (!desc.hasOwnProperty(col)) {
+            continue;
+          }
+          var compat = false;
+          if (jsonMap.hasOwnProperty(col)) {
+            if (gettype(desc[col]) === gettype(jsonMap[col])) {
+              compat = true;
+            }
+            if (is_float(desc[col]) && is_int(jsonMap[col])) {
+              compat = true;
+            }
+            if (typeof desc[col] === 'string') {
+              compat = true;
+            }
+            if (compat) {
+              sqlValuesMap[col] = jsonMap[col];
+              delete jsonMap[col];
             }
           }
         }
       }
       var nInt = n;
-      if ((typeof where === 'object') && (where.constructor.name === 'Object')) {
-        where = that.implementWhere(where);
-      }
-      if (where.substring(0, 1) === ' ') {
-        // add raw SQL
-      } else if (where.substring(0, 'WHERE '.length) === 'WHERE ') {
-        where = ' ' + where;
-      } else if (where !== '') {
-        where = " WHERE " + where;
-      }
       var limitInt = limit;
+      var whereStr = where;
+      if ((typeof where === 'object')
+          && (where.constructor.name === 'Object')) {
+        whereStr = that.implementWhere(where);
+      }
+      if ((whereStr !== '') && !whereStr.startsWith(' ')) {
+        whereStr = ' WHERE ' + whereStr;
+      }
       var op_clause = ' WHERE';
-      if (where !== '') {
+      if (whereStr !== '') {
         op_clause = ' AND';
       }
-      var op_and_clause = '';
+      var andStr = '';
       var rows_affected = 0;
-
       if ((sort_field !== '') && (nInt >= 0)) {
-        op_and_clause = op_clause + ' `' + sort_field + '`=' + nInt;
+        andStr = op_clause + ' `' + sort_field + '`=' + nInt;
       }
 
       // get the number of rows_affected
-      q = 'SELECT COUNT(*) AS rows_affected FROM ' + table + where + op_and_clause + ';';
+      q = 'SELECT COUNT(*) AS rows_affected FROM `' + tableStr + '`' + whereStr + andStr + ';';
       that.mysql_query(q, function(e, rows) {
         var rows_affected = 0;
         var row = rows[0];
         rows_affected = row.rows_affected;
         that.mysql_free_query(rows);
+
         if (rows_affected === 0) {
-          if (op_and_clause === '') {
+          if (andStr === '') {
             var e = '0 rows affected';
             callback(e);
           } else {
-            q = 'SELECT COUNT(*) AS rows_affected FROM ' + table + where + ';';
+            q = 'SELECT COUNT(*) AS rows_affected FROM `' + tableStr + '`' + whereStr + ';';
             that.mysql_query(q, function(e, rows) {
               rows_affected = 0;
               for (var r=0; r < rows.length; ++r) {
@@ -1144,14 +1235,13 @@
         }
 
         var qa = [];
-        qa.push(q);
 
         // generate UPDATE statements using json_field
         var promises = promise_mapSeries([]);
         promises.push((function() {
           return function promise() {
-            if (Object.keys(valuesMap).length === 0) {
-              q = 'UPDATE ' + table + values + where + op_and_clause + ';';
+            if (typeof values === 'string') {
+              q = 'UPDATE `' + tableStr + '`' + valuesStr + whereStr + andStr + ';';
               qa.push(q);
               promise.resolve(q);
             } else {
@@ -1162,7 +1252,7 @@
                 promise.resolve(q);
               } else {
                 jsonValue = '';
-                q = 'SELECT `' + json_field + '` FROM ' + table + where + op_and_clause + orderby + ';';
+                q = 'SELECT `' + json_field + '` FROM `' + tableStr + '`' + whereStr + andStr + orderByStr + ';';
                 that.mysql_query(q, function(e, rows) {
                   for (var r=0; (r < rows.length) && !e; ++r) {
                     var row = rows[r];
@@ -1176,7 +1266,7 @@
                   }
                   that.mysql_free_query(rows);
                   if (e) {
-                    err = '"' + that.mysql_real_escape_string(jsonValue) + '" value in `' + json_field + '` column in ' + table + ' table; ' + e;
+                    err = '"' + that.mysql_real_escape_string(jsonValue) + '" value in `' + json_field + '` column in `' + tableStr + '` table; ' + e;
                     callback(err);
                     return;
                   }
@@ -1197,17 +1287,18 @@
                       var col = sqlValuesKeys[c];
                       value = sqlValuesMap[col];
                       if (valuesStr !== '') {
-                        valuesStr = ',';
+                        valuesStr += ',';
                       }
                       valueStr = '';
-                      if (is_array(value)) {
+                      if ((typeof value === 'object')
+                          && (['Object', 'Array'].indexOf(value.constructor.name) >= 0)) {
                         var jsonStr = JSON.stringify(value);
                         if ((jsonStr === '') || (jsonStr === '[]')) {
                           jsonStr = '{}';
                         }
                         valueStr = '"' + that.mysql_real_escape_string(jsonStr) + '"';
-                      } else if (is_bool(value)) {
-                        valueBool = boolval(value);
+                      } else if (typeof value === 'boolean') {
+                        var valueBool = !!value;
                         if (valueBool) {
                           valueStr = '1';
                         } else {
@@ -1215,35 +1306,35 @@
                         }
                       } else if (is_int(value)) {
                         valueStr = strval(value);
-                      } else if (is_null(value)) {
+                      } else if (value === null) {
                         valueStr = 'NULL';
                       } else {
                         valueStr = '"' + that.mysql_real_escape_string(value) + '"';
                       }
                       valuesStr += '`' + that.mysql_real_escape_string(col) + '`=' + valueStr;
                     }
-                    values = ' SET ' + valuesStr;
+                    valuesStr = ' SET ' + valuesStr;
                     // add a custom update for each row
                     if (that.opt && updateJson) {
-                      q = 'UPDATE ' + table + values + where;
-                      if (sort_field === '') {
+                      q = 'UPDATE `' + tableStr + '`' + valuesStr + whereStr;
+                      if (nInt === -1) {
                         q += ';';
                         qa.push(q);
                       } else {
                         if (typeof qInsMap[q] !== 'undefined') {
                           var qi = qInsMap[q];
-                          qIns[qi].Values.push(i);
+                          qIns[qi].values.push(nInt);
                         } else {
-                          qIns.push(newQueryUsingInKeyword(q, op_clause, sort_field, i));
+                          qIns.push(new QueryUsingInKeyword(q, op_clause, sort_field, nInt));
                           qInsMap[q] = qIns.length - 1;
                         }
                       }
                     } else {
-                      var op_and_clause = '';
+                      var andStr = '';
                       if (nInt >= 0) {
-                        op_and_clause = op_clause + ' `' + sort_field + '`=' + i;
+                        andStr = op_clause + ' `' + sort_field + '`=' + nInt;
                       }
-                      q = 'UPDATE ' + table + values + where + op_and_clause + ';';
+                      q = 'UPDATE `' + tableStr + '`' + valuesStr + whereStr + andStr + ';';
                       qa.push(q);
                     }
                   }
@@ -1263,8 +1354,8 @@
 
         promises.resolve(function() {
           var promises = promise_mapSeries([]);
-          for (var qi in qa) {
-            var q = qa[qi];
+          for (var i=0; i < qa.length; ++i) {
+            var q = qa[i];
             promises.push((function(q) {
               return function promise() {
                 that.mysql_query(q, function(e, rows) {
@@ -1284,7 +1375,7 @@
                 e = that.checkJsonColumnConstraint(querySpec, whereSpec);
               }
               if (e !== null) {
-                callback("post-check: " + e);
+                callback('post-check: ' + e);
               }
             }
             callback(null, true);
@@ -1323,10 +1414,10 @@
    *
    * If there is no sort column, it does nothing.
    *
-   * @param {string} table A database table.
-   * @param {string} where A WHERE clause.
-   * @param {number} m The row to move.
-   * @param {number} n The row to move to.
+   * @param {string} querySpec A database table.
+   * @param {Map} whereSpec A WHERE clause.
+   * @param {number} mSpec The row to move.
+   * @param {number} nSpec The row to move to.
    * @param {function} callback A callback function.
    *
    * @author DanielWHoward
@@ -1355,13 +1446,14 @@
         e = that.checkJsonColumnConstraint(querySpec, whereSpec);
       }
       if (e !== null) {
-        callback("pre-check: " + e.Error());
+        callback('pre-check: ' + e.Error());
       }
     }
 
     // decode the arguments into variables
     var queryMap = querySpec;
-    if ((typeof queryMap !== 'object') || (queryMap.constructor.name !== 'Object')) {
+    if ((typeof queryMap !== 'object')
+        || (queryMap.constructor.name !== 'Object')) {
       queryMap = {};
     }
     queryMap = array3Merge({
@@ -1382,7 +1474,6 @@
 
     // decode ambiguous table argument
     var tableStr = table;
-    table = '`' + tableStr + '`';
 
     // cache the table description
     var dryRun = that.dryRun;
@@ -1395,13 +1486,14 @@
       var descMap = that.cache[tableStr];
       var sort_field = descMap.sort_column || '';
       var json_field = descMap.json_column || '';
-      var orderby = '';
+      var orderByStr = '';
       if (sort_field !== '') {
-        orderby = ' ORDER BY `' + sort_field + '` DESC';
+        orderByStr = ' ORDER BY `' + sort_field + '` DESC';
       } else {
         callback(tableStr + ' does not have a sort_field');
         return;
       }
+      var limitStr = ' LIMIT 1';
 
       if (m === n) {
         callback('`m` and `n` are the same so nothing to do');
@@ -1409,27 +1501,27 @@
       }
 
       // decode remaining ambiguous arguments
-      if ((typeof where === 'object') && (where.constructor.name === 'Object')) {
-        var whereMap = where;
-        whereMap = that.applyTablesToWhere(whereMap, tableStr);
-        where = that.implementWhere(whereMap);
+      var whereStr = where;
+      if ((typeof where === 'object')
+          && (where.constructor.name === 'Object')) {
+        whereMap = that.applyTablesToWhere(where, tableStr);
+        whereStr = that.implementWhere(whereMap);
       }
-      if (where.substring(0, 1) === ' ') {
-        // add raw SQL
-      } else if (where.substring(0, 'WHERE '.length) === 'WHERE ') {
-        where = ' ' + where;
-      } else if (where !== '') {
-        where = " WHERE " + where;
+      if ((whereStr !== '') && !whereStr.startsWith(' ')) {
+        whereStr = ' WHERE ' + whereStr;
       }
-      var op_cause = ' WHERE';
-      if (where !== '') {
-        op_cause = ' AND';
+      var opStr = '';
+      if ((sort_field !== '') && (n >= 0)) {
+        opStr = ' WHERE';
+        if (whereStr !== '') {
+          opStr = ' AND';
+        }
       }
 
       // get the length of the array
-      var nLen = 0;
-      var q = 'SELECT `' + sort_field + '` FROM ' + table + where + orderby + ';';
+      var q = 'SELECT `' + sort_field + '` FROM `' + tableStr + '`' + whereStr + orderByStr + limitStr + ';';
       that.mysql_query(q, function(e, rows) {
+        var nLen = 0;
         if (rows.length > 0) {
           var row = rows[0];
           nLen = row[sort_field] + 1;
@@ -1447,49 +1539,49 @@
         var qa = [];
 
         // save the row at the m-th to the end
-        var valuesStr = ' `' + sort_field + '`=' + nLen;
-        var and_clause = ' `' + sort_field + '`=' + m;
-        q = 'UPDATE ' + table + ' SET' + valuesStr + where + op_cause + and_clause + ';';
+        var setStr = ' SET `' + sort_field + '`=' + nLen;
+        var andStr = opStr + ' `' + sort_field + '`=' + m;
+        q = 'UPDATE `' + tableStr + '`' + setStr + whereStr + andStr + ';';
         qa.push(q);
 
         // update the indices between m and n
         if (that.opt) {
           if (m < n) {
-            valuesStr = ' `' + sort_field + '`=`' + sort_field + '`-1';
-            and_clause = ' `' + sort_field + '`>' + m + ' AND `' + sort_field + '`<=' + n;
+            setStr = ' SET `' + sort_field + '`=`' + sort_field + '`-1';
+            andStr = opStr + ' `' + sort_field + '`>' + m + ' AND `' + sort_field + '`<=' + n;
           } else {
-            valuesStr = ' `' + sort_field + '`=`' + sort_field + '`+1';
-            and_clause = ' `' + sort_field + '`>=' + n + ' AND `' + sort_field + '`<' + m;
+            setStr = ' SET `' + sort_field + '`=`' + sort_field + '`+1';
+            andStr = opStr + ' `' + sort_field + '`>=' + n + ' AND `' + sort_field + '`<' + m;
           }
-          q = 'UPDATE ' + table + ' SET' + valuesStr + where + op_cause + and_clause + ';';
+          q = 'UPDATE `' + tableStr + '`' + setStr + whereStr + andStr + ';';
           qa.push(q);
         } else {
           if (m < n) {
             for (var i = m; i < n; i++) {
-              valuesStr = ' `' + sort_field + '`=' + i;
-              and_clause += ' `' + sort_field + '`=' + (i+1);
-              q = 'UPDATE ' + table + ' SET' + valuesStr + where + op_cause + and_clause + ';';
+              setStr = ' SET `' + sort_field + '`=' + i;
+              andStr = opStr + ' `' + sort_field + '`=' + (i+1);
+              q = 'UPDATE `' + tableStr + '`' + setStr + whereStr + andStr + ';';
               qa.push(q);
             }
           } else {
-            for (i = m - 1; i >= n; i--) {
-              valuesStr = ' `' + sort_field + '`=' + (i+1);
-              and_clause = ' `' + sort_field + '`=' + i;
-              q = 'UPDATE ' + table + ' SET' + valuesStr + where + op_cause + and_clause + ';';
+            for (var i = m - 1; i >= n; i--) {
+              setStr = ' SET `' + sort_field + '`=' + (i+1);
+              andStr = opStr + ' `' + sort_field + '`=' + i;
+              q = 'UPDATE `' + tableStr + '`' + setStr + whereStr + andStr + ';';
               qa.push(q);
             }
           }
         }
 
         // copy the row at the end to the n-th position
-        valuesStr = ' `' + sort_field + '`=' + n;
-        and_clause = ' `' + sort_field + '`=' + nLen;
-        q = 'UPDATE ' + table + ' SET' + valuesStr + where + op_cause + and_clause + ';';
+        setStr = ' SET `' + sort_field + '`=' + n;
+        andStr = opStr + ' `' + sort_field + '`=' + nLen;
+        q = 'UPDATE `' + tableStr + '`' + setStr + whereStr + andStr + ';';
         qa.push(q);
 
         var promises = promise_mapSeries([]);
-        for (var qi in qa) {
-          var q = qa[qi];
+        for (var i=0; i < qa.length; ++i) {
+          var q = qa[i];
           promises.push((function(q) {
             return function promise() {
               that.mysql_query(q, function(e, rows) {
@@ -1509,7 +1601,7 @@
               e = that.checkJsonColumnConstraint(querySpec, whereSpec);
             }
             if (e !== null) {
-              callback("post-check: " + e);
+              callback('post-check: ' + e);
             }
           }
 
@@ -1540,7 +1632,7 @@
       }
       callback.apply(null, arguments);
     });
-  }
+  };
 
   /**
    * Flexible mysql_query() function.
@@ -1556,7 +1648,7 @@
     if (that.dumpSql || that.dryRun) {
       console.debug(query);
     }
-    if (that.dryRun && (query.substring(0, 'SELECT '.length) !== 'SELECT ') && (query.substring(0, 'DESCRIBE '.length) !== 'DESCRIBE ')) {
+    if (that.dryRun && (!query.startsWith('SELECT ') && !query.startsWith('DESCRIBE '))) {
       return callback({
         code: 'ER_DRY_RUN',
         errno: 0,
@@ -1570,49 +1662,60 @@
   };
 
   /**
-   * Flexible mysql_num_rows() function.
+   * Renamed mysql_query() for INSERT queries so
+   * mysql_insert_id() will work.
    *
-   * @param $result String The result to fetch.
-   * @return The mysql_num_rows() return value.
+   * @param {string} query The query to execute.
+   * @param {function} callback A callback function.
+   * @return {string} The mysql_query() return value.
    *
    * @author DanielWHoward
    */
-  XibDb.prototype.mysql_num_rows = function(result) {
-    return (result && result.length)? result.length: 0;
+  XibDb.prototype.mysql_exec = function(query, callback) {
+    return that.mysql_query(query, callback);
   };
 
   /**
    * Flexible mysql_fetch_assoc() function.
    *
-   * @param $result String The result to fetch.
+   * @param {Map} result The result to fetch.
    * @return The mysql_fetch_assoc() return value.
    *
    * @author DanielWHoward
    */
-  XibDb.prototype.mysql_fetch_assoc = function(result) {
-    return result;
+  XibDb.prototype.mysql_fetch_assoc = function(rows) {
+    var assoc = null;
+    if (rows) {
+      if (!rows.hasOwnProperty('mysql_fetch_assoc_index')) {
+        rows.mysql_fetch_assoc_index = 0;
+      }
+      if (rows.mysql_fetch_assoc_index < rows.length) {
+        assoc = rows[rows.mysql_fetch_assoc_index++];
+      }
+    }
+    return assoc;
   };
 
   /**
    * Flexible mysql_free_result() function.
    *
-   * @param $result String The result to free.
+   * @param {Object} result The result to free.
    * @return The mysql_free_result() return value.
    *
    * @author DanielWHoward
    */
-  XibDb.prototype.mysql_free_query = function() {
+  XibDb.prototype.mysql_free_query = function(result) {
   };
 
   /**
    * Flexible mysql_free_result() function for INSERTs.
    *
-   * @param $result String The result to free.
+   * @param {Object} result The result to free.
    * @return The mysql_free_result() return value.
    *
    * @author DanielWHoward
    */
-  XibDb.prototype.mysql_free_exec = function() {
+  XibDb.prototype.mysql_free_exec = function(result) {
   };
 
   /**
@@ -1624,7 +1727,14 @@
    * @author DanielWHoward
    */
   XibDb.prototype.mysql_real_escape_string = function(unescaped_string) {
-    return mysql_real_escape_string(unescaped_string, this.config['link_identifier']);
+    return (unescaped_string + '')
+      .replace(/\0/g, '\\x00')
+      .replace(/\n/g, '\\n')
+      .replace(/\r/g, '\\r')
+      .replace(/\\/g, '\\\\')
+      .replace(/'/g, '\\\'')
+      .replace(/"/g, '\\"')
+      .replace(/\x1a/g, '\\\x1a');
   };
 
   /**
@@ -1639,20 +1749,61 @@
   };
 
   /**
+   * Return true if the data in a table, optionally
+   * filtered with a WHERE clause, has integers 0 .. n-1
+   * in its sort_column such that it is an array.
+   *
+   * @param {string} querySpec A database table.
+   * @param {Map} whereSpec A WHERE clause.
+   * @param {function} callback A callback function.
+   * @return A clause string.
+   *
+   * @author DanielWHoward
+   */
+  XibDb.prototype.checkSortColumnConstraint = function(querySpec, whereSpec, callback) {
+    var e = null;
+
+    callback(e);
+  };
+
+  /**
+   * Return true if the data in a table, optionally
+   * filtered with a WHERE clause, has integers 0 .. n-1
+   * in its sort_column such that it is an array.
+   *
+   * @param {string} querySpec A database table.
+   * @param {function} callback A callback function.
+   * @return A clause string.
+   *
+   * @author DanielWHoward
+   */
+  XibDb.prototype.checkJsonColumnConstraint = function(querySpec, callback) {
+    var e = null;
+
+    // decode the arguments into variables
+    var queryMap = querySpec;
+    callback(e);
+  };
+
+  /**
    * Prepend a table specifier to keys and values in a
    * WHERE array.
    *
-   * @param a An array with WHERE clause specification.
-   * @param table An array of tables.
+   * @param {Map} a An array with WHERE clause specification.
+   * @param {string} table An array of tables.
    * @return A clause string.
    *
    * @author DanielWHoward
    */
   XibDb.prototype.applyTablesToWhere = function(a, table) {
+    var keywords = ['AND', 'OR'];
     var aa = {};
     for (var key in a) {
+      if (!a.hasOwnProperty(key)) {
+        continue;
+      }
       var value = a[key];
-      if (key.indexOf('.') === -1) {
+      if ((key.indexOf('.') === -1) && (keywords.indexOf(key) === -1)) {
         aa[table + '.' + key] = value;
       } else {
         aa[key] = value;
@@ -1667,21 +1818,24 @@
    * It is easier to use an array to create a MySQL WHERE clause instead
    * of using string concatenation.
    *
-   * @param where An array with clause specification.
+   * @param {Map} whereSpec An array with clause specification.
    * @return A clause string.
    *
    * @author DanielWHoward
    */
   XibDb.prototype.implementWhere = function(whereSpec) {
     var that = this;
-    var ret = whereSpec;
-    if ((typeof whereSpec === 'object') && (whereSpec.constructor.name === 'Object')) {
-      ret = that.implementClause(whereSpec);
-      if (ret !== '') {
-        ret = 'WHERE ' + ret;
+    var whereStr = '';
+    if ((typeof whereSpec === 'object')
+        && (whereSpec.constructor.name === 'Object')) {
+      whereStr = that.implementCondition(whereSpec);
+      if (whereStr !== '') {
+        whereStr = ' WHERE ' + whereStr;
       }
+    } else {
+      whereStr = whereSpec;
     }
-    return ret;
+    return whereStr;
   };
 
   /**
@@ -1690,22 +1844,30 @@
    * It is easier to use an array to create a MySQL WHERE clause instead
    * of using string concatenation.
    *
-   * @param where An array with clause specification.
+   * @param {Map} onVar An array with an ON clause specification.
    * @return A clause string.
    *
    * @author DanielWHoward
    */
-  XibDb.prototype.implementOn = function(on) {
+  XibDb.prototype.implementOn = function(onVar) {
+    var that = this;
     var joins = ['INNER JOIN', 'LEFT JOIN', 'RIGHT JOIN', 'OUTER JOIN'];
-    if (is_array(on)) {
-      var clause = '';
-      for (var table in on) {
-        var cond = on[table];
+    var onVarStr = '';
+    if ((typeof onVar === 'object')
+        && (onVar.constructor.name === 'Object')) {
+      for (var table in onVar) {
+        if (!onVar.hasOwnProperty(table)) {
+          continue;
+        }
+        var cond = onVar[table];
         // INNER JOIN is the default
         var join = joins[0];
         // remove JOIN indicator from conditions
         var conds = {};
         for (var k in cond) {
+          if (!cond.hasOwnProperty(k)) {
+            continue;
+          }
           var v = cond[k];
           if (joins.indexOf(k.toUpperCase()) !== -1) {
             join = k;
@@ -1714,58 +1876,79 @@
           }
         }
         // build the JOIN clause
-        clause += ' '+join+' '+table+' ON '+this.implementClause(conds, true);
+        onVarStr += join + ' `' + table + '` ON ' + that.implementCondition(conds, 'ON ');
       }
-      on = clause;
+    } else {
+      onVarStr = onVar;
     }
-    return on;
+    return onVarStr;
   };
 
   /**
-   * Return a clause string created from an array specification.
+   * Return a SQL condition string created from an array specification.
    *
    * It is easier to use an array to create a MySQL WHERE clause instead
    * of using string concatenation.
    *
-   * @param clause An array with clause specification.
-   * @return A clause string.
+   * @param {Map} condObj An array with conditional specification.
+   * @param {string} onVar A string with an ON clause specification.
+   * @return A SQL string containing a nested conditional.
    *
    * @author DanielWHoward
    */
-  XibDb.prototype.implementClause = function(clause, on) {
-    on = on || false;
-    if (is_array(clause) && (clause.length === 0)) {
-      clause = '';
-    } else if (is_array(clause)) {
-      var op = 'AND';
-      if (clause['or']) {
-        op = 'OR';
-        delete clause['or'];
-      } else if (clause['and']) {
-        delete clause['and'];
-      }
-      var s = '(';
-      for (var key in clause) {
-        var value = clause[key];
-        if (s !== '(') {
-          s += ' '+op+' ';
+  XibDb.prototype.implementCondition = function(condObj, onVar) {
+    var that = this;
+    onVar = onVar || '';
+    var cond = '';
+    if ((typeof condObj) == 'string') {
+      cond = condObj;
+    } else if ((typeof condObj === 'object')
+        && (condObj.constructor.name === 'Object')) {
+      var condMap = condObj;
+      var conds = [];
+      var op = ' AND ';
+      for (var key in condMap) {
+        if (!condMap.hasOwnProperty(key)) {
+          continue;
         }
-        if (is_array(value)) {
-          if (Array.isArray(value)) {
+        var value = condMap[key];
+        var sub = '';
+        if (key.toUpperCase() === 'OR') {
+          op = ' OR ';
+        } else if (key.toUpperCase() !== 'AND') {
+          if (((typeof value) === 'object')
+              && (value.constructor.name === 'Array')) {
             // assume it is some SQL syntax
-            s += '('+this.implementSyntax(key, value)+')';
-          } else {
+            sub = that.implementSyntax(key, value);
+            if (sub !== '') {
+              sub = '('+sub+ ')';
+            }
+          } else if (((typeof value) === 'object')
+              && (value.constructor.name === 'Object')) {
             // assume it is a sub-clause
-            s += this.implementClause(value);
+            sub = that.implementCondition(value);
+            if (sub !== '') {
+              sub = '('+sub+ ')';
+            }
+          } else {
+            sub = that.mysql_real_escape_string(value);
+            if (onVar === '') {
+              sub = "'"+sub+ "'";
+            } else {
+              sub = '`' + sub.replace(/\./g, '`.`') + '`';
+            }
+            sub = '`' + key.replace(/\./g, '`.`') + '`=' + sub;
           }
-        } else {
-          s += key+'="'+this.mysql_real_escape_string(value)+'"';
+        }
+        if (sub !== '') {
+          conds.push(sub);
         }
       }
-      s += ')';
-      clause = s;
+      if (conds.length > 0) {
+        cond = conds.join(op);
+      }
     }
-    return clause;
+    return cond;
   }
 
   /**
@@ -1774,64 +1957,113 @@
    * It is easier to use an array to create a SQL string (like LIKE)
    * instead of using string concatenation.
    *
-   * @param key A name, possibly unused.
-   * @param clause An array with syntax specification.
+   * @param {string} key A name, possibly unused.
+   * @param {Array} syntax An array with syntax specification.
    * @return A SQL syntax string.
    *
    * @author DanielWHoward
    */
   XibDb.prototype.implementSyntax = function(key, syntax) {
     var sql = '';
-    if ((syntax.length >= 1) && (syntax[0] === 'LIKE')) {
-      // LIKE: array('LIKE', 'tags', '% ', $arrayOfTags, ' %')
-      var key = syntax[1];
-      var values = [];
+    var cmdStr = syntax[0];
+    if ((syntax.length >= 1) && (cmdStr.toUpperCase() === 'LIKE')) {
+      // LIKE: 'unused': ['LIKE', 'tags', '% ', $arrayOfTags, ' %']
+      var op = ' OR ';
+      var clauses = [];
+      var col = syntax[1];
+      var likeStr = '`'+col+'` LIKE';
       if (syntax.length === 3) {
-        values.push(syntax[2]);
+        var valueStr = syntax[2];
+        valueStr = likeStr + " '" + that.mysql_real_escape_string(valueStr) + "'";
+        clauses.push(valueStr);
       } else if ((syntax.length === 4) || (syntax.length === 5)) {
         var pre = syntax[2];
-        var post = (syntax.length === 5)? syntax[4]: '';
-        if (is_array(syntax[3])) {
-          for (var v=0; v < syntax[3].length; ++v) {
-            values.push(pre+syntax[3][v]+post);
+        var post = '';
+        if (syntax.length === 5) {
+          post = syntax[4];
+        }
+        if (((typeof syntax[3]) === 'object')
+            && (syntax[3].constructor.name === 'Array')) {
+          for (var i=0; i < syntax[3].length; ++i) {
+            var value = syntax[3][i];
+            var valueStr = pre + value + post;
+            valueStr = likeStr + " '" + that.mysql_real_escape_string(valueStr) + "'";
+            clauses.append(valueStr);
           }
         } else {
-          values.push(pre+syntax[3]+post);
+          var valueStr = syntax[3];
+          valueStr = likeStr + " '" + that.mysql_real_escape_string(valueStr) + "'";
+          clauses.append(valueStr);
         }
       }
-      var op = 'OR';
-      for (var v=0; v < values.length; ++v) {
-        if (v > 0) {
-          sql += ' '+op+' ';
-        }
-        sql += key+' LIKE \''+this.mysql_real_escape_string(values[v])+'\'';
-      }
+      sql = clauses.join(op);
     } else {
-      // OR: 'column'=>array('1', '2', '3')
-      var op = 'OR';
-      var values = syntax;
-      for (var v=0; v < values.length; ++v) {
-        if (v > 0) {
-          sql += ' '+op+' ';
-        }
-        sql += '`'+key+'`=\''+this.mysql_real_escape_string(values[v])+'\'';
+      // OR: aColumn: ['1', '2', '3']
+      var op = ' OR ';
+      var clauses = [];
+      for (var v=0; v < syntax.length; ++v) {
+        var valueStr = syntax[i];
+        valueStr = '`'+key+"`='" + that.mysql_real_escape_string(valueStr) + "'";
+        clauses.append(valueStr);
       }
+      sql = clauses.join(op);
     }
     return sql;
+  };
+
+/**
+ * Store values to create a query with the IN keyword.
+ *
+ * @version 0.0.9
+ * @author DanielWHoward
+ */
+
+  /**
+   * Create an object to store values to create a query
+   * with the IN keyword.
+   *
+   * @param prefix A string with most of the query.
+   * @param value The first value for the IN clause.
+   *
+   * @author DanielWHoward
+   */
+  function QueryUsingInKeyword(prefix, op_clause, field, value) {
+    this.prefix = prefix;
+    this.op_clause = op_clause;
+    this.field = field;
+    this.values = [];
+    this.values.push(value);
+  }
+
+  /**
+   * Return a SQL string created from multiple values.
+   *
+   * @param op_clause A name, possibly unused.
+   * @param sort_field An array with syntax specification.
+   * @return A SQL syntax string.
+   *
+   * @author DanielWHoward
+   */
+  QueryUsingInKeyword.prototype.getQuery = function() {
+    var and_clause = '';
+    if (this.values.length === 1) {
+      and_clause = ' `' + this.field + '`=' + this.values[0];
+    } else {
+      for (var i in this.values) {
+        if (and_clause !== '') {
+          and_clause += ', ';
+        }
+        $and_clause += $i;
+      }
+      and_clause = ' `' + this.field + '` IN (' + and_clause + ')';
+    }
+    return this.prefix + this.op_clause + and_clause + ';';
   };
 
 // constructor is the module
 module.exports = XibDb;
 
-/**
- * True if the variable is defined.
- * 
- * @param {mixed} v The variable to check.
- * @returns {Boolean} True if not undefined.
- */
-function isset(v) {
-  return typeof v !== 'undefined';
-}
+var unknownTypeId = 1;
 
 /**
  * Get the type but uses PHP constants.  Return NULL,
@@ -1839,57 +2071,27 @@ function isset(v) {
  * unknown type.
  * 
  * @param {mixed} v The variable to check.
- * @returns {String} The type of the variable.
+ * @returns {string} The type of the variable.
  */
 function gettype(v) {
   if (v === null) {
     return 'NULL';
-  } else if ((typeof v) == 'boolean') {
+  } else if (typeof v == 'boolean') {
     return 'boolean';
-  } else if (((typeof v) == 'number') && ((v % 1) === 0)) {
+  } else if ((typeof v == 'number') && ((v % 1) === 0)) {
     return 'integer';
-  } else if (((typeof v) == 'number') && (Math.round(v) !== v)) {
+  } else if ((typeof v == 'number') && (Math.round(v) !== v)) {
     return 'double';
-  } else if ((typeof v) == 'string') {
+  } else if (typeof v == 'string') {
     return 'string';
-  } else if (v instanceof Array) {
-    return 'array'; // indexed array
-  } else if (((typeof v) == 'object') && (v.constructor.name === 'Object')) {
-    return 'array'; // associative array
-  } else if ((typeof v) == 'object') {
-    return 'object';
+  } else if ((typeof v === 'object') && v.constructor && (v.constructor.name === 'Array')) {
+    return 'list'; // list/indexed array
+  } else if ((typeof v === 'object') && v.constructor && (v.constructor.name === 'Object')) {
+    return 'map'; // map/associative array
+  } else if ((typeof v === 'object') && v.constructor && v.constructor.name) {
+    return v.constructor.name;
   }
-  return 'unknown type';
-}
-
-/**
- * Return true if the varible is NULL.
- * 
- * @param {mixed} v The variable to check.
- * @returns {Boolean} True if it is null.
- */
-function is_null(v) {
-  return gettype(v) == 'NULL';
-}
-
-/**
- * Return true if the variable is a string.
- * 
- * @param {mixed} s The variable to check.
- * @returns {Boolean} True if it is a string.
- */
-function is_string(s) {
-  return gettype(s) === 'string';
-}
-
-/**
- * Return true if the variable is a boolean.
- * 
- * @param {mixed} v The variable to check.
- * @returns {Boolean} True if it is a boolean.
- */
-function is_bool(v) {
-  return gettype(v) == 'boolean';
+  return 'unknown type ' + unknownTypeId++;
 }
 
 /**
@@ -1910,26 +2112,6 @@ function is_int(s) {
  */
 function is_float(v) {
   return gettype(v) == 'double';
-}
-
-/**
- * Return true if the variable is an array.
- * 
- * @param {mixed} v The variable to check.
- * @returns {Boolean} True if it is an array.
- */
-function is_array(v) {
-  return gettype(v) == 'array';
-}
-
-/**
- * Return true if the variable is an object.
- * 
- * @param {mixed} v The variable to check.
- * @returns {Boolean} True if it is an object.
- */
-function is_object(v) {
-  return gettype(v) == 'object';
 }
 
 /**
@@ -1989,20 +2171,19 @@ function floatval(n) {
 }
 
 /**
- * Return true if the key (property) exists in a
- * JavaScript object.
- * 
- * @param {string} k The property.
- * @param {Array} a The object.
- * @returns {Boolean} True if it exists.
+ * Return the variable as a double.
+ *
+ * @param {mixed} n The variable.
+ * @returns {number} The double representation.
  */
-function array_key_exists(k, a) {
-  return (typeof a[k]) != 'undefined';
+function doubleval(n) {
+  return floatval(n);
 }
 
 /**
  * Merge keys of objects with string indices and
- * return a new array.
+ * return a new array.  Standard now but provided
+ * so merge can be customized.
  *
  * @return object The merged object.
  *
@@ -2011,33 +2192,19 @@ function array_key_exists(k, a) {
 function arrayMerge(a, b) {
   var r = {};
   var key;
-  var value;
   for (key in a) {
+    if (!a.hasOwnProperty(key)) {
+      continue;
+    }
     r[key] = a[key];
   }
   for (key in b) {
+    if (!b.hasOwnProperty(key)) {
+      continue;
+    }
     r[key] = b[key];
   }
   return r;
-}
-
-/**
- * Merge two objects and return the result.
- *
- * @param {Array} array1 The first array.
- * @param {Array} array2 The second array.
- * @returns {Array} The merged array.
- */
-function array_merge(array1, array2) {
-  var p = '';
-  var result = {};
-  for (p in array1) {
-    result[p] = array1[p];
-  }
-  for (p in array2) {
-    result[p] = array2[p];
-  }
-  return result;
 }
 
 /**
@@ -2052,16 +2219,25 @@ function array3Merge(a, b, c) {
   var value = null;
   var r = {};
   for (key in a) {
+    if (!a.hasOwnProperty(key)) {
+      continue;
+    }
     value = a[key];
     r[key] = value;
   }
   for (key in b) {
+    if (!b.hasOwnProperty(key)) {
+      continue;
+    }
     value = b[key];
     if ((value !== null) && (value !== '')) {
       r[key] = value;
     }
   }
   for (key in c) {
+    if (!c.hasOwnProperty(key)) {
+      continue;
+    }
     value = c[key];
     if ((value !== null) && (value !== '')) {
       r[key] = value;
@@ -2070,50 +2246,13 @@ function array3Merge(a, b, c) {
   return r;
 }
 
-function array_intersect(a, b) {
-  return a.filter(function(n) {
-    return b.indexOf(n) !== -1;
-  });
-
-}
-
-/**
- * Return the position of a substring in a string.
- * 
- * @param {string} s The string to search.
- * @param {string} needle The string to search for.
- * @param {number} offset The index to start from.
- * @returns {mixed} Return the position (int) or, if not found, false (boolean).
- */
-function strpos(s, needle, offset) {
-  var p = s.indexOf(needle, offset);
-  return (p == -1)? false: p;
-}
-
-/**
- * Return a string with escape characters added for MySQL queries.
- * 
- * @param {string} s The string.
- * @returns {string} The escaped string.
- */
-function mysql_real_escape_string(s) {
-  return (s + '')
-    .replace(/\0/g, '\\x00')
-    .replace(/\n/g, '\\n')
-    .replace(/\r/g, '\\r')
-    .replace(/\\/g, '\\\\')
-    .replace(/'/g, '\\\'')
-    .replace(/"/g, '\\"')
-    .replace(/\x1a/g, '\\\x1a');
-}
-
 /**
  * Add a resolve() function to an array of
  * promises that will resolve all promises in
  * parallel.
  *
- * @param a array The array of promise functions.
- * @return array The array of promise functions.
+ * @param {Array} a The array of promise functions.
+ * @return {Array} The array of promise functions.
  *
  * @author DanielWHoward
  **/
@@ -2143,8 +2282,8 @@ function promise_map(a) {
  * promises that will resolve all promises in
  * serially, that is, one by one in order.
  *
- * @param a array The array of promise functions.
- * @return array The array of promise functions.
+ * @param {Array} a The array of promise functions.
+ * @return {Array} The array of promise functions.
  *
  * @author DanielWHoward
  **/
@@ -2174,8 +2313,8 @@ function promise_mapSeries(a) {
  * Execute an array of MySQL queries synchronously and
  * in order.
  * 
- * @param conn The MySQL connection.
- * @param qa An array of MySQL statements.
+ * @param {Object} conn The MySQL connection.
+ * @param {Array} qa An array of MySQL statements.
  * @param func A callback function.
  */
 function findCallback(args, start, end) {

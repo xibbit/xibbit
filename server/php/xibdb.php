@@ -48,6 +48,7 @@ class XibDb {
   function __construct($config=array()) {
     $this->config = $config;
     $this->cache = array();
+    $this->mapBool = true;
     $this->checkConstraints = false;
     $this->dryRun = false;
     $this->dumpSql = false;
@@ -68,11 +69,11 @@ class XibDb {
    * @param $whereSpec String A WHERE clause.
    * @param $columnsSpec String A columns clause.
    * @param $onSpec String An ON clause.
-   * @return A string containing a JSON array of objects.
+   * @return A JSON array of objects.
    *
    * @author DanielWHoward
    */
-  function readRowsNative($querySpec, $whereSpec='', $columnsSpec='*', $onSpec='') {
+  function &readRowsNative($querySpec, $whereSpec='', $columnsSpec='*', $onSpec='') {
     if ($this->dumpSql || $this->dryRun) {
       $this->log->println('readRowsNative()');
     }
@@ -84,7 +85,7 @@ class XibDb {
         $e = $this->checkJsonColumnConstraint($querySpec, $whereSpec);
       }
       if ($e !== null) {
-        throw new Exception("pre-check: " . e.Error());
+        throw new Exception("pre-check: " . $e->getMessage());
       }
     }
 
@@ -98,113 +99,126 @@ class XibDb {
       'table'=>'',
       'columns'=>'*',
       'on'=>'',
-      'where'=>''
+      'where'=>'',
+      'order by'=>''
     ), array(
       'table'=>$querySpec,
       'columns'=>$columnsSpec,
       'on'=>$onSpec,
-      'where'=>$whereSpec
+      'where'=>$whereSpec,
+      'order by'=>''
     ), $queryMap);
     $table = $queryMap['table'];
     $columns = $queryMap['columns'];
     $onVar = $queryMap['on'];
     $where = $queryMap['where'];
+    $orderby = $queryMap['order by'];
 
     // decode ambiguous table argument
-    $tableArr = array();
     $tableStr = '';
+    $tableArr = array();
     if (is_array($table)
         && (count(array_filter(array_keys($table), 'is_string')) === 0)) {
-      $tableArr = $table;
       $tableStr = $table[0];
-    } else if (is_string($table)) {
-      $tableArr[] = $table;
+      $tableArr = $table;
+    } elseif (is_string($table)) {
       $tableStr = $table;
+      $tableArr[] = $table;
     }
-    $tablesStr = $tableStr;
-    foreach ($tableArr as $tableName) {
-      if ($tablesStr !== $tableName) {
-        $tablesStr .= ',' . $tableName;
+    if (is_array($onVar)
+        && (count(array_filter(array_keys($onVar), 'is_string')) > 0)
+        && (count($tableArr) === 1)) {
+      foreach ($onVar as $tbl=>$cond) {
+        $tableArr[] = $tbl;
       }
     }
-    $table = '`' . $tableStr . '`';
 
     // cache the table description
     $dryRun = $this->dryRun;
     $dumpSql = $this->dumpSql;
     $this->dryRun = false;
     $this->dumpSql = false;
-    $this->readDescNative($tableStr);
+    foreach ($tableArr as $t) {
+      $this->readDescNative($t);
+    }
     $this->dryRun = $dryRun;
     $this->dumpSql = $dumpSql;
     $descMap = $this->cache[$tableStr];
-    $desc = $descMap['desc_a'];
+    $desc = array();
+    foreach ($tableArr as $tbl) {
+      $desc = array_merge($desc, $this->cache[$tbl]['desc_a']);
+    }
     $sort_field = isset($descMap['sort_column'])? $descMap['sort_column']: '';
     $json_field = isset($descMap['json_column'])? $descMap['json_column']: '';
-    $orderby = '';
+    $orderByStr = '';
     if ($sort_field !== '') {
-      $orderby = ' ORDER BY `' . $sort_field . '` ASC';
+      $orderByStr = ' ORDER BY `' . $sort_field . '` ASC';
+    }
+    if ($orderby !== '') {
+      $orderByStr = ' ORDER BY ' . $orderby;
     }
 
     // decode remaining ambiguous arguments
+    $columnsStr = $columns;
     if (is_array($columns)) {
       $columnArr = $columns;
-      $columnsStr = '';
       if (count($tableArr) === 1) {
+        // only one table so it's simple
         foreach ($columnArr as $col) {
           if ($columnsStr !== '') {
-            $columnsStr .= ',';
+            $columnsStr .= ', ';
           }
           $columnsStr .= '`' . $col . '`';
         }
-      } else if (count($tableArr) > 1) {
-        // assume all columns from first table
+      } else if (count($tableArr) >= 2) {
+        // assume '*' columns from first table
         $columnsStr .= '`' . $tableStr . '`.*';
         foreach ($columnArr as $col) {
           if (strpos($col, '.') === false) {
             // assume column is from second table
-            $columnsStr .= ',`' . $tableArr[1] . '`.`' . $col . '`';
+            $columnsStr .= ', `' . $tableArr[1] . '`.`' . $col . '`';
           } else {
             // do not assume table; table is specified
             $parts = explode('.', $col, 2);
             $tablePart = $parts[0];
             $colPart = $parts[1];
-            $columnsStr .= ',`' . $tablePart . '`.`' . $colPart . '`';
+            $columnsStr .= ', `' . $tablePart . '`.`' . $colPart . '`';
           }
         }
       }
-      $columns = $columnsStr;
     }
+    $onVarStr = $onVar;
     if (is_array($onVar)) {
       // "on" spec shortcut: assume second table
-      if (stringKeysOrArrayIntersect($tableArr, $onVar)) {
+      $tableNamesInBoth = array();
+      $tableArrList = (count(array_filter(array_keys($tableArr), 'is_string')) > 0)? array_keys($tableArr): $tableArr;
+      $onVarList = (count(array_filter(array_keys($onVar), 'is_string')) > 0)? array_keys($onVar): $onVar;
+      $tableNamesInBoth = array_intersect($tableArrList, $onVarList);
+      if (count($tableNamesInBoth) === 0) {
         // explicitly specify the second table
         $newOnVar = array();
         $newOnVar[$tableArr[1]] = $onVar;
         $onVar = $newOnVar;
       }
-      $onVar = $this->implementOn($onVar);
+      $onVarStr = $this->implementOn($onVar);
     }
-    if ($onVar !== '') {
-      $onVar = ' ' . $onVar;
+    if ($onVarStr !== '') {
+      $onVarStr = ' ' . $onVarStr;
     }
-    if (is_array($where)) {
-      $whereMap = $where;
-      $whereMap = $this->applyTablesToWhere($whereMap, $tableStr);
-      $where = $this->implementWhere($whereMap);
+    $whereStr = $where;
+    if (is_array($where)
+        && (count(array_filter(array_keys($where), 'is_string')) > 0)) {
+      $whereMap = $this->applyTablesToWhere($where, $tableStr);
+      $whereStr = $this->implementWhere($whereMap);
     }
-    if (substr($where, 0, 1) === ' ') {
-      // add raw SQL
-    } else if (substr($where, 0, strlen('WHERE ')) === 'WHERE ') {
-      $where = ' ' . $where;
-    } else if ($where !== '') {
-      $where = ' WHERE ' . $where;
+    if (($whereStr !== '') && (substr($whereStr, 0, 1) !== ' ')) {
+      $whereStr = ' WHERE ' . $whereStr;
     }
 
     $config = $this->config;
 
     // read the table
-    $q = 'SELECT ' . $columns . ' FROM ' . $table . ' ' . $onVar . ' ' . $where . $orderby . ';';
+    $q = 'SELECT ' . $columnsStr . ' FROM `' . $tableStr . '`' . $onVarStr . $whereStr . $orderByStr . ';';
     $rows = &$this->mysql_query($q);
     // read result
     $objs = array();
@@ -212,37 +226,44 @@ class XibDb {
       $obj = array();
       // add the SQL data first
       foreach ($row as $key => $value) {
-        if ($key == 'class') {
+        if ($key === 'class') {
           $key = 'clazz';
         }
-        if ($key == $json_field) {
+        if ($key === $json_field) {
           // add non-SQL JSON data later
-        } elseif ($key == $config['sort_column']) {
+        } elseif ($key === $config['sort_column']) {
           // sort column isn't user data
         } elseif ($value === null) {
           $obj[$key] = null;
-        } elseif (is_numeric($value) && (strval(intval($value)) == $value) && is_bool($desc[$key])) {
+        } elseif ($this->mapBool && is_numeric($value) && (strval(intval($value)) == $value) && is_bool($desc[$key])) {
           $obj[$key] = (intval($value) === 1);
         } elseif (is_numeric($value) && (strval(intval($value)) == $value) && is_int($desc[$key])) {
           $obj[$key] = intval($value);
         } elseif (is_numeric($value) && is_float($desc[$key])) {
           $obj[$key] = floatval($value);
         } else {
-          $val = json_decode($value, true);
-          if ($val !== null) {
+          $val = $value;
+          try {
+            if (in_array($value[0], array('{', '['))) {
+              $val = json_decode($value, true);
+            }
             $obj[$key] = $val;
-          } else {
-            $obj[$key] = $value;
+          } catch (Exception $e) {
+            $obj[$key] = $val;
           }
         }
       }
       // add non-SQL JSON data
-      if (($json_field != '') && ($row[$json_field] !== null)) {
-        $jsonMap = json_decode($row[$json_field], true);
-        if ($jsonMap !== null) {
-          foreach ($jsonMap as $key => $value) {
-            $obj[$key] = $value;
+      if (($json_field !== '') && ($row[$json_field] !== null)) {
+        try {
+          $jsonMap = json_decode($row[$json_field], true);
+          if ($jsonMap !== null) {
+            foreach ($jsonMap as $key => $value) {
+              $obj[$key] = $value;
+            }
           }
+        } catch (Exception $e) {
+          $obj[$key] = array();
         }
       }
       $objs[] = $obj;
@@ -256,7 +277,7 @@ class XibDb {
         $e = $this->checkJsonColumnConstraint($querySpec, $whereSpec);
       }
       if ($e !== null) {
-        throw new Exception("post-check: " . e.Error());
+        throw new Exception("post-check: " . $e->getMessage());
       }
     }
 
@@ -264,9 +285,9 @@ class XibDb {
   }
 
   function readRows($querySpec, $whereSpec='', $columnsSpec='*', $onSpec='') {
-    $objs = $this->ReadRowsNative($querySpec, $whereSpec, $columnsSpec, $onSpec);
-    $s = json_encode($objs);
-    return $s;
+    $objs = $this->readRowsNative($querySpec, $whereSpec, $columnsSpec, $onSpec);
+    $rowsStr = json_encode($objs);
+    return $rowsStr;
   }
 
   /**
@@ -274,47 +295,42 @@ class XibDb {
    *
    * It does not return "sort" and "json" columns, if any.
    *
-   * @param $table String A database table.
+   * @param $querySpec String A database table.
    * @return A string containing a JSON object with columns and default values.
    *
    * @author DanielWHoward
    */
   function readDescNative($querySpec) {
     if ($this->dumpSql || $this->dryRun) {
-      $this->log->println("readDescNative()");
+      $this->log->println('readDescNative()');
     }
 
     // check constraints
     $e = '';
-/*    if ($this->checkConstraints) {
-      $e = $this->checkSortColumnConstraint($querySpec, $whereSpec);
-      if ($e === null) {
-        $e = $this->checkJsonColumnConstraint($querySpec, $whereSpec);
-      }
-      if ($e !== null) {
-        throw new Exception("pre-check: " . e.Error());
-      }
-    }*/
+//    if ($this->checkConstraints) {
+//      $e = $this->checkJsonColumnConstraint($querySpec);
+//      if ($e !== null) {
+//        throw new Exception("pre-check: " . $e->getMessage());
+//      }
+//    }
 
-    $table = '';
-    if (is_array($querySpec)) {
-      $queryMap = $querySpec;
-      $args = array_merge(array(), $queryMap);
-      $table = $queryMap['table'];
-    } else {
-      $table = $querySpec;
+    $tableStr = $querySpec;
+    if (is_array($querySpec)
+        && (count(array_filter(array_keys($querySpec), 'is_string')) > 0)) {
+      $queryMap = array_merge(array(), $querySpec);
+      $tableStr = $queryMap['table'];
     }
     $config = $this->config;
 
     $desc = array();
-    if (isset($this->cache[$table]) && isset($this->cache[$table]['desc_a'])) {
-      $desc = $this->cache[$table]['desc_a'];
+    if (isset($this->cache[$tableStr]) && isset($this->cache[$tableStr]['desc_a'])) {
+      $desc = $this->cache[$tableStr]['desc_a'];
     } else {
       // read the table description
       $sort_column = '';
       $json_column = '';
       $auto_increment_column = '';
-      $q = 'DESCRIBE `' . $table . '`;';
+      $q = 'DESCRIBE `' . $tableStr . '`;';
       $rows = &$this->mysql_query($q);
       while ($rowdesc = &$this->mysql_fetch_assoc($rows)) {
         $field = $rowdesc['Field'];
@@ -324,14 +340,14 @@ class XibDb {
           $sort_column = $field;
         } elseif ($field === $config['json_column']) {
           $json_column = $field;
-        } elseif (strpos($typ, 'tinyint(1)') !== false) {
+        } elseif ($this->mapBool && (strpos($typ, 'tinyint(1)') !== false)) {
           $desc[$field] = false;
         } elseif (strpos($typ, 'int') !== false) {
           $desc[$field] = 0;
         } elseif (strpos($typ, 'float') !== false) {
           $desc[$field] = floatval(0);
         } elseif (strpos($typ, 'double') !== false) {
-          $desc[$field] = floatval(0);
+          $desc[$field] = doubleval(0);
         } else {
           $desc[$field] = '';
         }
@@ -339,39 +355,41 @@ class XibDb {
           $auto_increment_column = $field;
         }
       }
+      $this->mysql_free_query($rows);
+
       // cache the description
-      if (!isset($this->cache[$table])) {
-        $this->cache[$table] = array();
+      if (!isset($this->cache[$tableStr])) {
+        $this->cache[$tableStr] = array();
       }
-      $this->cache[$table]['desc_a'] = $desc;
+      $this->cache[$tableStr]['desc_a'] = $desc;
       $descStr = json_encode($desc);
-      $this->cache[$table]['desc'] = $descStr;
-      if ($sort_column != '') {
-        $this->cache[$table]['sort_column'] = $sort_column;
+      $this->cache[$tableStr]['desc'] = $descStr;
+      if ($sort_column !== '') {
+        $this->cache[$tableStr]['sort_column'] = $sort_column;
       }
-      if ($json_column != '') {
-        $this->cache[$table]['json_column'] = $json_column;
+      if ($json_column !== '') {
+        $this->cache[$tableStr]['json_column'] = $json_column;
       }
-      if ($auto_increment_column != '') {
-        $this->cache[$table]['auto_increment_column'] = $auto_increment_column;
+      if ($auto_increment_column !== '') {
+        $this->cache[$tableStr]['auto_increment_column'] = $auto_increment_column;
       }
     }
 
     // check constraints
-/*    if ($this->checkConstraints) {
-      $e = $this->checkJsonColumnConstraint($querySpec);
-      if ($e !== null) {
-        throw new Exception("post-check: " . e.Error());
-      }
-    }*/
+//    if ($this->checkConstraints) {
+//      $e = $this->checkJsonColumnConstraint($querySpec);
+//      if ($e !== null) {
+//        throw new Exception("post-check: " . $e->getMessage());
+//      }
+//    }
 
     return $desc;
   }
 
   function readDesc($querySpec) {
     $desc = $this->readDescNative($querySpec);
-    $s = json_encode($desc);
-    return $s;
+    $descStr = json_encode($desc);
+    return $descStr;
   }
 
   /**
@@ -379,10 +397,10 @@ class XibDb {
    *
    * If there is no sort column, it inserts the row, anyway.
    *
-   * @param $table String A database table.
-   * @param $where String A WHERE clause.
-   * @param $index int The place to insert the row before; -1 means the end.
-   * @param $values mixed A JSON string (string) or JSON array (array).
+   * @param $querySpec String A database table.
+   * @param $whereSpec String A WHERE clause.
+   * @param $valuesSpec mixed A JSON string (string) or JSON array (array).
+   * @param $nSpec int The place to insert the row before; -1 means the end.
    *
    * @author DanielWHoward
    */
@@ -398,7 +416,7 @@ class XibDb {
         $e = $this->checkJsonColumnConstraint($querySpec, $whereSpec);
       }
       if ($e !== null) {
-        throw new Exception("pre-check: " . e.Error());
+        throw new Exception("pre-check: " . $e->getMessage());
       }
     }
 
@@ -426,7 +444,6 @@ class XibDb {
 
     // decode ambiguous table argument
     $tableStr = $table;
-    $table = '`' . $tableStr . '`';
 
     // cache the table description
     $dryRun = $this->dryRun;
@@ -441,24 +458,28 @@ class XibDb {
     $sort_field = isset($descMap['sort_column'])? $descMap['sort_column']: '';
     $json_field = isset($descMap['json_column'])? $descMap['json_column']: '';
     $auto_increment_field = isset($descMap['auto_increment_column'])? $descMap['auto_increment_column']: '';
-    $orderby = '';
+    $orderByStr = '';
     if ($sort_field !== '') {
-      $orderby = ' ORDER BY `' . $sort_field . '` DESC';
+      $orderByStr = ' ORDER BY `' . $sort_field . '` DESC';
     }
 
     // decode remaining ambiguous arguments
-    $valuesMap = array();
+    $valuesStr = $values;
+    $valuesMap = $values;
     $sqlValuesMap = array(); // SET clause
-    $jsonMap = arrayMerge($valuesMap, $values);
+    $jsonMap = array(); // 'json' field
     if (is_string($values)) {
-      $values = ' SET ' . $values;
+      $valuesStr = ' ' . $values;
+      $valuesMap = array();
     } else {
-      $valuesMap = arrayMerge($valuesMap, $values);
+      $valuesStr = '';
+      $valuesMap = array_merge(array(), $values);
+      $jsonMap = array_merge(array(), $values);
       // copy SQL columns to sqlValuesMap
       foreach ($desc as $col => $colValue) {
-        if (isset($jsonMap[$col])) {
+        if (array_key_exists($col, $jsonMap)) {
           $compat = false;
-          if (gettype($desc[$col]) == gettype($jsonMap[$col])) {
+          if (gettype($desc[$col]) === gettype($jsonMap[$col])) {
             $compat = true;
           }
           if (is_float($desc[$col]) && is_int($jsonMap[$col])) {
@@ -479,15 +500,17 @@ class XibDb {
       }
     }
     $nInt = $n;
-    if (is_array($where)) {
-      $where = $this->implementWhere($where);
+    $whereStr = $where;
+    if (is_array($where)
+        && (count(array_filter(array_keys($where), 'is_string')) > 0)) {
+      $whereStr = $this->implementWhere($where);
     }
-    if (substr($where, 0, strlen(' ')) === ' ') {
-      // add raw SQL
-    } elseif (substr($where, 0, strlen('WHERE ')) === 'WHERE ') {
-      $where = ' ' . $where;
-    } elseif ($where !== '') {
-      $where = " WHERE " . $where;
+    if (($whereStr !== '') && (substr($whereStr, 0, 1) !== ' ')) {
+      $whereStr = ' WHERE ' . $whereStr;
+    }
+    $limitStr = '';
+    if ($this->opt || ($nInt === -1)) {
+      $limitStr = ' LIMIT 1';
     }
 
     $qa = array();
@@ -495,59 +518,54 @@ class XibDb {
     // update the positions
     if ($sort_field !== '') {
       $nLen = 0;
-      $limit = '';
-      if ($this->opt || ($nInt === -1)) {
-        $limit = ' LIMIT 1';
-      }
-      $qu = 'SELECT `' . $sort_field . '` FROM ' . $table . $where . $orderby . $limit . ';';
-      $qr_reorder = &$this->mysql_query($qu);
+      $q = 'SELECT `' . $sort_field . '` FROM `' . $tableStr . '`' . $whereStr . $orderByStr . $limitStr . ';';
+      $qr_reorder = &$this->mysql_query($q);
       while ($row = &$this->mysql_fetch_assoc($qr_reorder)) {
         $nValue = intval($row[$sort_field]);
         if ($nValue >= $nLen) {
           $nLen = $nValue + 1;
         }
         if ($nInt === -1) {
-          $n = $nValue + 1;
-          $nInt = $n;
+          $nInt = $nValue + 1;
         }
         if ($nInt > $nValue) {
           break;
         }
-        $and_clause = ' WHERE ';
-        if ($where !== '') {
-          $and_clause = ' AND ';
+        $setStr = '';
+        $andStr = ' WHERE ';
+        if ($whereStr !== '') {
+          $andStr = ' AND ';
         }
         if ($this->opt) {
-          $set_clause = ' `' . $sort_field . '`=`' . $sort_field . '`+1';
-          $and_clause .= '`' . $sort_field . '`>=' . intval($nInt);
-          $qu = 'UPDATE ' . $table . ' SET' . $set_clause . $where . $and_clause . ';';
-          $qa[] = $qu;
+          $setStr .= ' SET `' . $sort_field . '`=`' . $sort_field . '`+1';
+          $andStr .= '`' . $sort_field . '`>=' . $nInt;
+          $q = 'UPDATE `' . $tableStr . '`' . $setStr . $whereStr . $andStr . ';';
+          $qa[] = $q;
           break;
         } else {
-          $set_clause = ' `' . $sort_field . '`=' . ($nValue+1);
-          $and_clause .= ' `' . $sort_field . '`=' . $nValue;
-          $qu = 'UPDATE ' . $table . ' SET' . $set_clause . $where . $and_clause . ';';
-          $qa[] = $qu;
+          $setStr .= ' SET `' . $sort_field . '`=' . ($nValue+1);
+          $andStr .= ' `' . $sort_field . '`=' . $nValue;
+          $q = 'UPDATE `' . $tableStr . '`' . $setStr . $whereStr . $andStr . ';';
+          $qa[] = $q;
         }
       }
       $this->mysql_free_query($qr_reorder);
       if ($nInt === -1) {
-        $n = 0;
-        $nInt = $n;
+        $nInt = 0;
       }
       if ($nInt > $nLen) {
         throw new Exception('`n` value out of range');
       }
 
-      // add sort field to valuesMap
+      // add sort field to sqlValuesMap
       if (count($sqlValuesMap) > 0) {
-        $sqlValuesMap[$sort_field] = $n;
+        $sqlValuesMap[$sort_field] = $nInt;
       }
     }
 
-    // finally, generate values.(string) from valuesMap
-    if (count($valuesMap) > 0) {
-      $valuesStr = '';
+    // finally, generate valuesStr from valuesMap
+    if (count($sqlValuesMap) > 0) {
+      $colsStr = '';
       foreach ($sqlValuesMap as $col => $value) {
         if ($valuesStr !== '') {
           $valuesStr .= ',';
@@ -559,7 +577,7 @@ class XibDb {
             $jsonStr = '{}';
           }
           $valueStr = '"' . $this->mysql_real_escape_string($jsonStr) . '"';
-        } elseif (is_bool($value)) {
+        } elseif ($this->mapBool && is_bool($value)) {
           $valueBool = $value;
           if ($valueBool) {
             $valueStr = '1';
@@ -575,20 +593,23 @@ class XibDb {
         }
         $valuesStr .= '`' . $this->mysql_real_escape_string($col) . '`=' . $valueStr;
       }
-      $values = ' SET ' . $valuesStr;
+      $valuesStr = ' SET ' . $valuesStr;
     }
 
-    $q = 'INSERT INTO ' . $table . $values . ';';
+    $q = 'INSERT INTO `' . $tableStr . '`' . $valuesStr . ';';
     $qa[] = $q;
 
-    $result = null;
+    $qr = null;
+
     foreach ($qa as $q) {
-      $result = &$this->mysql_query($q);
+      $qr = &$this->mysql_query($q);
     }
 
-    if ($auto_increment_field !== '') {
-      $valuesMap[$auto_increment_field] = $this->mysql_insert_id($result);
+    if (($auto_increment_field !== '') && (qr !== null)) {
+      $valuesMap[$auto_increment_field] = $this->mysql_insert_id($qr);
     }
+
+    $this->mysql_free_exec($qr);
 
     // check constraints
     if ($this->checkConstraints) {
@@ -597,7 +618,7 @@ class XibDb {
         $e = $this->checkJsonColumnConstraint($querySpec, $whereSpec);
       }
       if ($e !== null) {
-        throw new Exception("post-check: " + e.Error());
+        throw new Exception("post-check: " . $e->getMessage());
       }
     }
 
@@ -605,9 +626,9 @@ class XibDb {
   }
 
   function insertRow($querySpec, $whereSpec='', $valuesSpec='{}', $nSpec=-1) {
-    $row = $this->insertRowNative($querySpec, $whereSpec, $valuesSpec, $nSpec);
-    $s = json_encode($row);
-    return $s;
+    $valuesMap = $this->insertRowNative($querySpec, $whereSpec, $valuesSpec, $nSpec);
+    $valuesStr = json_encode($valuesMap);
+    return $valuesStr;
   }
 
   /**
@@ -615,9 +636,9 @@ class XibDb {
    *
    * If there is no sort column, it deletes the first row.
    *
-   * @param $table String A database table.
-   * @param $where String A WHERE clause.
-   * @param $index mixed The row to delete (int) or JSON data to select the row (string).
+   * @param $querySpec String A database table.
+   * @param $whereSpec String A WHERE clause.
+   * @param $nSpec mixed The row to delete (int) or JSON data to select the row (string).
    *
    * @author DanielWHoward
    */
@@ -633,7 +654,7 @@ class XibDb {
         $e = $this->checkJsonColumnConstraint($querySpec, $whereSpec);
       }
       if ($e !== null) {
-        throw new Exception("pre-check: " + e.Error());
+        throw new Exception("pre-check: " . $e->getMessage());
       }
     }
 
@@ -658,7 +679,6 @@ class XibDb {
 
     // decode ambiguous table argument
     $tableStr = $table;
-    $table = '`' . $tableStr . '`';
 
     // cache the table description
     $dryRun = $this->dryRun;
@@ -671,74 +691,84 @@ class XibDb {
     $descMap = $this->cache[$tableStr];
     $sort_field = isset($descMap['sort_column'])? $descMap['sort_column']: '';
     $json_field = isset($descMap['json_column'])? $descMap['json_column']: '';
-    $and_clause = '';
 
     // decode remaining ambiguous arguments
-    if (is_array($where)) {
-      $whereMap = $where;
-      $where = $this->implementWhere($whereMap);
+    $nInt = $n;
+    $nStr = $n;
+    $whereStr = $where;
+    if (is_array($where)
+        && (count(array_filter(array_keys($where), 'is_string')) > 0)) {
+      $whereStr = $this->implementWhere($where);
     }
-    if (substr($where, 0, 1) === ' ') {
-      // add raw SQL
-    } else if (substr($where, 0, strlen('WHERE ')) === 'WHERE ') {
-      $where = ' ' . $where;
-    } else if ($where !== '') {
-      $where = ' WHERE ' . $where;
+    if (($whereStr !== '') && (substr($whereStr, 0, 1) !== ' ')) {
+      $whereStr = ' WHERE ' . $whereStr;
     }
-    if (($sort_field !== '') && is_int($n)) {
-      $sort_start = ' AND ';
-      if ($where === '') {
-        $sort_start = ' WHERE ';
+    $andStr = '';
+    if (($sort_field !== '') && is_int($n) && ($n !== -1)) {
+      $opStr = ' WHERE ';
+      if ($whereStr !== '') {
+        $opStr = ' AND ';
       }
-      $and_clause .= $sort_start . '`' . $sort_field . '`=' . $n;
+      $andStr .= $opStr . '`' . $sort_field . '`=' . $nInt;
     } else {
-      if (is_string($n) && ($n !== '')) {
-        $nMap = json_decode($n, true);
+      if ($nInt === -1) {
+        $andStr = '';
+      }
+      if (is_string($n) && ($nStr !== '')) {
+        $nMap = json_decode($nStr, true);
         if ($nMap !== null) {
           foreach ($nMap as $col=>$value) {
-            if (($and_clause === '') && ($where === '')) {
-              $and_clause .= ' WHERE ';
+            if (($andStr === '') && ($whereStr === '')) {
+              $andStr .= ' WHERE ';
             } else {
-              $and_clause .= ' AND ';
+              $andStr .= ' AND ';
             }
-            $and_clause .= $col . '=\'' . $value . '\'';
+            $andStr .= $col . '=\'' . $value . '\'';
           }
         } else {
-          $and_clause .= $n;
+          $andStr .= $nStr;
         }
       }
       $field = $sort_field;
       if ($sort_field === '') {
         $field = '*';
       }
-      $orderby_clause = '';
+      $orderByStr = '';
       if ($sort_field !== '') {
-        $orderby_clause = ' ORDER BY ' . $sort_field . ' DESC';
+        $orderByStr = ' ORDER BY `' . $sort_field . '` DESC';
       }
-      $q = 'SELECT COUNT(*) AS num_rows FROM ' . $table . ' ' . $where . ' ' . $and_clause . $orderby_clause . ';';
+      $q = 'SELECT COUNT(*) AS num_rows FROM `' . $tableStr . '`' . $whereStr . $andStr . $orderByStr . ';';
       $qr = $this->mysql_query($q);
       $num_rows = 0;
       while ($row = &$this->mysql_fetch_assoc($qr)) {
         $num_rows = intval($row['num_rows']);
       }
+      if ($nInt === -1) {
+        $nInt = $num_rows - 1;
+      }
 //      $this->mysql_free_query($qr);
-      $q = 'SELECT ' . $field . ' FROM ' . $table . ' ' . $where . ' ' . $and_clause . $orderby_clause . ';';
+      $quotedField = $field;
+      if ($field !== '*') {
+        $quotedField = '`' . $field . '`';
+      }
+      $q = 'SELECT ' . $quotedField. ' FROM `' . $tableStr . '`' . $whereStr . $andStr . $orderByStr . ';';
+      // verify that non-standard n var yields valid rows
       if (($num_rows === 1) || (($num_rows > 1) && ($sort_field !== ''))) {
         $qr = $this->mysql_query($q);
         $row = $this->mysql_fetch_assoc($qr);
         if ($num_rows === 1) {
-          if (sort_field !== '') {
+          if ($sort_field !== '') {
             $n = intval($row[$sort_field]);
           }
 //          $this->mysql_free_query($qr);
         } elseif (($num_rows > 1) && ($sort_field !== '')) {
           $n = $row[$sort_field];
-          if (($and_clause === '') && ($where === '')) {
-            $and_clause .= 'WHERE ';
+          if (($andStr === '') && ($whereStr === '')) {
+            $andStr .= ' WHERE ';
           } else {
-            $and_clause .= ' AND ';
+            $andStr .= ' AND ';
           }
-          $and_clause .= $sort_field . '="' . $n . '"';
+          $andStr .= '`' . $sort_field . '`=' . $nInt;
         }
         $this->mysql_free_query($qr);
       } else {
@@ -746,41 +776,41 @@ class XibDb {
         $this->fail($e);
       }
     }
-    $nInt = $n;
 
     $qa = array();
 
     // update the positions
     if ($sort_field !== '') {
       $nLen = 0;
-      $orderby = ' ORDER BY `' . $sort_field . '` ASC';
-      $limit = '';
+      $orderByStr = ' ORDER BY `' . $sort_field . '` ASC';
+      $limitStr = '';
       if ($this->opt) {
-        $orderby = ' ORDER BY `' . $sort_field . '` DESC';
-        $limit = ' LIMIT 1';
+        $orderByStr = ' ORDER BY `' . $sort_field . '` DESC';
+        $limitStr = ' LIMIT 1';
       }
-      $qu = 'SELECT `' . $sort_field . '` FROM ' . $table . $where . $orderby . $limit . ';';
-      $qr_reorder = &$this->mysql_query($qu);
+      $q = 'SELECT `' . $sort_field . '` FROM `' . $tableStr . '`' . $whereStr . $orderByStr . $limitStr . ';';
+      $qr_reorder = &$this->mysql_query($q);
       while ($row = &$this->mysql_fetch_assoc($qr_reorder)) {
         $nValue = intval($row[$sort_field]);
         if ($nValue >= $nLen) {
           $nLen = $nValue + 1;
         }
-        $and_where = ' WHERE ';
-        if ($where !== '') {
-          $and_where = ' AND ';
+        $setStr = '';
+        $andSetStr = ' WHERE ';
+        if ($whereStr !== '') {
+          $andSetStr = ' AND ';
         }
         if ($this->opt) {
-          $set_clause .= ' `' . $sort_field . '`=`' . $sort_field . '`-1';
-          $and_where .= '`' . $sort_field . '`>=' . $nInt;
-          $qu = 'UPDATE ' . $table . ' SET' . $set_clause . $where . $and_where . ';';
-          $qa[] = $qu;
+          $setStr .= ' SET `' . $sort_field . '`=`' . $sort_field . '`-1';
+          $andSetStr .= '`' . $sort_field . '`>=' . $nInt;
+          $q = 'UPDATE `' . $tableStr . '`' . $setStr . $whereStr . $andSetStr . ';';
+          $qa[] = $q;
           break;
         } else {
-          $set_clause .= ' `' . $sort_field . '`=' . ($nValue-1);
-          $and_where .= $sort_field . '=' . $nValue;
-          $qu = 'UPDATE ' . $table . ' SET' . $set_clause . $where . $and_where . ';';
-          $qa[] = $qu;
+          $setStr .= ' SET `' . $sort_field . '`=' . ($nValue-1);
+          $andSetStr .= '`' . $sort_field . '`=' . $nValue;
+          $q = 'UPDATE `' . $tableStr . '`' . $setStr . $whereStr . $andSetStr . ';';
+          $qa[] = $q;
         }
       }
       $this->mysql_free_query($qr_reorder);
@@ -790,8 +820,10 @@ class XibDb {
       }
     }
 
-    $q = 'DELETE FROM ' . $table . $where . $and_clause . ';';
+    $q = 'DELETE FROM `' . $tableStr . '`' . $whereStr . $andStr . ';';
     array_splice($qa, 0, 0, array($q));
+
+    $qr = null;
 
     foreach ($qa as $q) {
       $qr = &$this->mysql_query($q);
@@ -804,9 +836,11 @@ class XibDb {
         $e = $this->checkJsonColumnConstraint($querySpec, $whereSpec);
       }
       if ($e !== null) {
-        throw new Exception("post-check: " + e.Error());
+        throw new Exception("post-check: " . $e->getMessage());
       }
     }
+
+    return $e;
   }
 
   function deleteRow($querySpec, $whereSpec='', $nSpec='') {
@@ -818,16 +852,17 @@ class XibDb {
    *
    * If there is no sort column, it updates the first row.
    *
-   * @param $table String A database table.
-   * @param $where String A WHERE clause.
-   * @param $index mixed The row to update (int) or JSON data to select the row (string).
-   * @param $values mixed A JSON string (string) or JSON array (array).
+   * @param $querySpec String A database table.
+   * @param $valuesSpec mixed A JSON string (string) or JSON array (array).
+   * @param $nSpec mixed The row to update (int) or JSON data to select the row (string).
+   * @param $whereSpec String A WHERE clause.
+   * @param $limitSpec int A LIMIT value for number of rows to retrieve.
    *
    * @author DanielWHoward
    */
   function updateRowNative($querySpec, $valuesSpec='', $nSpec=-1, $whereSpec='', $limitSpec=1) {
     if ($this->dumpSql || $this->dryRun) {
-      $this->log->println("updateRowNative()");
+      $this->log->println('updateRowNative()');
     }
 
     // check constraints
@@ -838,7 +873,7 @@ class XibDb {
         $e = $this->checkJsonColumnConstraint($querySpec, $whereSpec);
       }
       if ($e !== null) {
-        throw new Exception("pre-check: " + e.Error());
+        throw new Exception("pre-check: " . $e->getMessage());
       }
     }
 
@@ -869,7 +904,6 @@ class XibDb {
 
     // decode ambiguous table argument
     $tableStr = $table;
-    $table = '`' . $tableStr . '`';
 
     // cache the table description
     $dryRun = $this->dryRun;
@@ -883,19 +917,23 @@ class XibDb {
     $desc = $descMap['desc_a'];
     $sort_field = isset($descMap['sort_column'])? $descMap['sort_column']: '';
     $json_field = isset($descMap['json_column'])? $descMap['json_column']: '';
-    $orderby = '';
+    $orderByStr = '';
     if ($sort_field !== '') {
-      $orderby = ' ORDER BY `' . $sort_field . '` ASC';
+      $orderByStr = ' ORDER BY `' . $sort_field . '` ASC';
     }
 
     // decode remaining ambiguous arguments
-    $valuesMap = array();
+    $valuesStr = $values;
+    $valuesMap = $values;
     $sqlValuesMap = array(); // SET clause
-    $jsonMap = arrayMerge($valuesMap, $values);
+    $jsonMap = array(); // 'json' field
     if (is_string($values)) {
-      $values = " SET " . $values;
+      $valuesStr = ' SET ' . $values;
+      $valuesMap = array();
     } else {
-      $valuesMap = arrayMerge($valuesMap, $values);
+      $valuesStr = '';
+      $valuesMap = array_merge(array(), $valuesMap);
+      $jsonMap = array_merge(array(), $valuesMap);
       // copy SQL columns to sqlValuesMap
       foreach ($desc as $col => $colValue) {
         if (array_key_exists($col, $jsonMap)) {
@@ -919,45 +957,45 @@ class XibDb {
       }
     }
     $nInt = $n;
-    if (is_array($where)) {
-      $where = $this->implementWhere($where);
-    }
-    if (substr($where, 0, strlen(' ')) === ' ') {
-      // add raw SQL
-    } elseif (substr($where, 0, strlen('WHERE ')) === 'WHERE ') {
-      $where = ' ' . $where;
-    } elseif ($where !== '') {
-      $where = " WHERE " . $where;
-    }
     $limitInt = $limit;
+    $whereStr = $where;
+    if (is_array($where)
+        && (count(array_filter(array_keys($where), 'is_string')) > 0)) {
+      $whereStr = $this->implementWhere($where);
+    }
+    if (($whereStr !== '') && (substr($whereStr, 0, 1) !== ' ')) {
+      $whereStr = ' WHERE ' . $whereStr;
+    }
     $op_clause = ' WHERE';
-    if ($where !== '') {
+    if ($whereStr !== '') {
       $op_clause = ' AND';
     }
-    $op_and_clause = '';
-    $rows_affected = 0;
-
+    $andStr = '';
     if (($sort_field !== '') && ($nInt >= 0)) {
-      $op_and_clause = $op_clause . ' `' . $sort_field . '`=' . $nInt;
+      $andStr = ' WHERE';
+      if ($whereStr !== '') {
+        $andStr = ' AND';
+      }
+      $andStr .= ' `' . $sort_field . '`=' . $nInt;
     }
 
     // get the number of rows_affected
-    $q = 'SELECT COUNT(*) AS rows_affected FROM ' . $table . $where . $op_and_clause . ';';
+    $q = 'SELECT COUNT(*) AS rows_affected FROM `' . $tableStr . '`' . $whereStr . $andStr . ';';
     $qr = $this->mysql_query($q);
     $rows_affected = 0;
     while ($row = &$this->mysql_fetch_assoc($qr)) {
       $rows_affected = intval($row['rows_affected']);
     }
     $this->mysql_free_query($qr);
+
     if ($rows_affected === 0) {
-      if ($op_and_clause === '') {
+      if ($andStr === '') {
         $e = '0 rows affected';
         $this->log->println($q);
         $this->fail($e);
       }
-      $q = 'SELECT COUNT(*) AS rows_affected FROM ' . $table . $where . ';';
+      $q = 'SELECT COUNT(*) AS rows_affected FROM `' . $tableStr . '`' . $whereStr . ';';
       $qr = $this->mysql_query($q);
-      $rows_affected = 0;
       while ($row = &$this->mysql_fetch_assoc($qr)) {
         $rows_affected = intval($row['rows_affected']);
       }
@@ -975,11 +1013,11 @@ class XibDb {
       $this->fail($e);
     }
 
-    $qa = array($q);
+    $qa = array();
 
     // generate UPDATE statements using json_field
-    if (is_string($valuesMap)) {
-      $q = 'UPDATE ' . $table . $values . $where . $op_and_clause . ';';
+    if (is_string($values)) {
+      $q = 'UPDATE `' . $tableStr . '`' . $valuesStr . $whereStr . $andStr . ';';
       $qa[] = $q;
     } else {
       // get the contents of the json_field for each affected row
@@ -989,7 +1027,7 @@ class XibDb {
         $jsonRowMaps[] = array();
       } else {
         $jsonValue = '';
-        $q = 'SELECT `' . $json_field . '` FROM ' . $table . $where . $op_and_clause . $orderby . ';';
+        $q = 'SELECT `' . $json_field . '` FROM `' . $tableStr . '`' . $whereStr . $andStr . $orderByStr . ';';
         $qr_reorder = $this->mysql_query($q);
         while (($row = &$this->mysql_fetch_assoc($qr_reorder)) && ($e === null)) {
           $jsonValue = $row[$json_field];
@@ -1002,7 +1040,7 @@ class XibDb {
         }
         $this->mysql_free_query($qr_reorder);
         if ($e) {
-          $err = '"' . $this->mysql_real_escape_string($jsonValue) . '" value in `' . $json_field . '` column in ' . $table . ' table; ' . $e;
+          $err = '"' . $this->mysql_real_escape_string($jsonValue) . '" value in `' . $json_field . '` column in `' . $tableStr . '` table; ' . $e;
           $this->fail($err);
         }
       }
@@ -1033,7 +1071,7 @@ class XibDb {
               $jsonStr = '{}';
             }
             $valueStr = '"' . $this->mysql_real_escape_string($jsonStr) . '"';
-          } elseif (is_bool($value)) {
+          } elseif ($this->mapBool && is_bool($value)) {
             $valueBool = boolval($value);
             if ($valueBool) {
               $valueStr = '1';
@@ -1052,25 +1090,25 @@ class XibDb {
         $values = ' SET ' . $valuesStr;
         // add a custom update for each row
         if ($this->opt && $updateJson) {
-          $q = 'UPDATE ' . $table . $values . $where;
-          if ($sort_field === '') {
+          $q = 'UPDATE `' . $tableStr . '`' . $values . $whereStr;
+          if ($nInt === -1) {
             $q .= ';';
             $qa[] = $q;
           } else {
-            if (is_set($qInsMap[$q])) {
+            if (isset($qInsMap[$q])) {
               $qi = $qInsMap[$q];
-              $qIns[$qi]->Values[] = $i;
+              $qIns[$qi]->Values[] = $nInt;
             } else {
-              $qIns[] = newQueryUsingInKeyword($q, $op_clause, $sort_field, $i);
+              $qIns[] = new QueryUsingInKeyword($q, $op_clause, $sort_field, $nInt);
               $qInsMap[$q] = count($qIns) - 1;
             }
           }
         } else {
           $op_and_clause = '';
           if ($nInt >= 0) {
-            $op_and_clause = $op_clause . ' `' . $sort_field . '`=' . $i;
+            $op_and_clause = $op_clause . ' `' . $sort_field . '`=' . $nInt;
           }
-          $q = 'UPDATE ' . $table . $values . $where . $op_and_clause . ';';
+          $q = 'UPDATE `' . $tableStr . '`' . $values . $whereStr . $op_and_clause . ';';
           $qa[] = $q;
         }
       }
@@ -1082,14 +1120,16 @@ class XibDb {
       }
     }
 
+    $qr = null;
+
     foreach ($qa as $q) {
       try {
-        $rows = &$this->mysql_query($q);
+        $qr = &$this->mysql_query($q);
       } catch (Exception $e) {
         print $q;
         throw $e;
       }
-      $this->mysql_free_query($rows);
+      $this->mysql_free_query($qr);
     }
 
     // check constraints
@@ -1099,15 +1139,17 @@ class XibDb {
         $e = $this->checkJsonColumnConstraint($querySpec, $whereSpec);
       }
       if ($e !== null) {
-        throw new Exception("post-check: " + e.Error());
+        throw new Exception("post-check: " . $e->getMessage());
       }
     }
+
+    return $valuesMap;
   }
 
   function updateRow($querySpec, $whereSpec='', $nSpec=-1, $valuesSpec='', $limitSpec=1) {
-    $row = $this->updateRowNative($querySpec, $whereSpec, $nSpec, $valuesSpec, $limitSpec);
-    $s = json_encode($row);
-    return $s;
+    $valuesMap = $this->updateRowNative($querySpec, $whereSpec, $nSpec, $valuesSpec, $limitSpec);
+    $valuesStr = json_encode($valuesMap);
+    return $valuesStr;
   }
 
   /**
@@ -1115,16 +1157,16 @@ class XibDb {
    *
    * If there is no sort column, it does nothing.
    *
-   * @param $table String A database table.
-   * @param $where String A WHERE clause.
-   * @param $m int The row to move.
-   * @param $n int The row to move to.
+   * @param $querySpec String A database table.
+   * @param $whereSpec String A WHERE clause.
+   * @param $mSpec int The row to move.
+   * @param $nSpec int The row to move to.
    *
    * @author DanielWHoward
    */
   function moveRowNative($querySpec, $whereSpec='', $mSpec=0, $nSpec=0) {
     if ($this->dumpSql || $this->dryRun) {
-      $this->log->println("moveRowNative()");
+      $this->log->println('moveRowNative()');
     }
 
     // check constraints
@@ -1134,7 +1176,7 @@ class XibDb {
         $e = $this->checkJsonColumnConstraint($querySpec, $whereSpec);
       }
       if ($e !== null) {
-        throw new Exception("pre-check: " + e.Error());
+        throw new Exception("pre-check: " . $e->getMessage());
       }
     }
 
@@ -1162,7 +1204,6 @@ class XibDb {
 
     // decode ambiguous table argument
     $tableStr = $table;
-    $table = '`' . $tableStr . '`';
 
     // cache the table description
     $dryRun = $this->dryRun;
@@ -1175,39 +1216,40 @@ class XibDb {
     $descMap = $this->cache[$tableStr];
     $desc = $descMap['desc_a'];
     $sort_field = isset($descMap['sort_column'])? $descMap['sort_column']: '';
-    $orderby = '';
+    $orderByStr = '';
     if ($sort_field !== '') {
-      $orderby = ' ORDER BY `' . $sort_field . '` DESC';
+      $orderByStr = ' ORDER BY `' . $sort_field . '` DESC';
     } else {
       throw new Exception($tableStr . ' does not have a sort_field');
     }
+    $limitStr = ' LIMIT 1';
 
     if ($m === $n) {
       throw new Exception('`m` and `n` are the same so nothing to do');
     }
 
     // decode remaining ambiguous arguments
-    if (is_array($where)) {
-      $whereMap = $where;
-      $whereMap = $this->applyTablesToWhere($whereMap, $tableStr);
-      $where = $this->implementWhere($whereMap);
+    $whereStr = $where;
+    if (is_array($where)
+        && (count(array_filter(array_keys($where), 'is_string')) > 0)) {
+      $whereMap = $this->applyTablesToWhere($where, $tableStr);
+      $whereStr = $this->implementWhere($whereMap);
     }
-    if (substr($where, 0, 1) === ' ') {
-      // add raw SQL
-    } else if (substr($where, 0, strlen('WHERE ')) === 'WHERE ') {
-      $where = ' ' . $where;
-    } else if ($where !== '') {
-      $where = ' WHERE ' . $where;
+    if (($whereStr !== '') && (substr($whereStr, 0, 1) !== ' ')) {
+      $whereStr = ' WHERE ' . $whereStr;
     }
-    $op_cause = ' WHERE';
-    if ($where !== '') {
-      $op_cause = ' AND';
+    $opStr = '';
+    if (($sort_field !== '') && ($n >= 0)) {
+      $opStr = ' WHERE';
+      if ($whereStr !== '') {
+        $opStr = ' AND';
+      }
     }
 
     // get the length of the array
-    $nLen = 0;
-    $q = 'SELECT `' . $sort_field . '` FROM ' . $table . $where . $orderby . ';';
+    $q = 'SELECT `' . $sort_field . '` FROM `' . $tableStr . '`' . $whereStr . $orderByStr . $limitStr . ';';
     $qr_end = $this->mysql_query($q);
+    $nLen = 0;
     if ($row = &$this->mysql_fetch_assoc($qr_end)) {
       $nLen = intval($row[$sort_field]) + 1;
     }
@@ -1222,49 +1264,51 @@ class XibDb {
     $qa = array();
 
     // save the row at the m-th to the end
-    $valuesStr = ' `' . $sort_field . '`=' . $nLen;
-    $and_clause = ' `' . $sort_field . '`=' . $m;
-    $q = 'UPDATE ' . $table . ' SET' . $valuesStr . $where . $op_cause . $and_clause . ';';
+    $setStr = ' SET `' . $sort_field . '`=' . $nLen;
+    $andStr = $opStr . ' `' . $sort_field . '`=' . $m;
+    $q = 'UPDATE `' . $tableStr . '`' . $setStr . $whereStr . $andStr . ';';
     $qa[] = $q;
 
     // update the indices between m and n
     if ($this->opt) {
       if ($m < $n) {
-        $valuesStr = ' `' . $sort_field . '`=`' . $sort_field . '`-1';
-        $and_clause = ' `' . $sort_field . '`>' . $m . ' AND `' . $sort_field . '`<=' . $n;
+        $setStr = ' SET `' . $sort_field . '`=`' . $sort_field . '`-1';
+        $andStr = $opStr . ' `' . $sort_field . '`>' . $m . ' AND `' . $sort_field . '`<=' . $n;
       } else {
-        $valuesStr = ' `' . $sort_field . '`=`' . $sort_field . '`+1';
-        $and_clause = ' `' . $sort_field . '`>=' . $n . ' AND `' . $sort_field . '`<' . $m;
+        $setStr = ' SET `' . $sort_field . '`=`' . $sort_field . '`+1';
+        $andStr = $opStr . ' `' . $sort_field . '`>=' . $n . ' AND `' . $sort_field . '`<' . $m;
       }
-      $q = 'UPDATE ' . $table . ' SET' . $valuesStr . $where . $op_cause . $and_clause . ';';
+      $q = 'UPDATE `' . $tableStr . '`' . $setStr . $whereStr . $andStr . ';';
       $qa[] = $q;
     } else {
       if ($m < $n) {
         for ($i = m; $i < $n; $i++) {
-          $valuesStr = ' `' . $sort_field . '`=' . $i;
-          $and_clause .= ' `' . $sort_field . '`=' . ($i+1);
-          $q = 'UPDATE ' . $table . ' SET' . $valuesStr . $where . $op_cause . $and_clause . ';';
+          $setStr = ' SET `' . $sort_field . '`=' . $i;
+          $andStr = $opStr . ' `' . $sort_field . '`=' . ($i+1);
+          $q = 'UPDATE `' . $tableStr . '`' . $setStr . $whereStr . $andStr . ';';
           $qa[] = $q;
         }
       } else {
         for ($i = $m - 1; $i >= $n; $i--) {
-          $valuesStr = ' `' . $sort_field . '`=' . ($i+1);
-          $and_clause = ' `' . $sort_field . '`=' . $i;
-          $q = 'UPDATE ' . $table . ' SET' . $valuesStr . $where . $op_cause . $and_clause . ';';
+          $setStr = ' SET `' . $sort_field . '`=' . ($i+1);
+          $andStr = $opStr . ' `' . $sort_field . '`=' . $i;
+          $q = 'UPDATE `' . $tableStr . '`' . $setStr . $whereStr . $andStr . ';';
           $qa[] = $q;
         }
       }
     }
 
     // copy the row at the end to the n-th position
-    $valuesStr = ' `' . $sort_field . '`=' . $n;
-    $and_clause = ' `' . $sort_field . '`=' . $nLen;
-    $q = 'UPDATE ' . $table . ' SET' . $valuesStr . $where . $op_cause . $and_clause . ';';
+    $setStr = ' SET `' . $sort_field . '`=' . $n;
+    $andStr = $opStr . ' `' . $sort_field . '`=' . $nLen;
+    $q = 'UPDATE `' . $tableStr . '`' . $setStr . $whereStr . $andStr . ';';
     $qa[] = $q;
 
+    $qr = null;
+
     foreach ($qa as $q) {
-      $rows = &$this->mysql_query($q);
-      $this->mysql_free_query($rows);
+      $qr = &$this->mysql_query($q);
+      $this->mysql_free_query($qr);
     }
 
     // check constraints
@@ -1274,16 +1318,15 @@ class XibDb {
         $e = $this->checkJsonColumnConstraint($querySpec, $whereSpec);
       }
       if ($e !== null) {
-        throw new Exception("post-check: " + e.Error());
+        throw new Exception("post-check: " . $e->getMessage());
       }
     }
+
     return true;
   }
 
   function moveRow($querySpec, $whereSpec='', $mSpec=0, $nSpec=0) {
-    $row = $this->moveRowNative($querySpec, $whereSpec, $mSpec, $nSpec);
-    $s = json_encode($row);
-    return $s;
+    return $this->moveRowNative($querySpec, $whereSpec, $mSpec, $nSpec);
   }
 
   /**
@@ -1298,7 +1341,7 @@ class XibDb {
     if ($this->dumpSql || $this->dryRun) {
       $this->log->println($query);
     }
-    if ($this->dryRun && (substr($query, 0, strlen("SELECT ")) !== "SELECT ") && (substr($query, 0, strlen("DESCRIBE ")) !== "DESCRIBE ")) {
+    if ($this->dryRun && (substr($query, 0, strlen('SELECT ')) !== 'SELECT ') && (substr($query, 0, strlen('DESCRIBE ')) !== 'DESCRIBE ')) {
       return false;
     }
     $link_identifier = null;
@@ -1326,6 +1369,19 @@ class XibDb {
   }
 
   /**
+   * Renamed mysql_query() for INSERT queries so
+   * mysql_insert_id() will work.
+   *
+   * @param $query String The query to execute.
+   * @return The mysql_query() return value.
+   *
+   * @author DanielWHoward
+   */
+  function mysql_exec(&$query) {
+    return $this->mysql_query($query);
+  }
+
+  /**
    * Flexible mysql_fetch_assoc() function.
    *
    * @param $result String The result to fetch.
@@ -1337,7 +1393,7 @@ class XibDb {
     $assoc = null;
     if ($result === false) {
       $assoc = false;
-    } else if (isset($this->config['mysqli'])) {
+    } elseif (isset($this->config['mysqli'])) {
       $assoc = $result->fetch_assoc();
     } else {
       $assoc = mysql_fetch_assoc($result);
@@ -1356,7 +1412,7 @@ class XibDb {
   function mysql_free_query(&$result) {
     $e = '';
     if (gettype($result) === 'boolean') {
-    } else if (isset($this->config['mysqli'])) {
+    } elseif (isset($this->config['mysqli'])) {
       $result->free_result();
     } elseif (isset($this->config['mysql']) && isset($this->config['mysql']['link'])) {
       mysql_free_result($result, $this->config['mysql']['link']);
@@ -1417,8 +1473,8 @@ class XibDb {
    * filtered with a WHERE clause, has integers 0 .. n-1
    * in its sort_column such that it is an array.
    *
-   * @param a An array with WHERE clause specification.
-   * @param table An array of tables.
+   * @param $a An array with WHERE clause specification.
+   * @param $table An array of tables.
    * @return A clause string.
    *
    * @author DanielWHoward
@@ -1428,56 +1484,54 @@ class XibDb {
 
     // decode the arguments into variables
     $queryMap = $querySpec;
-    if (!is_array($querySpec)) {
+    if (!is_array($queryMap)
+        || (count(array_filter(array_keys($queryMap), 'is_string')) === 0)) {
       $queryMap = array();
     }
     $queryMap = array3Merge(array(
-      "table"=>"",
-      "where"=>"",
+      'table'=>'',
+      'where'=>''
     ), array(
-      "table"=>$querySpec,
-      "where"=>$whereSpec,
+      'table'=>$querySpec,
+      'where'=>$whereSpec
     ), $queryMap);
-    $table = $queryMap["table"];
-    $where = $queryMap["where"];
+    $table = $queryMap['table'];
+    $where = $queryMap['where'];
 
     // decode ambiguous table argument
     $tableStr = $table;
-    $table = '`' . $tableStr . '`';
+    $whereStr = $where;
 
     // cache the table description
-    $this->readDesc($tableStr);
+    $this->readDescNative($tableStr);
     $descMap = $this->cache[$tableStr];
-    $sort_field = $descMap["sort_column"];
-    $orderby = "";
-    if ($sort_field !== "") {
-      $orderby = ' ORDER BY `' . $sort_field . '` ASC';
+    $sort_field = $descMap['sort_column'];
+    $orderByStr = '';
+    if ($sort_field !== '') {
+      $orderByStr = ' ORDER BY `' . $sort_field . '` ASC';
     } else {
-      throw new Exception('CheckSortColumnConstraint(): ' . $tableStr . ' does not contain `' . $sort_field . '`');
+      $e = new Exception('checkSortColumnConstraint(): ' . $tableStr . ' does not contain `' . $sort_field . '`');
     }
 
     if ($e === null) {
       // decode remaining ambiguous arguments
-      if (is_array($where)) {
-        $where = $this->implementWhere($where);
+      if (is_array($where)
+          && (count(array_filter(array_keys($where), 'is_string')) > 0)) {
+        $whereStr = $this->implementWhere($where);
       }
-      if (substr($where, 0, 1) === ' ') {
-        // add raw SQL
-      } else if (substr($where, 0, strlen('WHERE ')) === 'WHERE ') {
-        $where = " " . $where;
-      } else if ($where != "") {
-        $where = " WHERE " . $where;
+      if (($whereStr !== '') && (substr($whereStr, 0, 1) !== ' ')) {
+        $whereStr = ' WHERE ' . $whereStr;
       }
 
       // read the table
-      $q = 'SELECT `' . $sort_field . '` FROM ' . $table . $where . $orderby . ';';
+      $q = 'SELECT `' . $sort_field . '` FROM `' . $tableStr . '`' . $whereStr . $orderByStr . ';';
       $rows = $this->mysql_query($q);
       // read result
       $n = 0;
       for ($row = $this->mysql_fetch_assoc($rows); ($row !== null); $row = $this->mysql_fetch_assoc($rows)) {
         if (intval($row[$sort_field]) !== $n) {
-          $err = '"' . strval($n) . '" value in `' . $sort_field . '` column in ' . $table . ' table; missing';
-          $e = new Exception('CheckSortColumnConstraint(): ' . $err);
+          $err = '"' . strval($n) . '" value in `' . $sort_field . '` column in ' . $tableStr . ' table; missing';
+          $e = new Exception('checkSortColumnConstraint(): ' . $err);
         }
         $n++;
       }
@@ -1492,8 +1546,8 @@ class XibDb {
    * filtered with a WHERE clause, has integers 0 .. n-1
    * in its sort_column such that it is an array.
    *
-   * @param a An array with WHERE clause specification.
-   * @param table An array of tables.
+   * @param $a An array with WHERE clause specification.
+   * @param $table An array of tables.
    * @return A clause string.
    *
    * @author DanielWHoward
@@ -1503,54 +1557,52 @@ class XibDb {
 
     // decode the arguments into variables
     $queryMap = $querySpec;
-    if (!is_array($querySpec)) {
+    if (!is_array($queryMap)
+        || (count(array_filter(array_keys($queryMap), 'is_string')) === 0)) {
       $queryMap = array();
     }
     $queryMap = array3Merge(array(
-      "table"=>"",
-      "where"=>"",
+      'table'=>'',
+      'where'=>''
     ), array(
-      "table"=>$querySpec,
-      "where"=>$whereSpec,
+      'table'=>$querySpec,
+      'where'=>$whereSpec
     ), $queryMap);
     $table = $queryMap['table'];
     $where = $queryMap['where'];
 
     // decode ambiguous table argument
     $tableStr = $table;
-    $table = '`' . $tableStr . '`';
+    $whereStr = $where;
 
     // cache the table description
-    $this->readDesc($tableStr);
+    $this->readDescNative($tableStr);
     $descMap = $this->cache[$tableStr];
-    $json_field = $descMap["json_column"];
+    $json_field = $descMap['json_column'];
     if ($json_field === '') {
-      $e = new Exception('CheckJsonColumnConstraint(): ' . $tableStr . ' does not contain `' . $json_field . '`');
+      $e = new Exception('checkJsonColumnConstraint(): ' . $tableStr . ' does not contain `' . $json_field . '`');
     }
 
     if ($e === null) {
       // decode remaining ambiguous arguments
-      if (is_array($where)) {
-        $where = $this->implementWhere($where);
+      if (is_array($where)
+          && (count(array_filter(array_keys($where), 'is_string')) > 0)) {
+        $whereStr = $this->implementWhere($where);
       }
-      if (substr($where, 0, 1) === ' ') {
-        // add raw SQL
-      } else if (substr($where, 0, strlen('WHERE ')) === 'WHERE ') {
-        $where = " " . $where;
-      } else if ($where != "") {
-        $where = " WHERE " . $where;
+      if (($whereStr !== '') && (substr($whereStr, 0, 1) !== ' ')) {
+        $whereStr = ' WHERE ' . $whereStr;
       }
 
       // read the table
-      $q = 'SELECT `' . $json_field . '` FROM ' . $table . $where . ';';
+      $q = 'SELECT `' . $json_field . '` FROM `' . $tableStr . '`' . $whereStr . ';';
       $rows = $this->mysql_query($q);
       // read result
       for ($row = $this->mysql_fetch_assoc($rows); ($row !== null) && ($e === null); $row = $this->mysql_fetch_assoc($rows)) {
         $jsonValue = $row[$json_field];
         $jsonRowMap = json_decode($jsonValue, true);
         if ($jsonRowMap === null) {
-          $err = '"' . $this->mysql_real_escape_string($jsonValue) . '" value in `' . $json_field . '` column in ' . $table . ' table; ' . $e;
-          $e = new Exception('CheckJsonColumnConstraint(): ' . $err);
+          $err = '"' . $this->mysql_real_escape_string($jsonValue) . '" value in `' . $json_field . '` column in ' . $tableStr . ' table; ' . $e;
+          $e = new Exception('checkJsonColumnConstraint(): ' . $err);
         }
       }
       $this->mysql_free_query($rows);
@@ -1588,20 +1640,23 @@ class XibDb {
    * It is easier to use an array to create a MySQL WHERE clause instead
    * of using string concatenation.
    *
-   * @param $where An array with clause specification.
+   * @param $whereSpec An array with clause specification.
    * @return A clause string.
    *
    * @author DanielWHoward
    */
   function implementWhere($whereSpec) {
-    $ret = $whereSpec;
-    if (is_array($whereSpec)) {
-      $ret = $this->implementClause($whereSpec);
-      if ($ret !== '') {
-        $ret = 'WHERE ' . $ret;
+    $whereStr = '';
+    if (is_array($whereSpec)
+        && (count(array_filter(array_keys($whereSpec), 'is_string')) > 0)) {
+      $whereStr = $this->implementCondition($whereSpec);
+      if ($whereStr !== '') {
+        $whereStr = ' WHERE ' . $whereStr;
       }
+    } else {
+      $whereStr = $whereSpec;
     }
-    return $ret;
+    return $whereStr;
   }
 
   /**
@@ -1610,16 +1665,17 @@ class XibDb {
    * It is easier to use an array to create a MySQL WHERE clause instead
    * of using string concatenation.
    *
-   * @param $where An array with clause specification.
+   * @param $onVar An array with an ON clause specification.
    * @return A clause string.
    *
    * @author DanielWHoward
    */
-  function implementOn($on) {
+  function implementOn($onVar) {
     $joins = array('INNER JOIN', 'LEFT JOIN', 'RIGHT JOIN', 'OUTER JOIN');
-    if (is_array($on)) {
-      $clause = '';
-      foreach ($on as $table=>$cond) {
+    $onVarStr = '';
+    if (is_array($onVar)
+        && (count(array_filter(array_keys($onVar), 'is_string')) > 0)) {
+      foreach ($onVar as $table=>$cond) {
         // INNER JOIN is the default
         $join = $joins[0];
         // remove JOIN indicator from conditions
@@ -1632,61 +1688,70 @@ class XibDb {
           }
         }
         // build the JOIN clause
-        $clause .= ' '.$join.' '.$table.' ON '.$this->implementClause($conds, true);
+        $onVarStr .= $join . ' `' . $table . '` ON ' . $this->implementCondition($conds, 'ON ');
       }
-      $on = $clause;
+    } else {
+      $onVarStr = $onVar;
     }
-    return $on;
+    return $onVarStr;
   }
 
   /**
-   * Return a clause string created from an array specification.
+   * Return a SQL condition string created from an array specification.
    *
    * It is easier to use an array to create a MySQL WHERE clause instead
    * of using string concatenation.
    *
-   * @param $clause An array with clause specification.
-   * @return A clause string.
+   * @param $condObj An array with conditional specification.
+   * @param $onVar A string with an ON clause specification.
+   * @return A SQL string containing a nested conditional.
    *
    * @author DanielWHoward
    */
-  function implementClause($clause, $on='') {
-    if (is_array($clause) && (count($clause) === 0)) {
-      $clause = '';
-    } elseif (is_array($clause)) {
-      $op = 'AND';
-      if (isset($clause['or'])) {
-        $op = 'OR';
-        unset($clause['or']);
-      } elseif (isset($clause['and'])) {
-        unset($clause['and']);
-      }
-      $s = '(';
-      foreach ($clause as $key=>$value) {
-        if ($s !== '(') {
-          $s .= ' '.$op.' ';
-        }
-        if (is_array($value)) {
-          if (count(array_filter(array_keys($value), 'is_string')) === 0) {
-            // assume it is some SQL syntax
-            $s .= '('.$this->implementSyntax($key, $value).')';
+  function implementCondition($condObj, $onVar='') {
+    $cond = '';
+    if (is_string($condObj)) {
+      $cond = $condObj;
+    } elseif (is_array($condObj)
+        && (count(array_filter(array_keys($condObj), 'is_string')) > 0)) {
+      $condMap = $condObj;
+      $conds = array();
+      $op = ' AND ';
+      foreach ($condMap as $key=>$value) {
+        $sub = '';
+        if (strtoupper($key) === 'OR') {
+          $op = ' OR ';
+        } elseif (strtoupper($key) !== 'AND') {
+          if (is_array($value)) {
+            if (count(array_filter(array_keys($value), 'is_string')) === 0) {
+              // assume it is some SQL syntax
+              $sub = $this->implementSyntax($key, $value);
+            } else {
+              // assume it is a sub-clause
+              $sub = $this->implementCondition($value);
+            }
+            if ($sub !== '') {
+              $sub = '(' . $sub . ')';
+            }
           } else {
-            // assume it is a sub-clause
-            $s .= $this->implementClause($value);
-          }
-        } else {
-          $quotedKey = '`'.str_replace('.', '`.`', $key).'`';
-          if ($on) {
-            $s .= ''.$quotedKey.'='.$value.'';
-          } else {
-            $s .= ''.$quotedKey.'="'.$this->mysql_real_escape_string($value).'"';
+            $sub = $this->mysql_real_escape_string($value);
+            if ($onVar === '') {
+              $sub = "'" . $sub . "'";
+            } else {
+              $sub = '`' . str_replace('.', '`.`', $sub) . '`';
+            }
+            $sub = '`' . str_replace('.', '`.`', $key) . '`=' . $sub;
           }
         }
+        if ($sub !== '') {
+          $conds[] = $sub;
+        }
       }
-      $s .= ')';
-      $clause = $s;
+      if (count($conds) > 0) {
+        $cond = implode($op, $conds);
+      }
     }
-    return $clause;
+    return $cond;
   }
 
   /**
@@ -1696,47 +1761,54 @@ class XibDb {
    * instead of using string concatenation.
    *
    * @param $key A name, possibly unused.
-   * @param $clause An array with syntax specification.
+   * @param $syntax An array with syntax specification.
    * @return A SQL syntax string.
    *
    * @author DanielWHoward
    */
   function implementSyntax($key, $syntax) {
     $sql = '';
-    if ((count($syntax) >= 1) && (strtoupper($syntax[0]) === 'LIKE')) {
+    $cmdStr = $syntax[0];
+    if ((count($syntax) >= 1) && (strtoupper($cmdStr) === 'LIKE')) {
       // LIKE: 'unused'=>array('LIKE', 'tags', '% ', $arrayOfTags, ' %')
-      $key = $syntax[1];
-      $values = array();
+      $op = ' OR ';
+      $clauses = array();
+      $col = $syntax[1];
+      $likeStr = '`' . $col . '` LIKE';
       if (count($syntax) === 3) {
-        $values[] = $syntax[2];
+        $valueStr = $syntax[2];
+        $valueStr = $likeStr . " '" . $this->mysql_real_escape_string($valueStr) . "'";
+        $clauses[] = $valueStr;
       } elseif ((count($syntax) === 4) || (count($syntax) === 5)) {
         $pre = $syntax[2];
-        $post = (count($syntax) === 5)? $syntax[4]: '';
-        if (is_array($syntax[3])) {
-          for ($v=0; $v < count($syntax[3]); ++$v) {
-            $values[] = $pre.$syntax[3][$v].$post;
+        $post = '';
+        if (count($syntax) === 5) {
+          $post = $syntax[4];
+        }
+        if (is_array($syntax[3])
+            && (count(array_filter(array_keys($syntax[3]), 'is_string')) === 0)) {
+          foreach ($syntax[3] as $value) {
+            $valueStr = $pre . $value . $post;
+            $valueStr = $likeStr . " '" . $this->mysql_real_escape_string($valueStr) . "'";
+            $clauses[] = $valueStr;
           }
         } else {
-          $values[] = $pre.$syntax[3].$post;
+          $valueStr = $pre . $syntax[3] . $post;
+          $valueStr = $likeStr . " '" . $this->mysql_real_escape_string($valueStr) . "'";
+          $clauses[] = $valueStr;
         }
       }
-      $op = 'OR';
-      for ($v=0; $v < count($values); ++$v) {
-        if ($v > 0) {
-          $sql .= ' ' . $op . ' ';
-        }
-        $sql .= $key . ' LIKE "' . $this->mysql_real_escape_string($values[$v]) . '"';
-      }
+      $sql = implode($op, $clauses);
     } else {
-      // OR: 'column'=>array('1', '2', '3')
-      $op = 'OR';
-      $values = $syntax;
-      for ($v=0; $v < count($values); ++$v) {
-        if ($v > 0) {
-          $sql .= ' ' . $op . ' ';
-        }
-        $sql .= '`' . $key . '`="' . $this->mysql_real_escape_string($values[$v]) . '"';
+      // OR: 'aColumn'=>array('1', '2', '3')
+      $op = ' OR ';
+      $clauses = array();
+      foreach ($syntax as $value) {
+        $valueStr = $value;
+        $valueStr = '`' . $key . "`='" . $this->mysql_real_escape_string($valueStr) . "'";
+        $clauses[] = $valueStr;
       }
+      $sql = implode($op, $clauses);
     }
     return $sql;
   }
@@ -1779,6 +1851,7 @@ class QueryUsingInKeyword {
    */
   function QueryUsingInKeyword($prefix, $op_clause, $field, $value) {
     $this->prefix = $prefix;
+    $this->op_clause = $op_clause;
     $this->field = $field;
     $this->Values = array();
     $this->Values[] = $value;
@@ -1812,7 +1885,8 @@ class QueryUsingInKeyword {
 
 /**
  * Merge keys of objects with string indices and
- * return a new array.
+ * return a new array.  Standard now but provided
+ * so merge can be customized.
  *
  * @return object The merged object.
  *
@@ -1852,19 +1926,5 @@ function array3Merge($a, $b, $c) {
     }
   }
   return $r;
-}
-
-/**
- * Return true if numeric arrays with strings or
- * associative arrays with string keys intersect.
- *
- * @return boolean True if array keys or array values.
- *
- * @author DanielWHoward
- **/
-function stringKeysOrArrayIntersect($arr1, $arr2) {
-  $arr1 = (count(array_filter(array_keys($arr1), 'is_string')) === 0)? $arr1: array_keys($arr1);
-  $arr2 = (count(array_filter(array_keys($arr2), 'is_string')) === 0)? $arr2: array_keys($arr2);
-  return count(array_intersect($arr1, $arr2)) === 0;
 }
 ?>

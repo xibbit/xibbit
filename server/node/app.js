@@ -64,6 +64,9 @@ var xdb = new XibDb({
 });
 xdb = Promise.promisifyAll(xdb);
 
+xdb.dumpSql = false;
+xdb.dryRun = false;
+
 // Public Figure specific database
 var pf = new pfapp(xdb, config.sql_prefix);
 pf = Promise.promisifyAll(pf);
