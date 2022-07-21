@@ -23,6 +23,8 @@
 // @version 1.5.3
 // @copyright xibbit 1.5.3 Copyright (c) © 2021 Daniel W. Howard and Sanjana A. Joshi Partnership
 // @license http://opensource.org/licenses/MIT
+var crypto = require('crypto');
+
 /**
  * Reads, inserts, deletes, updates and moves rows in
  * MySQL database using the JSON (JavaScript Object
@@ -54,6 +56,13 @@
     this.dumpSql = false;
     this.opt = true;
     this.log = config.log || this;
+    // generate a unique unguessable identifier
+    var length = 25;
+    var a = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789';
+    this.paramRand = '';
+    for(var i=0; i < length; i++) {
+      this.paramRand += a[this.rand_secure(0, a.length)];
+    }
   }
 
   /**
@@ -256,7 +265,8 @@
 
       // read the table
       var q = 'SELECT ' + columnsStr + ' FROM `' + tableStr + '`' + onVarStr + whereStr + orderByStr + ';';
-      that.mysql_query(q, function(e, rows, f) {
+      var params = {};
+      that.mysql_query(q, {}, function(e, rows, f) {
         if (e) {
           callback(e, rows, f);
         } else {
@@ -420,7 +430,7 @@
       var json_column = '';
       var auto_increment_column = '';
       var q = 'DESCRIBE `' + tableStr + '`;';
-      this.mysql_query(q, function(e, rows, f) {
+      this.mysql_query(q, {}, function(e, rows, f) {
         if (e) {
           return that.fail(e, '', q, callback);
         }
@@ -651,6 +661,7 @@
       }
 
       var qa = [];
+      var params = {};
 
       // update the positions
       var promises = promise_mapSeries([]);
@@ -659,7 +670,7 @@
         promises.push((function() {
           return function promise() {
             var q = 'SELECT `' + sort_field + '` FROM `' + tableStr + '`' + whereStr + orderByStr + limitStr + ';';
-            that.mysql_query(q, function(e, rows) {
+            that.mysql_query(q, {}, function(e, rows) {
               for (var r=0; r < rows.length; ++r) {
                 var row = rows[r];
                 nValue = row[sort_field];
@@ -711,7 +722,6 @@
         // finally, generate valuesStr from valuesMap
         if (Object.keys(sqlValuesMap).length > 0) {
           var colsStr = '';
-          var valuesStr = '';
           for (var col in sqlValuesMap) {
             if (!sqlValuesMap.hasOwnProperty(col)) {
               continue;
@@ -724,29 +734,9 @@
             if (valuesStr !== '') {
               valuesStr += ',';
             }
-            valueStr = '';
-            if (((typeof value === 'object') || (value.constructor.name === 'Object') ||
-                value instanceof Array)) {
-              jsonStr = JSON.stringify(jsonMap);
-              if ((jsonStr === '') || (jsonStr === '[]')) {
-                jsonStr = '{}';
-              }
-              valueStr = '"' + that.mysql_real_escape_string(jsonStr) + '"';
-            } else if (typeof value === 'boolean') {
-              var valueBool = !!value;
-              if (valueBool) {
-                valueStr = '1';
-              } else {
-                valueStr = '0';
-              }
-            } else if (is_int(value)) {
-              valueStr = value;
-            } else if (value === null) {
-              valueStr = 'NULL';
-            } else {
-              valueStr = "'" + that.mysql_real_escape_string(value) + "'";
-            }
-            valuesStr += valueStr;
+            var param = '{{{' + that.paramRand + '--value--' + qa.length + '--' + col + '}}}';
+            params[param] = value;
+            valuesStr += param;
           }
           valuesStr = ' (' + colsStr + ') VALUES (' + valuesStr + ')';
         }
@@ -760,7 +750,7 @@
           var q = qa[i];
           promises.push((function(q) {
             return function promise() {
-              that.mysql_query(q, function(e, rows) {
+              that.mysql_query(q, params, function(e, rows) {
                 qr = rows;
                 if (rows) {
                   that.mysql_free_query(rows);
@@ -964,7 +954,7 @@
               orderByStr = ' ORDER BY `' + sort_field + '` DESC';
             }
             var q = 'SELECT COUNT(*) AS num_rows FROM `' + tableStr + '`' + whereStr + andStr + orderByStr + ';';
-            that.mysql_query(q, function(e, rows) {
+            that.mysql_query(q, {}, function(e, rows) {
               if (e) {
                 return that.fail(e, '', q, callback);
               }
@@ -984,7 +974,7 @@
               q = 'SELECT ' + quotedField + ' FROM `' + tableStr + '`' + whereStr + andStr + orderByStr + ';';
               // verify that non-standard n var yields valid rows
               if ((num_rows === 1) || ((num_rows > 1) && (sort_field !== ''))) {
-                that.mysql_query(q, function(e, rows) {
+                that.mysql_query(q, {}, function(e, rows) {
                   var row = rows[0];
                   if (num_rows === 1) {
                     if (sort_field !== '') {
@@ -1025,7 +1015,7 @@
           promises.push((function() {
             return function promise() {
               var q = 'SELECT `' + sort_field + '` FROM `' + tableStr + '`' + whereStr + orderByStr + limitStr + ';';
-              that.mysql_query(q, function(e, rows) {
+              that.mysql_query(q, {}, function(e, rows) {
                 for (var r=0; r < rows.length; ++r) {
                   var row = rows[r];
                   nValue = row[sort_field];
@@ -1069,7 +1059,7 @@
             var q = qa[i];
             promises.push((function(q) {
               return function promise() {
-                that.mysql_query(q, function(e, rows) {
+                that.mysql_query(q, {}, function(e, rows) {
                   if (rows) {
                     that.mysql_free_query(rows);
                   }
@@ -1279,7 +1269,8 @@
 
       // get the number of rows_affected and save values
       q = 'SELECT * FROM `' + tableStr + '`' + whereStr + andStr + orderByStr + ';';
-      that.mysql_query(q, function(e, rows) {
+      var params = {};
+      that.mysql_query(q, {}, function(e, rows) {
         var rows_affected = 0;
         var sqlRowMaps = [];
         for (var r=0; r < rows.length; ++r) {
@@ -1313,7 +1304,7 @@
             return that.fail(null, '0 rows affected', q, callback);
           } else {
             q = 'SELECT COUNT(*) AS rows_affected FROM `' + tableStr + '`' + whereStr + ';';
-            that.mysql_query(q, function(e, rows) {
+            that.mysql_query(q, {}, function(e, rows) {
               rows_affected = 0;
               for (var r=0; r < rows.length; ++r) {
                 var row = rows[r];
@@ -1374,10 +1365,12 @@
                   }
                   // add changed values to SET clause
                   if (oldValue !== newValue) {
+                    param = '{{{' + that.paramRand + '--set--' + qa.length + '--' + col + '}}}';
+                    params[param] = newValue;
                     if (valuesRow !== ' SET ') {
                       valuesRow += ', ';
                     }
-                    valuesRow += '`' + that.mysql_real_escape_string(col) + "`='" + that.mysql_real_escape_string(newValue) + "'";
+                    valuesRow += '`' + that.mysql_real_escape_string(col) + '`=' + param;
                   }
                 }
               }
@@ -1388,17 +1381,16 @@
                   continue;
                 }
                 var value = sqlRowMap[col];
-                //TODO include date values properly
-                if (Object.prototype.toString.call(value) !== '[object Date]') {
-                  if (whereRow !== ' WHERE ') {
-                    whereRow += ' AND ';
-                  }
-                  var opStr = '=';
-                  if (is_numeric(value) && is_float(desc[col])) {
-                    opStr = ' LIKE ';
-                  }
-                  whereRow += '`' + that.mysql_real_escape_string(col) + "`" + opStr + "'" + that.mysql_real_escape_string(value) + "'";
+                param = '{{{' + that.paramRand + '--where--' + qa.length + '--' + col + '}}}';
+                var opStr = '=';
+                if (is_numeric(value) && is_float(desc[col])) {
+                  opStr = ' LIKE ';
                 }
+                params[param] = value;
+                if (whereRow !== ' WHERE ') {
+                  whereRow += ' AND ';
+                }
+                whereRow += '`' + that.mysql_real_escape_string(col) + '`' + opStr + param;
               }
               if (valuesRow !== ' SET ') {
                 var q = 'UPDATE `' + tableStr + '`' + valuesRow + whereRow + ' LIMIT 1;';
@@ -1417,7 +1409,7 @@
             var q = qa[i];
             promises.push((function(q) {
               return function promise() {
-                that.mysql_query(q, function(e, rows) {
+                that.mysql_query(q, params, function(e, rows) {
                   if (rows) {
                     that.mysql_free_query(rows);
                   }
@@ -1593,7 +1585,8 @@
 
       // get the length of the array
       var q = 'SELECT `' + sort_field + '` FROM `' + tableStr + '`' + whereStr + orderByStr + limitStr + ';';
-      that.mysql_query(q, function(e, rows) {
+      var params = {};
+      that.mysql_query(q, params, function(e, rows) {
         var nLen = 0;
         if (rows.length > 0) {
           var row = rows[0];
@@ -1655,7 +1648,7 @@
           var q = qa[i];
           promises.push((function(q) {
             return function promise() {
-              that.mysql_query(q, function(e, rows) {
+              that.mysql_query(q, {}, function(e, rows) {
                 if (rows) {
                   that.mysql_free_query(rows);
                 }
@@ -1725,15 +1718,61 @@
    * Flexible mysql_query() function.
    *
    * @param {string} query The query to execute.
+   * @param {Map} a A parameterized query argument map.
    * @param {function} callback A callback function.
    * @return {string} The mysql_query() return value.
    *
    * @author DanielWHoward
    */
-  XibDb.prototype.mysql_queryCb = function(query, callback) {
+  XibDb.prototype.mysql_queryCb = function(query, a, callback) {
+    callback = (typeof a === 'function')? (callback || a): callback;
+    a = ((typeof a === 'object') && (a.constructor.name === 'Object'))? a: {};
     var that = this;
+    var parameterizedQuery = true;
+    var ordinaryQuery = true;
+    var link_identifier = null;
+    var result = false;
+    var e = '';
+    // convert to real parameterized query
+    var placeholder = '?';
+    var paramTypes = '';
+    var paramQuery = query;
+    var paramValues = [];
+    for (var aKey in a) {
+      if (!a.hasOwnProperty(aKey)) {
+        continue;
+      }
+      var aValue = a[aKey];
+      var i = paramQuery.indexOf(aKey);
+      if (i >= 0) {
+        if ((typeof aValue === 'object') // both
+            && (['Object', 'Array'].indexOf(aValue.constructor.name) >= 0)) {
+          jsonStr = JSON.stringify(aValue);
+          if ((jsonStr === '') || (jsonStr === '[]')) {
+            jsonStr = '{}';
+          }
+          aValue = jsonStr;
+        } else if (that.mapBool && (typeof aValue === 'boolean')) {
+          var valueBool = !!aValue;
+          if (valueBool) {
+            aValue = '1';
+          } else {
+            aValue = '0';
+          }
+        } else if (Object.prototype.toString.call(aValue) === '[object Date]') {
+          aValue = aValue.toISOString().slice(0, 19).replace('T', ' ');
+        }
+        paramTypes += 's';
+        paramValues.push(aValue);
+        paramQuery = paramQuery.split(aKey).join(placeholder);
+      }
+    }
     if (that.dumpSql || that.dryRun) {
-      that.log.println(query);
+      if (paramValues.length === 0) {
+        that.log.println(query);
+      } else {
+        that.log.println(paramQuery + ' with params: ' + JSON.stringify(paramValues));
+      }
     }
     if (that.dryRun && (!query.startsWith('SELECT ') && !query.startsWith('DESCRIBE '))) {
       return callback({
@@ -1745,7 +1784,18 @@
         sqlMessage: 'Dry run'
       });
     }
-    return that.config['link_identifier'].query(query, callback);
+    // execute parameterized or ordinary query
+    if (that.config.link_identifier) {
+      link_identifier = that.config.link_identifier;
+      if (parameterizedQuery && (paramValues.length > 0)) {
+        // TODO add support for parameterized queries
+      }
+      if (ordinaryQuery && !e) {
+        query = that.xibdb_flatten_query(query, a);
+        return link_identifier.query(query, callback)
+      }
+    }
+    return link_identifier.query(query, callback);
   };
 
   XibDb.prototype.mysql_query = function(query, a, callback) {
@@ -1769,13 +1819,14 @@
    * mysql_insert_id() will work.
    *
    * @param {string} query The query to execute.
+   * @param {Map} a A parameterized query argument map.
    * @param {function} callback A callback function.
    * @return {string} The mysql_query() return value.
    *
    * @author DanielWHoward
    */
-  XibDb.prototype.mysql_exec = function(query, callback) {
-    return that.mysql_query(query, callback);
+  XibDb.prototype.mysql_exec = function(query, a, callback) {
+    return that.mysql_query(query, a, callback);
   };
 
   /**
@@ -1850,6 +1901,56 @@
   XibDb.prototype.mysql_insert_id = function(result) {
     return result.insertId;
   };
+
+  /**
+   * Return query string with argument map appied.
+   *
+   * An argument map allows the caller to specify his
+   * own string template substitutions.  This allows
+   * xibdb to convert a query to a real parameterized
+   * query in mysql_query().  But this method just does
+   * a dumb substitution to create a query with escaped
+   * strings.
+   *
+   * @param {string} query The query to execute.
+   * @param {Map} a An argument map.
+   * @return The mysql_query() return value.
+   *
+   * @author DanielWHoward
+   */
+  XibDb.prototype.xibdb_flatten_query = function(query, a) {
+    var that = this;
+    for (var name in a) {
+      if (!a.hasOwnProperty(name)) {
+        continue;
+      }
+      var value = a[name];
+      var valueStr = '';
+      if ((typeof value === 'object') // is_map
+          && (value.constructor.name === 'Object')) {
+        var jsonStr = JSON.stringify(value);
+        if ((jsonStr === '') || (jsonStr === '[]')) {
+          jsonStr = '{}';
+        }
+        valueStr = "'" + that.mysql_real_escape_string(jsonStr) + "'";
+      } else if (that.mapBool && (typeof value == 'boolean')) {
+        var valueBool = !!value;
+        if (valueBool) {
+          valueStr = '1';
+        } else {
+          valueStr = '0';
+        }
+      } else if ((typeof value == 'number') && ((value % 1) === 0)) {
+        valueStr = value.toString();
+      } else if (value === null) {
+        valueStr = 'NULL';
+      } else {
+        valueStr = "'" + that.mysql_real_escape_string(value) + "'";
+      }
+      query = query.split(name).join(valueStr);
+    }
+    return query;
+  }
 
   /**
    * Return true if the data in a table, optionally
@@ -2112,6 +2213,28 @@
       sql = clauses.join(op);
     }
     return sql;
+  };
+
+  /**
+   * Return a random number in a range.
+   *
+   * @param {number} min The minimum value.
+   * @param {number} max The maximum value.
+   * @return int A random value.
+   *
+   * @author DanielWHoward
+   **/
+  XibDb.prototype.rand_secure = function(min, max) {
+    var log = Math.log2(max - min);
+    var bytes = Math.floor((log / 8) + 1);
+    var bits = Math.floor(log + 1);
+    var filter = Math.floor((1 << bits) - 1);
+    var rnd = 0;
+    do {
+      rnd = parseInt(crypto.randomBytes(bytes).toString('hex'), 16);
+      rnd = rnd & filter; // discard irrelevant bits
+    } while (rnd >= (max - min));
+    return Math.floor(min + rnd);
   };
 
   /**

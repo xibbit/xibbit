@@ -293,8 +293,8 @@ func (self Pfapp) MoveRow(table map[string]interface{}) error {
  *
  * @author DanielWHoward
  */
-func (self Pfapp) Mysql_query(query string) (*sql.Rows, error, []string) {
-	return self.xibdb.Mysql_query(query)
+func (self Pfapp) Mysql_query(query string, a map[string]interface{}) (*sql.Rows, error, []string) {
+	return self.xibdb.Mysql_query(query, a)
 }
 
 /**

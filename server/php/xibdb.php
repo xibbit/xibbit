@@ -57,6 +57,13 @@ class XibDb {
 //    $this->undefine = curl_init();
 //    $this->json = new Services_JSON();
 //    json___construct(SERVICES_JSON_LOOSE_TYPE);
+    // generate a unique unguessable identifier
+    $length = 25;
+    $a = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789';
+    $this->paramRand = '';
+    for ($i=0; $i < $length; $i++) {
+      $this->paramRand .= $a[$this->rand_secure(0, strlen($a))];
+    }
   }
 
   /**
@@ -233,6 +240,7 @@ class XibDb {
 
     // read the table
     $q = 'SELECT ' . $columnsStr . ' FROM `' . $tableStr . '`' . $onVarStr . $whereStr . $orderByStr . ';';
+    $params = array();
     $rows = &$this->mysql_query($q);
     // read result
     $objs = array();
@@ -532,6 +540,7 @@ class XibDb {
     }
 
     $qa = array();
+    $params = array();
 
     // update the positions
     if ($sort_field !== '') {
@@ -593,28 +602,9 @@ class XibDb {
         if ($valuesStr !== '') {
           $valuesStr .= ',';
         }
-        $valueStr = '';
-        if (is_array($value)) {
-          $jsonStr = json_encode($jsonMap);
-          if (($jsonStr === '') || ($jsonStr === '[]')) {
-            $jsonStr = '{}';
-          }
-          $valueStr = "'" . $this->mysql_real_escape_string($jsonStr) . "'";
-        } elseif ($this->mapBool && is_bool($value)) {
-          $valueBool = $value;
-          if ($valueBool) {
-            $valueStr = '1';
-          } else {
-            $valueStr = '0';
-          }
-        } elseif (is_int($value)) {
-          $valueStr = $value;
-        } elseif (is_null($value)) {
-          $valueStr = 'NULL';
-        } else {
-          $valueStr = "'" . $this->mysql_real_escape_string($value) . "'";
-        }
-        $valuesStr .= $valueStr;
+        $param = '{{{' . $this->paramRand . '--value--' . count($qa) . '--' . $col . '}}}';
+        $params[$param] = $value;
+        $valuesStr .= $param;
       }
       $valuesStr = ' (' . $colsStr . ') VALUES (' . $valuesStr . ')';
     }
@@ -629,7 +619,7 @@ class XibDb {
         if ($qr !== null) {
           $this->mysql_free_query($qr);
         }
-        $qr = &$this->mysql_query($q);
+        $qr = &$this->mysql_query($q, $params);
       } catch (Exception $e) {
         $this->fail($e, $q);
         return null;
@@ -726,6 +716,7 @@ class XibDb {
     $json_field = isset($descMap['json_column'])? $descMap['json_column']: '';
 
     // decode remaining ambiguous arguments
+    $params = array();
     $nInt = $n;
     $nStr = $n;
     $whereStr = $where;
@@ -862,7 +853,7 @@ class XibDb {
 
     foreach ($qa as $q) {
       try {
-        $qr = &$this->mysql_query($q);
+        $qr = &$this->mysql_query($q, $params);
         $this->mysql_free_query($qr);
       } catch (Exception $e) {
         $this->fail($e, $q);
@@ -1021,6 +1012,7 @@ class XibDb {
 
     // get the number of rows_affected and save values
     $q = 'SELECT * FROM `' . $tableStr . '`' . $whereStr . $andStr . $orderByStr . ';';
+    $params = array();
     $qr = $this->mysql_query($q);
     $rows_affected = 0;
     $sqlRowMaps = array();
@@ -1034,7 +1026,7 @@ class XibDb {
       if ($updateJson) {
         $jsonRowMap = json_decode($row[$json_field], true);
         if ($jsonRowMap === null) {
-          $e = '"' . $this->mysql_real_escape_string($row[$json_field]) . '" value in `' . $json_field . '` column in ' . $table . ' table; ' . $e;
+          $e = '"' . $this->mysql_real_escape_string($row[$json_field]) . '" value in `' . $json_field . '` column in `' . $tableStr . '` table; ' . $e;
           $this->fail($e, $q);
           return null;
         }
@@ -1093,23 +1085,27 @@ class XibDb {
           }
           // add changed values to SET clause
           if ($oldValue !== $newValue) {
+            $param = '{{{' . $this->paramRand . '--set--' . count($qa) . '--' . $col . '}}}';
+            $params[$param] = $newValue;
             if ($valuesRow !== ' SET ') {
               $valuesRow .= ', ';
             }
-            $valuesRow .= '`' . $this->mysql_real_escape_string($col) . '`="' . $this->mysql_real_escape_string($newValue) . '"';
+            $valuesRow .= '`' . $this->mysql_real_escape_string($col) . '`=' . $param;
           }
         }
         // construct WHERE clause
         $whereRow = ' WHERE ';
         foreach ($sqlRowMap as $col=>$value) {
+          $param = '{{{' . $this->paramRand . '--where--' . count($qa) . '--' . $col . '}}}';
+          $opStr = '=';
+          if (is_numeric($value) && is_float($desc[$col])) {
+            $opStr = ' LIKE ';
+          }
+          $params[$param] = $value;
           if ($whereRow !== ' WHERE ') {
             $whereRow .= ' AND ';
           }
-          $opStr = '=';
-          if (is_numeric($value) && is_float($desc[$col])) {
-              $opStr = ' LIKE ';
-          }
-          $whereRow .= '`' . $this->mysql_real_escape_string($col) . '`' + opStr + '"' . $this->mysql_real_escape_string($value) . '"';
+          $whereRow .= '`' . $this->mysql_real_escape_string($col) . '`' . $opStr . $param;
         }
         if ($valuesRow !== ' SET ') {
           $q = 'UPDATE `' . $tableStr . '`' . $valuesRow . $whereRow . ' LIMIT 1;';
@@ -1122,7 +1118,7 @@ class XibDb {
 
     foreach ($qa as $q) {
       try {
-        $qr = &$this->mysql_query($q);
+        $qr = &$this->mysql_query($q, $params);
         $this->mysql_free_query($qr);
       } catch (Exception $e) {
         $this->fail($e, $q);
@@ -1250,6 +1246,7 @@ class XibDb {
 
     // get the length of the array
     $q = 'SELECT `' . $sort_field . '` FROM `' . $tableStr . '`' . $whereStr . $orderByStr . $limitStr . ';';
+    $params = array();
     $qr_end = $this->mysql_query($q);
     $nLen = 0;
     if ($row = &$this->mysql_fetch_assoc($qr_end)) {
@@ -1312,7 +1309,7 @@ class XibDb {
 
     foreach ($qa as $q) {
       try {
-        $qr = &$this->mysql_query($q);
+        $qr = &$this->mysql_query($q, $params);
         $this->mysql_free_query($qr);
       } catch (Exception $e) {
         $this->fail($e, $q);
@@ -1343,29 +1340,132 @@ class XibDb {
    * Flexible mysql_query() function.
    *
    * @param $query String The query to execute.
+   * @param $a Map A parameterized query argument map.
    * @return The mysql_query() return value.
    *
    * @author DanielWHoward
    */
-  function &mysql_query(&$query) {
+  function &mysql_query(&$query, $a=array()) {
+    $parameterizedQuery = true;
+    $ordinaryQuery = true;
+    $link_identifier = null;
+    $result = false;
+    $e = '';
+    // convert to real parameterized query
+    $placeholder = '?';
+    $paramTypes = '';
+    $paramQuery = $query;
+    $paramValues = [];
+    foreach ($a as $aKey=>$aValue) {
+      $i = strpos($paramQuery, $aKey);
+      if ($i !== false) {
+        if (is_array($aValue)) { // is_map
+          $jsonStr = json_encode($aValue);
+          if (($jsonStr === '') || ($jsonStr === '[]')) {
+            $jsonStr = '{}';
+          }
+          $aValue = $jsonStr;
+        } elseif ($this->mapBool && is_bool($aValue)) {
+          $valueBool = boolval($aValue);
+          if ($valueBool) {
+            $aValue = 1;
+          } else {
+            $aValue = 0;
+          }
+        }
+        $paramTypes .= 's';
+        $paramValues[] = $aValue;
+        $paramQuery = str_replace($aKey, $placeholder, $paramQuery);
+      }
+    }
     if ($this->dumpSql || $this->dryRun) {
-      $this->log->println($query);
+      if (count($paramValues) === 0) {
+        $this->log->println($query);
+      } else {
+        $this->log->println($paramQuery . ' with params: ' . json_encode($paramValues));
+      }
     }
     if ($this->dryRun && (substr($query, 0, strlen('SELECT ')) !== 'SELECT ') && (substr($query, 0, strlen('DESCRIBE ')) !== 'DESCRIBE ')) {
       return false;
     }
-    $link_identifier = null;
-    $result = null;
-    $e = '';
+    // execute parameterized or ordinary query
     if (isset($this->config['mysqli'])) {
       $link_identifier = &$this->config['mysqli']['link'];
-      $result = $link_identifier->query($query);
-      $e = mysqli_error($this->config['mysqli']['link']);
+      if ($parameterizedQuery && (count($paramValues) > 0)) {
+        $stmt = mysqli_prepare($link_identifier, $paramQuery);
+        if ($stmt) {
+          $v = $paramValues;
+          // avoid ellipsis (...) notation for backwards compat
+          if (strlen($paramTypes) === 1) {
+            mysqli_stmt_bind_param($stmt, $paramTypes, $v[0]);
+          } elseif (strlen($paramTypes) === 2) {
+            mysqli_stmt_bind_param($stmt, $paramTypes, $v[0], $v[1]);
+          } elseif (strlen($paramTypes) === 3) {
+            mysqli_stmt_bind_param($stmt, $paramTypes, $v[0], $v[1], $v[2]);
+          } elseif (strlen($paramTypes) === 4) {
+            mysqli_stmt_bind_param($stmt, $paramTypes, $v[0], $v[1], $v[2], $v[3]);
+          } elseif (strlen($paramTypes) === 5) {
+            mysqli_stmt_bind_param($stmt, $paramTypes, $v[0], $v[1], $v[2], $v[3], $v[4]);
+          } elseif (strlen($paramTypes) === 6) {
+            mysqli_stmt_bind_param($stmt, $paramTypes, $v[0], $v[1], $v[2], $v[3], $v[4], $v[5]);
+          } elseif (strlen($paramTypes) === 7) {
+            mysqli_stmt_bind_param($stmt, $paramTypes, $v[0], $v[1], $v[2], $v[3], $v[4], $v[5], $v[6]);
+          } elseif (strlen($paramTypes) === 8) {
+            mysqli_stmt_bind_param($stmt, $paramTypes, $v[0], $v[1], $v[2], $v[3], $v[4], $v[5], $v[6], $v[7]);
+          } elseif (strlen($paramTypes) === 9) {
+            mysqli_stmt_bind_param($stmt, $paramTypes, $v[0], $v[1], $v[2], $v[3], $v[4], $v[5], $v[6], $v[7], $v[8]);
+          } elseif (strlen($paramTypes) === 10) {
+            mysqli_stmt_bind_param($stmt, $paramTypes, $v[0], $v[1], $v[2], $v[3], $v[4], $v[5], $v[6], $v[7], $v[8], $v[9]);
+          } elseif (strlen($paramTypes) === 11) {
+            mysqli_stmt_bind_param($stmt, $paramTypes, $v[0], $v[1], $v[2], $v[3], $v[4], $v[5], $v[6], $v[7], $v[8], $v[9], $v[10]);
+          } elseif (strlen($paramTypes) === 12) {
+            mysqli_stmt_bind_param($stmt, $paramTypes, $v[0], $v[1], $v[2], $v[3], $v[4], $v[5], $v[6], $v[7], $v[8], $v[9], $v[10], $v[11]);
+          } elseif (strlen($paramTypes) === 13) {
+            mysqli_stmt_bind_param($stmt, $paramTypes, $v[0], $v[1], $v[2], $v[3], $v[4], $v[5], $v[6], $v[7], $v[8], $v[9], $v[10], $v[11], $v[12]);
+          } elseif (strlen($paramTypes) === 14) {
+            mysqli_stmt_bind_param($stmt, $paramTypes, $v[0], $v[1], $v[2], $v[3], $v[4], $v[5], $v[6], $v[7], $v[8], $v[9], $v[10], $v[11], $v[12], $v[13]);
+          } elseif (strlen($paramTypes) === 15) {
+            mysqli_stmt_bind_param($stmt, $paramTypes, $v[0], $v[1], $v[2], $v[3], $v[4], $v[5], $v[6], $v[7], $v[8], $v[9], $v[10], $v[11], $v[12], $v[13], $v[14]);
+          } elseif (strlen($paramTypes) === 16) {
+            mysqli_stmt_bind_param($stmt, $paramTypes, $v[0], $v[1], $v[2], $v[3], $v[4], $v[5], $v[6], $v[7], $v[8], $v[9], $v[10], $v[11], $v[12], $v[13], $v[14], $v[15]);
+          } elseif (strlen($paramTypes) === 17) {
+            mysqli_stmt_bind_param($stmt, $paramTypes, $v[0], $v[1], $v[2], $v[3], $v[4], $v[5], $v[6], $v[7], $v[8], $v[9], $v[10], $v[11], $v[12], $v[13], $v[14], $v[15], $v[16]);
+          } elseif (strlen($paramTypes) === 18) {
+            mysqli_stmt_bind_param($stmt, $paramTypes, $v[0], $v[1], $v[2], $v[3], $v[4], $v[5], $v[6], $v[7], $v[8], $v[9], $v[10], $v[11], $v[12], $v[13], $v[14], $v[15], $v[16], $v[17]);
+          } elseif (strlen($paramTypes) === 19) {
+            mysqli_stmt_bind_param($stmt, $paramTypes, $v[0], $v[1], $v[2], $v[3], $v[4], $v[5], $v[6], $v[7], $v[8], $v[9], $v[10], $v[11], $v[12], $v[13], $v[14], $v[15], $v[16], $v[17], $v[18]);
+          } elseif (strlen($paramTypes) === 19) {
+            mysqli_stmt_bind_param($stmt, $paramTypes, $v[0], $v[1], $v[2], $v[3], $v[4], $v[5], $v[6], $v[7], $v[8], $v[9], $v[10], $v[11], $v[12], $v[13], $v[14], $v[15], $v[16], $v[17], $v[18], $v[19]);
+          } else {
+            $this->log->println('E:Too many MySQL params to bind');
+          }
+          $bExecuteSuccess = mysqli_stmt_execute($stmt);
+          if ($bExecuteSuccess) {
+            $bCloseSuccess = mysqli_stmt_close($stmt);
+            if ($bCloseSuccess) {
+              return $result;
+            } else {
+              $e = 'mysqli_stmt_close() failed:' . mysqli_stmt_error($stmt);
+            }
+          } else {
+            $e = 'mysqli_stmt_execute() failed: ' . mysqli_stmt_error($stmt);
+          }
+        } else {
+          $e = 'mysqli_prepare() failed';
+        }
+      }
+      if ($ordinaryQuery && ($e === '')) {
+        $query = $this->xibdb_flatten_query($query, $a);
+        $result = mysqli_query($link_identifier, $query);
+        $e = mysqli_error($link_identifier);
+      }
     } elseif (isset($this->config['mysql']) && isset($this->config['mysql']['link'])) {
       $link_identifier = &$this->config['mysql']['link'];
+      $query = $this->xibdb_flatten_query($query, $a);
       $result = mysql_query($query, $link_identifier);
-      $e = mysql_error($this->config['mysql']['link']);
+      $e = mysql_error($link_identifier);
     } else {
+      $query = $this->xibdb_flatten_query($query, $a);
       $result = mysql_query($query);
       $e = mysql_error();
     }
@@ -1381,12 +1481,13 @@ class XibDb {
    * mysql_insert_id() will work.
    *
    * @param $query String The query to execute.
+   * @param $a Map A parameterized query argument map.
    * @return The mysql_query() return value.
    *
    * @author DanielWHoward
    */
-  function mysql_exec(&$query) {
-    return $this->mysql_query($query);
+  function mysql_exec(&$query, $a=array()) {
+    return $this->mysql_query($query, $a);
   }
 
   /**
@@ -1474,6 +1575,50 @@ class XibDb {
       return mysql_insert_id($this->config['mysql']['link']);
     }
     return mysql_insert_id();
+  }
+
+  /**
+   * Return query string with argument map appied.
+   *
+   * An argument map allows the caller to specify his
+   * own string template substitutions.  This allows
+   * xibdb to convert a query to a real parameterized
+   * query in mysql_query().  But this method just does
+   * a dumb substitution to create a query with escaped
+   * strings.
+   *
+   * @param $query String The query to execute.
+   * @param $a An argument map.
+   * @return The mysql_query() return value.
+   *
+   * @author DanielWHoward
+   */
+  function xibdb_flatten_query(&$query, $a) {
+    foreach ($a as $name=>$value) {
+      $valueStr = '';
+      if (is_array($value)) { // is_map
+        $jsonStr = json_encode($value);
+        if (($jsonStr === '') || ($jsonStr === '[]')) {
+          $jsonStr = '{}';
+        }
+        $valueStr = "'" . $this->mysql_real_escape_string($jsonStr) . "'";
+      } elseif ($this->mapBool && is_bool($value)) {
+        $valueBool = boolval($value);
+        if ($valueBool) {
+          $valueStr = '1';
+        } else {
+          $valueStr = '0';
+        }
+      } elseif (is_int($value)) {
+        $valueStr = strval($value);
+      } elseif (is_null($value)) {
+        $valueStr = 'NULL';
+      } else {
+        $valueStr = "'" . $this->mysql_real_escape_string($value) . "'";
+      }
+      $query = str_replace($name, $valueStr, $query);
+    }
+    return $query;
   }
 
   /**
@@ -1819,6 +1964,27 @@ class XibDb {
       $sql = implode($op, $clauses);
     }
     return $sql;
+  }
+
+  /**
+   * Return a random number in a range.
+   *
+   * @param $min int The minimum value.
+   * @param $max int The maximum value.
+   * @return int A random value.
+   *
+   * @author DanielWHoward
+   **/
+  function rand_secure($min, $max) {
+    $log = log(($max - $min), 2);
+    $bytes = (int) ($log / 8) + 1;
+    $bits = (int) $log + 1;
+    $filter = (int) (1 << $bits) - 1;
+    do {
+      $rnd = hexdec(bin2hex(openssl_random_pseudo_bytes($bytes)));
+      $rnd = $rnd & $filter; // discard irrelevant bits
+    } while ($rnd >= ($max - $min));
+    return $min + $rnd;
   }
 
   /**
