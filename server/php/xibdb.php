@@ -50,6 +50,7 @@ class XibDb {
     $this->cache = array();
     $this->mapBool = true;
     $this->checkConstraints = false;
+    $this->autoCommit = isset($config['autoCommit'])? $config['autoCommit']: true;
     $this->dryRun = false;
     $this->dumpSql = false;
     $this->opt = true;
@@ -539,6 +540,8 @@ class XibDb {
       $limitStr = ' LIMIT 1';
     }
 
+    $transaction = $this->xibdb_begin();
+
     $qa = array();
     $params = array();
 
@@ -621,7 +624,7 @@ class XibDb {
         }
         $qr = &$this->mysql_query($q, $params);
       } catch (Exception $e) {
-        $this->fail($e, $q);
+        $this->fail($e, $q, $transaction);
         return null;
       }
     }
@@ -631,6 +634,8 @@ class XibDb {
     }
 
     $this->mysql_free_exec($qr);
+
+    $this->xibdb_commit($transaction);
 
     // check constraints
     if ($this->checkConstraints) {
@@ -714,6 +719,8 @@ class XibDb {
     $descMap = $this->cache[$tableStr];
     $sort_field = isset($descMap['sort_column'])? $descMap['sort_column']: '';
     $json_field = isset($descMap['json_column'])? $descMap['json_column']: '';
+
+    $transaction = $this->xibdb_begin();
 
     // decode remaining ambiguous arguments
     $params = array();
@@ -856,10 +863,12 @@ class XibDb {
         $qr = &$this->mysql_query($q, $params);
         $this->mysql_free_query($qr);
       } catch (Exception $e) {
-        $this->fail($e, $q);
+        $this->fail($e, $q, $transaction);
         return null;
       }
     }
+
+    $this->xibdb_commit($transaction);
 
     // check constraints
     if ($this->checkConstraints) {
@@ -1010,6 +1019,8 @@ class XibDb {
       $andStr .= ' `' . $sort_field . '`=' . $nInt;
     }
 
+    $transaction = $this->xibdb_begin();
+
     // get the number of rows_affected and save values
     $q = 'SELECT * FROM `' . $tableStr . '`' . $whereStr . $andStr . $orderByStr . ';';
     $params = array();
@@ -1121,10 +1132,12 @@ class XibDb {
         $qr = &$this->mysql_query($q, $params);
         $this->mysql_free_query($qr);
       } catch (Exception $e) {
-        $this->fail($e, $q);
+        $this->fail($e, $q, $transaction);
         return null;
       }
     }
+
+    $this->xibdb_commit($transaction);
 
     // check constraints
     if ($this->checkConstraints) {
@@ -1244,6 +1257,8 @@ class XibDb {
       }
     }
 
+    $transaction = $this->xibdb_begin();
+
     // get the length of the array
     $q = 'SELECT `' . $sort_field . '` FROM `' . $tableStr . '`' . $whereStr . $orderByStr . $limitStr . ';';
     $params = array();
@@ -1312,10 +1327,12 @@ class XibDb {
         $qr = &$this->mysql_query($q, $params);
         $this->mysql_free_query($qr);
       } catch (Exception $e) {
-        $this->fail($e, $q);
+        $this->fail($e, $q, $transaction);
         return null;
       }
     }
+
+    $this->xibdb_commit($transaction);
 
     // check constraints
     if ($this->checkConstraints) {
@@ -1578,6 +1595,47 @@ class XibDb {
   }
 
   /**
+   * Begin a database transaction.
+   *
+   * @author DanielWHoward
+   */
+  function xibdb_begin() {
+    $transaction = null;
+    if (!$this->autoCommit) {
+      if (isset($this->config['mysqli'])) {
+        $link_identifier = &$this->config['mysqli']['link'];
+        $begun = mysqli_begin_transaction($link_identifier);
+        if ($begun) {
+          $transaction = $link_identifier;
+        } else {
+          $e = 'xibdb_begin() failed: ' . mysqli_error($link_identifier);
+          $this->fail($e);
+        }
+      }
+    }
+    return $transaction;
+  }
+
+  /**
+   * Commit a database transaction.
+   *
+   * @author DanielWHoward
+   */
+  function xibdb_commit($transaction) {
+    $committed = true;
+    if (!$this->autoCommit && $transaction) {
+      if (isset($this->config['mysqli'])) {
+        $committed = mysqli_commit($transaction);
+        if (!$committed) {
+          $e = 'xibdb_commit() failed: ' . mysqli_error($transaction);
+          $this->fail($e);
+        }
+      }
+    }
+    return $committed;
+  }
+
+  /**
    * Return query string with argument map appied.
    *
    * An argument map allows the caller to specify his
@@ -1619,6 +1677,25 @@ class XibDb {
       $query = str_replace($name, $valueStr, $query);
     }
     return $query;
+  }
+
+  /**
+   * Roll back a database transaction.
+   *
+   * @author DanielWHoward
+   */
+  function xibdb_rollback($transaction) {
+    $rolledBack = true;
+    if (!$this->autoCommit && $transaction) {
+      if (isset($this->config['mysqli'])) {
+        $rolledBack = mysqli_rollback($transaction);
+        if (!$rolledBack) {
+          $e = 'xibdb_rollback() failed: ' . mysqli_error($transaction);
+          $this->fail($e);
+        }
+      }
+    }
+    return $rolledBack;
   }
 
   /**
@@ -2001,9 +2078,12 @@ class XibDb {
    *
    * @author DanielWHoward
    */
-  function fail($e, $q='') {
+  function fail($e, $q='', $transaction=null) {
     if ($q !== '') {
       $this->log->println('E:' . $q);
+    }
+    if ($transaction !== null) {
+      $this->xibdb_rollback($transaction);
     }
     throw new Exception($e);
   }

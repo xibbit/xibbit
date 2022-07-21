@@ -52,6 +52,7 @@ var crypto = require('crypto');
     this.cache = {};
     this.mapBool = true;
     this.checkConstraints = false;
+    this.autoCommit = config.autoCommit || true;
     this.dryRun = false;
     this.dumpSql = false;
     this.opt = true;
@@ -106,7 +107,7 @@ var crypto = require('crypto');
         e = that.checkJsonColumnConstraint(querySpec, whereSpec);
       }
       if (e !== null) {
-        return that.fail(e, 'pre-check', '', callback);
+        return that.fail(e, 'pre-check', '', null, callback);
       }
     }
 
@@ -408,7 +409,7 @@ var crypto = require('crypto');
 //        e = that.checkJsonColumnConstraint(querySpec, whereSpec);
 //      }
 //      if (e !== null) {
-//        return that.fail(e, 'pre-check', '', callback);
+//        return that.fail(e, 'pre-check', '', null, callback);
 //      }
 //    }
 
@@ -432,7 +433,7 @@ var crypto = require('crypto');
       var q = 'DESCRIBE `' + tableStr + '`;';
       this.mysql_query(q, {}, function(e, rows, f) {
         if (e) {
-          return that.fail(e, '', q, callback);
+          return that.fail(e, '', q, null, callback);
         }
         for (var r=0; r < rows.length; ++r) {
           var rowdesc = rows[r];
@@ -483,7 +484,7 @@ var crypto = require('crypto');
 //            e = that.checkJsonColumnConstraint(querySpec, whereSpec);
 //          }
 //          if (e !== null) {
-//            return that.fail(e, 'post-check', '', callback);
+//            return that.fail(e, 'post-check', '', null, callback);
 //          }
 //        }
 
@@ -560,7 +561,7 @@ var crypto = require('crypto');
         e = that.checkJsonColumnConstraint(querySpec, whereSpec);
       }
       if (e !== null) {
-        return that.fail(e, 'pre-check', '', callback);
+        return that.fail(e, 'pre-check', '', null, callback);
       }
     }
 
@@ -660,6 +661,8 @@ var crypto = require('crypto');
         limitStr = ' LIMIT 1';
       }
 
+      that.xibdb_begin(function(e, transaction) {
+
       var qa = [];
       var params = {};
 
@@ -706,7 +709,7 @@ var crypto = require('crypto');
                 nInt = 0;
               }
               if (nInt > nLen) {
-                return that.fail(null, '`n` value out of range', q, callback);
+                return that.fail(null, '`n` value out of range', q, null, callback);
               }
 
               // add sort field to sqlValuesMap
@@ -765,6 +768,8 @@ var crypto = require('crypto');
             valuesMap[auto_increment_field] = that.mysql_insert_id(qr);
           }
 
+          that.xibdb_commit(transaction, function(e, transaction) {
+
           // check constraints
           if (that.checkConstraints) {
             e = that.checkSortColumnConstraint(querySpec, whereSpec);
@@ -772,11 +777,13 @@ var crypto = require('crypto');
               e = that.checkJsonColumnConstraint(querySpec, whereSpec);
             }
             if (e !== null) {
-              return that.fail(e, 'post-check', '', callback);
+              return that.fail(e, 'post-check', '', null, callback);
             }
           }
 
           callback(null, valuesMap);
+          });
+        });
         });
       });
     });
@@ -856,7 +863,7 @@ var crypto = require('crypto');
         e = that.checkJsonColumnConstraint(querySpec, whereSpec);
       }
       if (e !== null) {
-        return that.fail(e, 'pre-check', '', callback);
+        return that.fail(e, 'pre-check', '', null, callback);
       }
     }
 
@@ -893,6 +900,8 @@ var crypto = require('crypto');
       var descMap = that.cache[tableStr];
       var sort_field = descMap.sort_column || '';
       var json_field = descMap.json_column || '';
+
+      that.xibdb_begin(function(e, transaction) {
 
       // decode remaining ambiguous arguments
       var params = {};
@@ -956,7 +965,7 @@ var crypto = require('crypto');
             var q = 'SELECT COUNT(*) AS num_rows FROM `' + tableStr + '`' + whereStr + andStr + orderByStr + ';';
             that.mysql_query(q, {}, function(e, rows) {
               if (e) {
-                return that.fail(e, '', q, callback);
+                return that.fail(e, '', q, null, callback);
               }
               var num_rows = 0;
               for (var r=0; r < rows.length; ++r) {
@@ -993,7 +1002,7 @@ var crypto = require('crypto');
                   promise.resolve(true);
                 });
               } else {
-                return that.fail(null, 'xibdb.DeleteRow():num_rows:' + num_rows, '', callback);
+                return that.fail(null, 'xibdb.DeleteRow():num_rows:' + num_rows, '', null, callback);
               }
             });
           }
@@ -1042,7 +1051,7 @@ var crypto = require('crypto');
                 }
                 that.mysql_free_query(rows);
                 if (nInt >= nLen) {
-                  return that.fail(null, '`n` value out of range', '', callback);
+                  return that.fail(null, '`n` value out of range', '', null, callback);
                 }
                 promise.resolve(true);
               });
@@ -1069,6 +1078,9 @@ var crypto = require('crypto');
             })(q));
           }
           promises.resolve(function() {
+
+            that.xibdb_commit(transaction, function(e, transaction) {
+
             // check constraints
             if (that.checkConstraints) {
               e = that.checkSortColumnConstraint(querySpec, whereSpec);
@@ -1076,12 +1088,14 @@ var crypto = require('crypto');
                 e = that.checkJsonColumnConstraint(querySpec, whereSpec);
               }
               if (e !== null) {
-                return that.fail(e, 'post-check', '', callback);
+                return that.fail(e, 'post-check', '', null, callback);
               }
             }
             callback(null, true);
+            });
           });
         });
+      });
       });
     });
   };
@@ -1163,7 +1177,7 @@ var crypto = require('crypto');
         e = that.checkJsonColumnConstraint(querySpec, whereSpec);
       }
       if (e !== null) {
-        return that.fail(e, 'pre-check', '', callback);
+        return that.fail(e, 'pre-check', '', null, callback);
       }
     }
 
@@ -1267,6 +1281,8 @@ var crypto = require('crypto');
         andStr += ' `' + sort_field + '`=' + nInt;
       }
 
+      that.xibdb_begin(function(e, transaction) {
+
       // get the number of rows_affected and save values
       q = 'SELECT * FROM `' + tableStr + '`' + whereStr + andStr + orderByStr + ';';
       var params = {};
@@ -1292,7 +1308,7 @@ var crypto = require('crypto');
                 throw 'JSON.parse() error';
               }
             } catch (e) {
-              return that.fail(e, '--' + row[json_field] + '-- value in `' + json_field + '` column in `' + tableStr + '` table; ' + e, q, callback);
+              return that.fail(e, '--' + row[json_field] + '-- value in `' + json_field + '` column in `' + tableStr + '` table; ' + e, q, null, callback);
             }
           }
           sqlRowMaps.push(rowValues);
@@ -1301,7 +1317,7 @@ var crypto = require('crypto');
 
         if (rows_affected === 0) {
           if (andStr === '') {
-            return that.fail(null, '0 rows affected', q, callback);
+            return that.fail(null, '0 rows affected', q, null, callback);
           } else {
             q = 'SELECT COUNT(*) AS rows_affected FROM `' + tableStr + '`' + whereStr + ';';
             that.mysql_query(q, {}, function(e, rows) {
@@ -1316,12 +1332,12 @@ var crypto = require('crypto');
               } else {
                 e = '0 rows affected';
               }
-              return that.fail(null, e, q, callback);
+              return that.fail(null, e, q, null, callback);
             });
           }
           return;
         } else if ((limitInt !== -1) && (rows_affected > limitInt)) {
-          return that.fail(null, '' + rows_affected + ' rows affected but limited to ' + limitInt + ' rows', q, callback);
+          return that.fail(null, '' + rows_affected + ' rows affected but limited to ' + limitInt + ' rows', q, null, callback);
         }
 
         var qa = [];
@@ -1419,6 +1435,9 @@ var crypto = require('crypto');
             })(q));
           }
           promises.resolve(function() {
+
+            that.xibdb_commit(transaction, function(e, transaction) {
+
             // check constraints
             if (that.checkConstraints) {
               e = that.checkSortColumnConstraint(querySpec, whereSpec);
@@ -1426,12 +1445,14 @@ var crypto = require('crypto');
                 e = that.checkJsonColumnConstraint(querySpec, whereSpec);
               }
               if (e !== null) {
-                return that.fail(e, 'post-check', '', callback);
+                return that.fail(e, 'post-check', '', null, callback);
               }
             }
             callback(null, true);
+            });
           });
         });
+      });
       });
     });
   };
@@ -1513,7 +1534,7 @@ var crypto = require('crypto');
         e = that.checkJsonColumnConstraint(querySpec, whereSpec);
       }
       if (e !== null) {
-        return that.fail(e, 'pre-check', '', callback);
+        return that.fail(e, 'pre-check', '', null, callback);
       }
     }
 
@@ -1557,12 +1578,12 @@ var crypto = require('crypto');
       if (sort_field !== '') {
         orderByStr = ' ORDER BY `' + sort_field + '` DESC';
       } else {
-        return that.fail('', tableStr + ' does not have a sort_field', '', callback);
+        return that.fail('', tableStr + ' does not have a sort_field', '', null, callback);
       }
       var limitStr = ' LIMIT 1';
 
       if (m === n) {
-        return that.fail('', '`m` and `n` are the same so nothing to do', '', callback);
+        return that.fail('', '`m` and `n` are the same so nothing to do', '', null, callback);
       }
 
       // decode remaining ambiguous arguments
@@ -1583,6 +1604,8 @@ var crypto = require('crypto');
         }
       }
 
+      that.xibdb_begin(function(e, transaction) {
+
       // get the length of the array
       var q = 'SELECT `' + sort_field + '` FROM `' + tableStr + '`' + whereStr + orderByStr + limitStr + ';';
       var params = {};
@@ -1594,10 +1617,10 @@ var crypto = require('crypto');
         }
         that.mysql_free_query(rows);
         if ((m < 0) || (m >= nLen)) {
-          return that.fail(null, '`m` value out of range', q, callback);
+          return that.fail(null, '`m` value out of range', q, null, callback);
         }
         if ((n < 0) || (n >= nLen)) {
-          return that.fail(null, '`n` value out of range', q, callback);
+          return that.fail(null, '`n` value out of range', q, null, callback);
         }
 
         var qa = [];
@@ -1658,6 +1681,9 @@ var crypto = require('crypto');
           })(q));
         }
         promises.resolve(function() {
+
+          that.xibdb_commit(transaction, function(e, transaction) {
+
           // check constraints
           if (that.checkConstraints) {
             e = that.checkSortColumnConstraint(querySpec, whereSpec);
@@ -1665,12 +1691,14 @@ var crypto = require('crypto');
               e = that.checkJsonColumnConstraint(querySpec, whereSpec);
             }
             if (e !== null) {
-              return that.fail(e, 'post-check', '', callback);
+              return that.fail(e, 'post-check', '', null, callback);
             }
           }
 
           callback(null, true);
+          });
         });
+      });
       });
     });
   };
@@ -1755,9 +1783,9 @@ var crypto = require('crypto');
         } else if (that.mapBool && (typeof aValue === 'boolean')) {
           var valueBool = !!aValue;
           if (valueBool) {
-            aValue = '1';
+            aValue = 1;
           } else {
-            aValue = '0';
+            aValue = 0;
           }
         } else if (Object.prototype.toString.call(aValue) === '[object Date]') {
           aValue = aValue.toISOString().slice(0, 19).replace('T', ' ');
@@ -1903,6 +1931,29 @@ var crypto = require('crypto');
   };
 
   /**
+   * Begin a database transaction.
+   *
+   * @author DanielWHoward
+   */
+  XibDb.prototype.xibdb_begin = function(callback) {
+    var e = null;
+    var transaction = {};
+
+    callback(e, transaction);
+  };
+
+  /**
+   * Commit a database transaction.
+   *
+   * @author DanielWHoward
+   */
+  XibDb.prototype.xibdb_commit = function(transaction, callback) {
+    var e = null;
+
+    callback(e);
+  };
+
+  /**
    * Return query string with argument map appied.
    *
    * An argument map allows the caller to specify his
@@ -1951,6 +2002,18 @@ var crypto = require('crypto');
     }
     return query;
   }
+
+  /**
+   * Roll back a database transaction.
+   *
+   * @author DanielWHoward
+   */
+  XibDb.prototype.xibdb_rollback = function(transaction, callback) {
+    var e = null;
+    var rolledBack = true;
+
+    callback(e, rolledBack);
+  };
 
   /**
    * Return true if the data in a table, optionally
@@ -2253,14 +2316,23 @@ var crypto = require('crypto');
    *
    * @author DanielWHoward
    */
-  XibDb.prototype.fail = function(ex, eStr, q, callback) {
+  XibDb.prototype.fail = function(ex, eStr, q, transaction, callback) {
     var that = this;
     q = q || '';
+    transaction = transaction || null;
     if (q !== '') {
       that.log.println('E:' + q);
     }
-    eStr = eStr || ex.toString();
-    return callback(eStr);
+    if (transaction !== null) {
+      return this.xibdb_rollback(transaction, function(e) {
+        that.log.println('xibdb_rollback() failed:' + e.toString());
+        eStr = eStr || ex.toString();
+        return callback(eStr);
+      });
+    } else {
+      eStr = eStr || ex.toString();
+      return callback(eStr);
+    }
   };
 
 // constructor is the module
