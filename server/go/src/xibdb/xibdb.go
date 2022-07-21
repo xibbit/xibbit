@@ -58,6 +58,7 @@ type XibDb struct {
 	config           map[string]interface{}
 	cache            map[string]interface{}
 	CheckConstraints bool
+	AutoCommit       bool
 	DryRun           bool
 	DumpSql          bool
 	MapBool          bool
@@ -82,6 +83,11 @@ func NewXibDb(config map[string]interface{}) *XibDb {
 	self.cache = map[string]interface{}{}
 	self.MapBool = true
 	self.CheckConstraints = false
+	if obj, ok := config["autoCommit"].(bool); ok {
+		self.AutoCommit = obj
+	} else {
+		self.AutoCommit = true
+	}
 	self.DryRun = false
 	self.DumpSql = false
 	self.Opt = true
@@ -125,7 +131,7 @@ func (that XibDb) ReadRowsNative(querySpec interface{}, whereSpec interface{}, c
 			e = that.CheckJsonColumnConstraint(querySpec, whereSpec)
 		}
 		if e != nil {
-			return nil, that.Fail(e, "pre-check: " + e.Error(), "")
+			return nil, that.Fail(e, "pre-check: " + e.Error(), "", nil)
 		}
 	}
 
@@ -333,7 +339,7 @@ func (that XibDb) ReadRowsNative(querySpec interface{}, whereSpec interface{}, c
 			e = that.CheckJsonColumnConstraint(querySpec, whereSpec)
 		}
 		if e != nil {
-			return nil, that.Fail(e, "post-check: " + e.Error(), "")
+			return nil, that.Fail(e, "post-check: " + e.Error(), "", nil)
 		}
 	}
 
@@ -372,7 +378,7 @@ func (that XibDb) ReadDescNative(querySpec interface{}) (desc map[string]interfa
 //	if that.CheckConstraints {
 //		e = that.CheckJsonColumnConstraint(querySpec, nil)
 //		if e != nil {
-//			return nil, that.Fail(e, "pre-check: " + e.Error(), "")
+//			return nil, that.Fail(e, "pre-check: " + e.Error(), "", nil)
 //		}
 //	}
 
@@ -395,7 +401,7 @@ func (that XibDb) ReadDescNative(querySpec interface{}) (desc map[string]interfa
 		params := map[string]interface{}{}
 		rows, e, _ := that.Mysql_query(q, params)
 		if e != nil {
-			return nil, that.Fail(e, "", q)
+			return nil, that.Fail(e, "", q, nil)
 		}
 		for rowdesc := that.Mysql_fetch_assoc(rows); rowdesc != nil; rowdesc = that.Mysql_fetch_assoc(rows) {
 			field, _ := rowdesc["Field"].(string)
@@ -445,7 +451,7 @@ func (that XibDb) ReadDescNative(querySpec interface{}) (desc map[string]interfa
 //	if that.CheckConstraints {
 //		e = that.CheckJsonColumnConstraint(querySpec, nil)
 //		if e != nil {
-//			return nil, that.Fail(e, "post-check: " + e.Error(), "")
+//			return nil, that.Fail(e, "post-check: " + e.Error(), "", nil)
 //		}
 //	}
 
@@ -490,7 +496,7 @@ func (that XibDb) InsertRowNative(querySpec interface{}, whereSpec interface{}, 
 			e = that.CheckJsonColumnConstraint(querySpec, whereSpec)
 		}
 		if e != nil {
-			return nil, that.Fail(e, "pre-check: " + e.Error(), "")
+			return nil, that.Fail(e, "pre-check: " + e.Error(), "", nil)
 		}
 	}
 
@@ -583,6 +589,8 @@ func (that XibDb) InsertRowNative(querySpec interface{}, whereSpec interface{}, 
 		limitStr = " LIMIT 1"
 	}
 
+	transaction, _ := that.Xibdb_begin()
+
 	qa := []string{}
 	params := map[string]interface{}{}
 
@@ -592,7 +600,7 @@ func (that XibDb) InsertRowNative(querySpec interface{}, whereSpec interface{}, 
 		q := "SELECT `" + sort_field + "` FROM `" + tableStr + "`" + whereStr + orderByStr + limitStr + ";"
 		qr_reorder, e, _ := that.Mysql_query(q, params)
 		if e != nil {
-			return nil, that.Fail(e, "", q)
+			return nil, that.Fail(e, "", q, transaction)
 		}
 		for row := that.Mysql_fetch_assoc(qr_reorder); row != nil; row = that.Mysql_fetch_assoc(qr_reorder) {
 			nValue := intval(row[sort_field])
@@ -628,7 +636,7 @@ func (that XibDb) InsertRowNative(querySpec interface{}, whereSpec interface{}, 
 			nInt = 0
 		}
 		if nInt > nLen {
-			return nil, that.Fail(e, "`n` value out of range", q)
+			return nil, that.Fail(e, "`n` value out of range", q, nil)
 		}
 
 		// add sort field to sqlValuesMap
@@ -658,24 +666,34 @@ func (that XibDb) InsertRowNative(querySpec interface{}, whereSpec interface{}, 
 	q := "INSERT INTO `" + tableStr + "`" + valuesStr + ";"
 	qa = append(qa, q)
 
-	var result *sql.Result = nil
+	var qr *sql.Result = nil
+
 	for _, q := range qa {
-		if strings.HasPrefix(q, "INSERT INTO ") {
-			result, e, _ = that.Mysql_exec(q, params)
+		var rows* sql.Rows = nil
+		isInsert := strings.HasPrefix(q, "INSERT INTO ")
+		if isInsert {
+			qr, e, _ = that.Mysql_exec(q, params)
 		} else {
-			rows, _, _ := that.Mysql_query(q, params)
+			rows, e, _ = that.Mysql_query(q, params)
+		}
+		if e != nil {
+			return nil, that.Fail(e, "", q, transaction)
+		}
+		if !isInsert {
 			that.Mysql_free_query(rows)
 		}
 	}
 
-	if (auto_increment_field != "") && (valuesMap != nil) && (result != nil) {
-		valuesMap[auto_increment_field], e = that.Mysql_insert_id(result)
+	if (auto_increment_field != "") && (valuesMap != nil) && (qr != nil) {
+		valuesMap[auto_increment_field], e = that.Mysql_insert_id(qr)
 		if e != nil {
-			return nil, that.Fail(e, "", q)
+			return nil, that.Fail(e, "", q, transaction)
 		}
 	}
 
-	that.Mysql_free_exec(result)
+	that.Mysql_free_exec(qr)
+
+	that.Xibdb_commit(transaction)
 
 	// check constraints
 	if that.CheckConstraints {
@@ -684,7 +702,7 @@ func (that XibDb) InsertRowNative(querySpec interface{}, whereSpec interface{}, 
 			e = that.CheckJsonColumnConstraint(querySpec, whereSpec)
 		}
 		if e != nil {
-			return nil, that.Fail(e, "post-check: " + e.Error(), "")
+			return nil, that.Fail(e, "post-check: " + e.Error(), "", nil)
 		}
 	}
 
@@ -728,7 +746,7 @@ func (that XibDb) DeleteRowNative(querySpec interface{}, whereSpec interface{}, 
 			e = that.CheckJsonColumnConstraint(querySpec, whereSpec)
 		}
 		if e != nil {
-			return that.Fail(e, "pre-check: " + e.Error(), "")
+			return that.Fail(e, "pre-check: " + e.Error(), "", nil)
 		}
 	}
 
@@ -763,6 +781,8 @@ func (that XibDb) DeleteRowNative(querySpec interface{}, whereSpec interface{}, 
 	that.DumpSql = dumpSql
 	descMap := that.cache[tableStr].(map[string]interface{})
 	sort_field, _ := descMap["sort_column"].(string)
+
+	transaction, _ := that.Xibdb_begin()
 
 	// decode remaining ambiguous arguments
 	params := map[string]interface{}{}
@@ -813,7 +833,7 @@ func (that XibDb) DeleteRowNative(querySpec interface{}, whereSpec interface{}, 
 		q := "SELECT COUNT(*) AS num_rows FROM `" + tableStr + "`" + whereStr + andStr + orderByStr + ";"
 		qr, e, _ := that.Mysql_query(q, params)
 		if e != nil {
-			return that.Fail(e, "", q)
+			return that.Fail(e, "", q, transaction)
 		}
 		num_rows := 0
 		for qr.Next() {
@@ -846,7 +866,7 @@ func (that XibDb) DeleteRowNative(querySpec interface{}, whereSpec interface{}, 
 			}
 			andStr += "`" + sort_field + "`=" + strconv.Itoa(nInt)
 		} else {
-			return that.Fail(nil, "xibdb.DeleteRow():num_rows:" + strconv.Itoa(num_rows), q)
+			return that.Fail(nil, "xibdb.DeleteRow():num_rows:" + strconv.Itoa(num_rows), q, transaction)
 		}
 		that.Mysql_free_query(qr)
 	}
@@ -865,7 +885,7 @@ func (that XibDb) DeleteRowNative(querySpec interface{}, whereSpec interface{}, 
 		q := "SELECT `" + sort_field + "` FROM `" + tableStr + "`" + whereStr + orderByStr + limitStr + ";"
 		qr_reorder, e, _ := that.Mysql_query(q, params)
 		if e != nil {
-			return that.Fail(e, "", q)
+			return that.Fail(e, "", q, transaction)
 		}
 		for row := that.Mysql_fetch_assoc(qr_reorder); row != nil; row = that.Mysql_fetch_assoc(qr_reorder) {
 			nValue := intval(row[sort_field])
@@ -892,7 +912,7 @@ func (that XibDb) DeleteRowNative(querySpec interface{}, whereSpec interface{}, 
 		}
 		that.Mysql_free_query(qr_reorder)
 		if nInt >= nLen {
-			return that.Fail(nil, "`n` value out of range", q)
+			return that.Fail(nil, "`n` value out of range", q, nil)
 		}
 	}
 
@@ -903,9 +923,11 @@ func (that XibDb) DeleteRowNative(querySpec interface{}, whereSpec interface{}, 
 		rows, e, _ := that.Mysql_query(q, params)
 		that.Mysql_free_query(rows)
 		if e != nil {
-			return that.Fail(e, "", q)
+			return that.Fail(e, "", q, transaction)
 		}
 	}
+
+	that.Xibdb_commit(transaction)
 
 	// check constraints
 	if that.CheckConstraints {
@@ -914,7 +936,7 @@ func (that XibDb) DeleteRowNative(querySpec interface{}, whereSpec interface{}, 
 			e = that.CheckJsonColumnConstraint(querySpec, whereSpec)
 		}
 		if e != nil {
-			return that.Fail(e, "post-check: " + e.Error(), "")
+			return that.Fail(e, "post-check: " + e.Error(), "", nil)
 		}
 	}
 
@@ -950,7 +972,7 @@ func (that XibDb) UpdateRowNative(querySpec interface{}, whereSpec interface{}, 
 			e = that.CheckJsonColumnConstraint(querySpec, whereSpec)
 		}
 		if e != nil {
-			return nil, that.Fail(e, "pre-check: " + e.Error(), "")
+			return nil, that.Fail(e, "pre-check: " + e.Error(), "", nil)
 		}
 	}
 
@@ -1049,12 +1071,14 @@ func (that XibDb) UpdateRowNative(querySpec interface{}, whereSpec interface{}, 
 		andStr += " `" + sort_field + "`=" + strconv.Itoa(nInt)
 	}
 
+	transaction, _ := that.Xibdb_begin()
+
 	// get the number of rows_affected and save values
 	q := "SELECT * FROM `" + tableStr + "`" + whereStr + andStr + orderByStr + ";"
 	params := map[string]interface{}{}
 	qr, e, _ := that.Mysql_query(q, params)
 	if e != nil {
-		return nil, that.Fail(e, "", q)
+		return nil, that.Fail(e, "", q, transaction)
 	}
 	rows_affected := 0
 	sqlRowMaps := []map[string]interface{}{}
@@ -1070,7 +1094,7 @@ func (that XibDb) UpdateRowNative(querySpec interface{}, whereSpec interface{}, 
 			jsonRowMap := map[string]interface{}{}
 			e = json.Unmarshal([]byte(jsonValue), &jsonRowMap)
 			if e != nil {
-				return nil, that.Fail(e, "\"" + that.Mysql_real_escape_string(row[json_field].(string)) + "\" value in `" + json_field + "` column in `" + tableStr + "` table; " + e.Error(), q)
+				return nil, that.Fail(e, "\"" + that.Mysql_real_escape_string(row[json_field].(string)) + "\" value in `" + json_field + "` column in `" + tableStr + "` table; " + e.Error(), q, transaction)
 			}
 		}
 		sqlRowMaps = append(sqlRowMaps, rowValues)
@@ -1079,7 +1103,7 @@ func (that XibDb) UpdateRowNative(querySpec interface{}, whereSpec interface{}, 
 
 	if rows_affected == 0 {
 		if andStr == "" {
-			return nil, that.Fail(nil, "0 rows affected", q)
+			return nil, that.Fail(nil, "0 rows affected", q, nil)
 		}
 		q = "SELECT COUNT(*) AS rows_affected FROM `" + tableStr + "`" + whereStr + ";"
 		qr, _, _ = that.Mysql_query(q, params)
@@ -1088,13 +1112,13 @@ func (that XibDb) UpdateRowNative(querySpec interface{}, whereSpec interface{}, 
 		}
 		that.Mysql_free_query(qr)
 		if rows_affected > 0 {
-			return nil, that.Fail(nil, "`n` value out of range", q)
+			return nil, that.Fail(nil, "`n` value out of range", "", nil)
 		} else {
-			return nil, that.Fail(nil, "0 rows affected", q)
+			return nil, that.Fail(nil, "0 rows affected", "", nil)
 		}
 		return nil, e
 	} else if (limitInt != -1) && (rows_affected > limitInt) {
-		return nil, that.Fail(nil, strconv.Itoa(rows_affected) + " rows affected but limited to " + strconv.Itoa(limitInt) + " rows", q)
+		return nil, that.Fail(nil, strconv.Itoa(rows_affected) + " rows affected but limited to " + strconv.Itoa(limitInt) + " rows", "", nil)
 	}
 
 	qa := []string{}
@@ -1157,10 +1181,12 @@ func (that XibDb) UpdateRowNative(querySpec interface{}, whereSpec interface{}, 
 	for _, q := range qa {
 		rows, e, _ := that.Mysql_query(q, params)
 		if e != nil {
-			return nil, that.Fail(e, "", q)
+			return nil, that.Fail(e, "", q, transaction)
 		}
 		that.Mysql_free_query(rows)
 	}
+
+	that.Xibdb_commit(transaction)
 
 	// check constraints
 	if that.CheckConstraints {
@@ -1169,7 +1195,7 @@ func (that XibDb) UpdateRowNative(querySpec interface{}, whereSpec interface{}, 
 			e = that.CheckJsonColumnConstraint(querySpec, whereSpec)
 		}
 		if e != nil {
-			return nil, that.Fail(e, "post-check: " + e.Error(), "")
+			return nil, that.Fail(e, "post-check: " + e.Error(), "", nil)
 		}
 	}
 
@@ -1213,7 +1239,7 @@ func (that XibDb) MoveRowNative(querySpec interface{}, whereSpec interface{}, mS
 			e = that.CheckJsonColumnConstraint(querySpec, whereSpec)
 		}
 		if e != nil {
-			return that.Fail(e, "pre-check: " + e.Error(), "")
+			return that.Fail(e, "pre-check: " + e.Error(), "", nil)
 		}
 	}
 
@@ -1255,12 +1281,12 @@ func (that XibDb) MoveRowNative(querySpec interface{}, whereSpec interface{}, mS
 	if sort_field != "" {
 		orderByStr = " ORDER BY `" + sort_field + "` DESC"
 	} else {
-		return that.Fail(nil, tableStr + " does not have a sort_field", "")
+		return that.Fail(nil, tableStr + " does not have a sort_field", "", nil)
 	}
 	limitStr := " LIMIT 1"
 
 	if m == n {
-		return that.Fail(nil, "`m` and `n` are the same so nothing to do", "")
+		return that.Fail(nil, "`m` and `n` are the same so nothing to do", "", nil)
 	}
 
 	// decode remaining ambiguous arguments
@@ -1280,12 +1306,14 @@ func (that XibDb) MoveRowNative(querySpec interface{}, whereSpec interface{}, mS
 		}
 	}
 
+	transaction, _ := that.Xibdb_begin()
+
 	// get the length of the array
 	q := "SELECT `" + sort_field + "` FROM `" + tableStr + "`" + whereStr + orderByStr + limitStr + ";"
 	params := map[string]interface{}{}
 	qr_end, e, _ := that.Mysql_query(q, params)
 	if e != nil {
-		return that.Fail(e, "", q)
+		return that.Fail(e, "", q, transaction)
 	}
 	nLen := 0
 	if row := that.Mysql_fetch_assoc(qr_end); row != nil {
@@ -1293,10 +1321,10 @@ func (that XibDb) MoveRowNative(querySpec interface{}, whereSpec interface{}, mS
 	}
 	that.Mysql_free_query(qr_end)
 	if (m < 0) || (m >= nLen) {
-		return that.Fail(nil, "`m` value out of range", q)
+		return that.Fail(nil, "`m` value out of range", q, nil)
 	}
 	if (n < 0) || (n >= nLen) {
-		return that.Fail(nil, "`n` value out of range", q)
+		return that.Fail(nil, "`n` value out of range", q, nil)
 	}
 
 	qa := []string{}
@@ -1345,10 +1373,12 @@ func (that XibDb) MoveRowNative(querySpec interface{}, whereSpec interface{}, mS
 	for _, q := range qa {
 		rows, e, _ := that.Mysql_query(q, params)
 		if e != nil {
-			return that.Fail(e, "", q)
+			return that.Fail(e, "", q, transaction)
 		}
 		that.Mysql_free_query(rows)
 	}
+
+	that.Xibdb_commit(transaction)
 
 	// check constraints
 	if that.CheckConstraints {
@@ -1357,7 +1387,7 @@ func (that XibDb) MoveRowNative(querySpec interface{}, whereSpec interface{}, mS
 			e = that.CheckJsonColumnConstraint(querySpec, whereSpec)
 		}
 		if e != nil {
-			return that.Fail(e, "post-check: " + e.Error(), "")
+			return that.Fail(e, "post-check: " + e.Error(), "", nil)
 		}
 	}
 
@@ -1396,6 +1426,12 @@ func (that XibDb) Mysql_query(query string, a map[string]interface{}) (rows *sql
 					jsonStr = "{}"
 				}
 				aValue = jsonStr
+			} else if valueBool, ok := aValue.(bool); that.MapBool && ok {
+				if valueBool {
+					aValue = 1
+				} else {
+					aValue = 0
+				}
 			}
 			paramTypes += "s"
 			paramValues = append(paramValues, aValue)
@@ -1593,6 +1629,24 @@ func (that XibDb) Mysql_insert_id(result *sql.Result) (int, error) {
 }
 
 /**
+ * Begin a database transaction.
+ *
+ * @author DanielWHoward
+ */
+func (that XibDb) Xibdb_begin() (transaction interface{}, e error) {
+	return
+}
+
+/**
+ * Commit a database transaction.
+ *
+ * @author DanielWHoward
+ */
+func (that XibDb) Xibdb_commit(transaction interface{}) (e error) {
+	return
+}
+
+/**
  * Return query string with argument map appied.
  *
  * An argument map allows the caller to specify his
@@ -1641,6 +1695,15 @@ func (that XibDb) Xibdb_flatten_query(query string, a map[string]interface{}) st
 		query = strings.ReplaceAll(query, name, valueStr)
 	}
 	return query
+}
+
+/**
+ * Roll back a database transaction.
+ *
+ * @author DanielWHoward
+ */
+func (that XibDb) Xibdb_rollback(transaction interface{}) (e error) {
+	return
 }
 
 /**
@@ -2035,9 +2098,12 @@ func (that XibDb) Println(s string) {
  *
  * @author DanielWHoward
  */
-func (that XibDb) Fail(ex error, eStr string, q string) (e error) {
+func (that XibDb) Fail(ex error, eStr string, q string, transaction interface{}) (e error) {
 	if q != "" {
 		that.log.Println("E:" + q)
+	}
+	if transaction != nil {
+		that.Xibdb_rollback(transaction)
 	}
 	if ex == nil {
 		if eStr == "" {
