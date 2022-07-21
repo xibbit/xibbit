@@ -32,7 +32,6 @@ import (
 	"errors"
 	"fmt"
 	"log"
-	"sort"
 	"reflect"
 	"strconv"
 	"strings"
@@ -1036,6 +1035,7 @@ func (that XibDb) UpdateRowNative(querySpec interface{}, whereSpec interface{}, 
 			}
 		}
 	}
+	updateJson := (json_field != "") && (len(jsonMap) > 0)
 	nInt, _ := n.(int)
 	limitInt, _ := limit.(int)
 	whereStr, _ := where.(string)
@@ -1045,11 +1045,6 @@ func (that XibDb) UpdateRowNative(querySpec interface{}, whereSpec interface{}, 
 	if (whereStr != "") && !strings.HasPrefix(whereStr, " ") {
 		whereStr = " WHERE " + whereStr
 	}
-	op_clause := " WHERE"
-	if whereStr != "" {
-		op_clause = " AND"
-	}
-	rows_affected := 0
 	andStr := ""
 	if (sort_field != "") && (nInt >= 0) {
 		andStr = " WHERE"
@@ -1059,14 +1054,30 @@ func (that XibDb) UpdateRowNative(querySpec interface{}, whereSpec interface{}, 
 		andStr += " `" + sort_field + "`=" + strconv.Itoa(nInt)
 	}
 
-	// get the number of rows_affected
-	q := "SELECT COUNT(*) AS rows_affected FROM `" + tableStr + "`" + whereStr + andStr + ";"
+	// get the number of rows_affected and save values
+	q := "SELECT * FROM `" + tableStr + "`" + whereStr + andStr + orderByStr + ";"
 	qr, e, _ := that.Mysql_query(q)
 	if e != nil {
 		return nil, that.Fail(e, "", q)
 	}
-	for qr.Next() {
-		qr.Scan(&rows_affected)
+	rows_affected := 0
+	sqlRowMaps := []map[string]interface{}{}
+	for row := that.Mysql_fetch_assoc(qr); row != nil; row = that.Mysql_fetch_assoc(qr) {
+		rows_affected++
+		rowValues := map[string]interface{}{}
+		for col, value := range row {
+			rowValues[col] = value
+		}
+		// test json_field contents for each affected row
+		if updateJson {
+			jsonValue, _ := row[json_field].(string)
+			jsonRowMap := map[string]interface{}{}
+			e = json.Unmarshal([]byte(jsonValue), &jsonRowMap)
+			if e != nil {
+				return nil, that.Fail(e, "\"" + that.Mysql_real_escape_string(row[json_field].(string)) + "\" value in `" + json_field + "` column in `" + tableStr + "` table; " + e.Error(), q)
+			}
+		}
+		sqlRowMaps = append(sqlRowMaps, rowValues)
 	}
 	that.Mysql_free_query(qr)
 
@@ -1097,101 +1108,47 @@ func (that XibDb) UpdateRowNative(querySpec interface{}, whereSpec interface{}, 
 		q := "UPDATE `" + tableStr + "`" + valuesStr + whereStr + andStr + ";"
 		qa = append(qa, q)
 	} else {
-		// get the contents of the json_field for each affected row
-		updateJson := (json_field != "") && (len(jsonMap) > 0)
-		jsonRowMaps := []map[string]interface{}{}
-		if !updateJson {
-			jsonRowMaps = append(jsonRowMaps, map[string]interface{}{})
-		} else {
-			jsonValue := ""
-			q = "SELECT `" + json_field + "` FROM `" + tableStr + "`" + whereStr + andStr + orderByStr + ";"
-			qr_reorder, _, _ := that.Mysql_query(q)
-			for row := that.Mysql_fetch_assoc(qr_reorder); (row != nil) && (e == nil); row = that.Mysql_fetch_assoc(qr_reorder) {
-				jsonValue = row[json_field].(string)
-				jsonRowMap := map[string]interface{}{}
-				e = json.Unmarshal([]byte(jsonValue), &jsonRowMap)
-				if e == nil {
-					jsonRowMaps = append(jsonRowMaps, jsonRowMap)
-				}
-			}
-			that.Mysql_free_query(qr_reorder)
-			if e != nil {
-				err := "\"" + that.Mysql_real_escape_string(jsonValue) + "\" value in `" + json_field + "` column in `" + tableStr + "` table; " + e.Error()
-				return nil, errors.New(err)
-			}
-		}
-		qIns := make([]queryUsingInKeyword, 0)
-		qInsMap := map[string]int{}
-		for _, jsonRowMap := range jsonRowMaps {
-			// copy freeform values into 'json' field
-			if updateJson {
-				sqlValuesMap[json_field] = arrayMerge(jsonRowMap, jsonMap)
-			}
-			// sort valuesMap keys
-			sqlValuesKeys := make([]string, 0, len(sqlValuesMap))
-			for key := range sqlValuesMap {
-				sqlValuesKeys = append(sqlValuesKeys, key)
-			}
-			sort.Strings(sqlValuesKeys)
-			// finally, generate values.(string) from valuesMap
-			valuesStr := ""
-			for _, col := range sqlValuesKeys {
-				value := sqlValuesMap[col]
-				if valuesStr != "" {
-					valuesStr += ","
-				}
-				valueStr := ""
-				if hasStringKeys(value) || hasNumericKeys(value) {
-					jsonBytes, _ := json.Marshal(value)
-					jsonStr := string(jsonBytes)
-					if (jsonStr == "") || (jsonStr == "[]") {
-						jsonStr = "{}"
+		for _, sqlRowMap := range sqlRowMaps {
+			// construct SET clause
+			valuesRow := " SET "
+			for col, oldValue := range sqlRowMap {
+				newValue := oldValue
+				if updateJson && (col == json_field) {
+					// figure out newValue for json_field
+					jsonValue, _ := oldValue.(string)
+					oldMap := map[string]interface{}{}
+					json.Unmarshal([]byte(jsonValue), &oldMap)
+					newMap := arrayMerge(oldMap, jsonMap)
+					newValueBytes, _ := json.Marshal(newMap)
+					newValue = string(newValueBytes)
+					if (newValue == "") || (newValue == "[]") {
+						newValue = "{}"
 					}
-					valueStr = "'" + that.Mysql_real_escape_string(jsonStr) + "'"
-				} else if  _, ok := value.(bool); ok {
-					valueBool, _ := value.(bool)
-					if valueBool {
-						valueStr = "1"
-					} else {
-						valueStr = "0"
+				} else if _, ok := sqlValuesMap[col]; ok {
+					newValue = fmt.Sprintf("%v", sqlValuesMap[col])
+				}
+				// add changed values to SET clause
+				if oldValue != newValue {
+					if valuesRow != " SET " {
+						valuesRow += ", "
 					}
-				} else if _, ok := value.(int); ok {
-					valueStr = strconv.Itoa(value.(int))
-				} else if value == nil {
-					valueStr = "NULL"
-				} else {
-					valueStr = "'" + that.Mysql_real_escape_string(value.(string)) + "'"
+					valuesRow += "`" + that.Mysql_real_escape_string(col) + "`='" + that.Mysql_real_escape_string(newValue.(string)) + "'"
 				}
-				valuesStr += "`" + that.Mysql_real_escape_string(col) + "`=" + valueStr
 			}
-			values = " SET " + valuesStr
-			// add a custom update for each row
-			if that.Opt && updateJson {
-				q := "UPDATE `" + tableStr + "`" + values.(string) + whereStr
-				if nInt == -1 {
-					q += ";"
-					qa = append(qa, q)
-				} else {
-					if _, ok := qInsMap[q]; ok {
-						qi := qInsMap[q]
-						qIns[qi].Values = append(qIns[qi].Values, nInt)
-					} else {
-						qIns = append(qIns, *newQueryUsingInKeyword(q, op_clause, sort_field, nInt))
-						qInsMap[q] = len(qIns) - 1
-					}
+			// construct WHERE clause
+			whereRow := " WHERE "
+			for col, value := range sqlRowMap {
+				if whereRow != " WHERE " {
+					whereRow += " AND "
 				}
-			} else {
-				op_and_clause := ""
-				if nInt >= 0 {
-					op_and_clause = op_clause + " `" + sort_field + "`=" + strconv.Itoa(nInt)
+				opStr := "="
+				if is_numeric(value) && is_float(desc[col]) {
+					opStr = " LIKE "
 				}
-				q := "UPDATE `" + tableStr + "`" + values.(string) + whereStr + op_and_clause + ";"
-				qa = append(qa, q)
+				whereRow += "`" + that.Mysql_real_escape_string(col) + "`" + opStr + "'" + that.Mysql_real_escape_string(fmt.Sprintf("%v", value)) + "'"
 			}
-		}
-		if that.Opt {
-			for _, qIn := range qIns {
-				q := qIn.getQuery()
+			if valuesRow != " SET " {
+				q = "UPDATE `" + tableStr + "`" + valuesRow + whereRow + " LIMIT 1;"
 				qa = append(qa, q)
 			}
 		}
@@ -1940,63 +1897,6 @@ func (that XibDb) Fail(ex error, eStr string, q string) (e error) {
 	that.log.Println(e.Error())
 	debug.PrintStack()
 	return
-}
-
-/**
- * Store values to create a query with the IN keyword.
- *
- * @version 0.0.9
- * @author DanielWHoward
- */
-type queryUsingInKeyword struct {
-	prefix    string
-	op_clause string
-	field     string
-	Values    []int
-}
-
-/**
- * Create an object to store values to create a query
- * with the IN keyword.
- *
- * @param prefix A string with most of the query.
- * @param value The first value for the IN clause.
- *
- * @author DanielWHoward
- */
-func newQueryUsingInKeyword(prefix string, op_clause string, field string, value int) *queryUsingInKeyword {
-	self := new(queryUsingInKeyword)
-	self.prefix = prefix
-	self.op_clause = op_clause
-	self.field = field
-	self.Values = make([]int, 0)
-	self.Values = append(self.Values, value)
-	return self
-}
-
-/**
- * Return a SQL string created from multiple values.
- *
- * @param op_clause A name, possibly unused.
- * @param sort_field An array with syntax specification.
- * @return A SQL syntax string.
- *
- * @author DanielWHoward
- */
-func (that queryUsingInKeyword) getQuery() string {
-	and_clause := ""
-	if len(that.Values) == 1 {
-		and_clause = " `" + that.field + "`=" + strconv.Itoa(that.Values[0])
-	} else {
-		for _, i := range that.Values {
-			if and_clause != "" {
-				and_clause += ", "
-			}
-			and_clause += strconv.Itoa(i)
-		}
-		and_clause = " `" + that.field + "` IN (" + and_clause + ")"
-	}
-	return that.prefix + that.op_clause + and_clause + ";"
 }
 
 /**

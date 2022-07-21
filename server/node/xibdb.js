@@ -1193,6 +1193,7 @@
           }
         }
       }
+      var updateJson = (json_field !== '') && (Object.keys(jsonMap).length > 0);
       var nInt = n;
       var limitInt = limit;
       var whereStr = where;
@@ -1203,22 +1204,44 @@
       if ((whereStr !== '') && !whereStr.startsWith(' ')) {
         whereStr = ' WHERE ' + whereStr;
       }
-      var op_clause = ' WHERE';
-      if (whereStr !== '') {
-        op_clause = ' AND';
-      }
       var andStr = '';
-      var rows_affected = 0;
       if ((sort_field !== '') && (nInt >= 0)) {
-        andStr = op_clause + ' `' + sort_field + '`=' + nInt;
+        andStr = ' WHERE';
+        if (whereStr !== '') {
+          andStr = ' AND';
+        }
+        andStr += ' `' + sort_field + '`=' + nInt;
       }
 
-      // get the number of rows_affected
-      q = 'SELECT COUNT(*) AS rows_affected FROM `' + tableStr + '`' + whereStr + andStr + ';';
+      // get the number of rows_affected and save values
+      q = 'SELECT * FROM `' + tableStr + '`' + whereStr + andStr + orderByStr + ';';
       that.mysql_query(q, function(e, rows) {
         var rows_affected = 0;
-        var row = rows[0];
-        rows_affected = row.rows_affected;
+        var sqlRowMaps = [];
+        for (var r=0; r < rows.length; ++r) {
+          var row = rows[r];
+          ++rows_affected;
+          rowValues = {};
+          for (var col in row) {
+            if (!row.hasOwnProperty(col)) {
+              continue;
+            }
+            rowValues[col] = row[col];
+          }
+          // test json_field contents for each affected row
+          if (updateJson) {
+            try {
+              var jsonRowMap = JSON.parse(row[json_field]);
+              if ((typeof jsonRowMap !== 'object') // not is_map
+                  || (jsonRowMap.constructor.name !== 'Object')) {
+                throw 'JSON.parse() error';
+              }
+            } catch (e) {
+              return that.fail(e, '--' + row[json_field] + '-- value in `' + json_field + '` column in `' + tableStr + '` table; ' + e, q, callback);
+            }
+          }
+          sqlRowMaps.push(rowValues);
+        }
         that.mysql_free_query(rows);
 
         if (rows_affected === 0) {
@@ -1257,108 +1280,68 @@
               qa.push(q);
               promise.resolve(q);
             } else {
-              // get the contents of the json_field for each affected row
-              var updateJson = (json_field !== '') && (Object.keys(jsonMap).length > 0);
-              var jsonRowMaps = [];
-              if (!updateJson) {
+              for (var m=0; m < sqlRowMaps.length; ++m) {
+                var sqlRowMap = sqlRowMaps[m];
+                // construct SET clause
+                var valuesRow = ' SET ';
+                for (var col in sqlRowMap) {
+                  if (!sqlRowMap.hasOwnProperty(col)) {
+                    continue;
+                  }
+                  var oldValue = sqlRowMap[col];
+                  var newValue = oldValue;
+                  if (updateJson && (col === json_field)) {
+                    try {
+                      // figure out newValue for json_field
+                      var oldMap = JSON.parse(oldValue);
+                      if ((typeof oldMap !== 'object') // not is_map
+                          || (oldMap.constructor.name !== 'Object')) {
+                        throw 'JSON.parse() error';
+                      }
+                      var newMap = arrayMerge(oldMap, jsonMap);
+                      newValue = JSON.stringify(newMap);
+                      if ((newValue === '') || (newValue === '[]')) {
+                        newValue = '{}';
+                      }
+                    } catch (e) {
+                    }
+                  } else if (sqlValuesMap.hasOwnProperty(col)) {
+                    newValue = sqlValuesMap[col];
+                  }
+                  // add changed values to SET clause
+                  if (oldValue !== newValue) {
+                    if (valuesRow !== ' SET ') {
+                      valuesRow += ', ';
+                    }
+                    valuesRow += '`' + that.mysql_real_escape_string(col) + "`='" + that.mysql_real_escape_string(newValue) + "'";
+                  }
+                }
+              }
+              // construct WHERE clause
+              var whereRow = ' WHERE ';
+              for (var col in sqlRowMap) {
+                if (!sqlRowMap.hasOwnProperty(col)) {
+                  continue;
+                }
+                var value = sqlRowMap[col];
+                //TODO include date values properly
+                if (Object.prototype.toString.call(value) !== '[object Date]') {
+                  if (whereRow !== ' WHERE ') {
+                    whereRow += ' AND ';
+                  }
+                  var opStr = '=';
+                  if (is_numeric(value) && is_float(desc[col])) {
+                    opStr = ' LIKE ';
+                  }
+                  whereRow += '`' + that.mysql_real_escape_string(col) + "`" + opStr + "'" + that.mysql_real_escape_string(value) + "'";
+                }
+              }
+              if (valuesRow !== ' SET ') {
+                var q = 'UPDATE `' + tableStr + '`' + valuesRow + whereRow + ' LIMIT 1;';
+                qa.push(q);
                 promise.resolve(q);
               } else {
-                jsonValue = '';
-                q = 'SELECT `' + json_field + '` FROM `' + tableStr + '`' + whereStr + andStr + orderByStr + ';';
-                that.mysql_query(q, function(e, rows) {
-                  for (var r=0; (r < rows.length) && !e; ++r) {
-                    var row = rows[r];
-                    var jsonValue = row[json_field];
-                    var jsonRowMap = JSON.parse(jsonValue);
-                    if (jsonRowMap === null) {
-                      e = 'json_decode() returned null';
-                    } else {
-                      jsonRowMaps.push(jsonRowMap);
-                    }
-                  }
-                  that.mysql_free_query(rows);
-                  if (e) {
-                    err = '"' + that.mysql_real_escape_string(jsonValue) + '" value in `' + json_field + '` column in `' + tableStr + '` table; ' + e;
-                    callback(err);
-                    return;
-                  }
-                  var qIns = [];
-                  var qInsMap = {};
-                  for (var i in jsonRowMaps) {
-                    var jsonRowMap = jsonRowMaps[i];
-                    // copy freeform values into 'json' field
-                    if (updateJson) {
-                      sqlValuesMap[json_field] = arrayMerge(jsonRowMap, jsonMap);
-                    }
-                    // sort valuesMap keys
-                    var sqlValuesKeys = Object.keys(sqlValuesMap);
-                    sqlValuesKeys.sort();
-                    // finally, generate values from valuesMap
-                    valuesStr = '';
-                    for (var c in sqlValuesKeys) {
-                      var col = sqlValuesKeys[c];
-                      value = sqlValuesMap[col];
-                      if (valuesStr !== '') {
-                        valuesStr += ',';
-                      }
-                      valueStr = '';
-                      if ((typeof value === 'object')
-                          && (['Object', 'Array'].indexOf(value.constructor.name) >= 0)) {
-                        var jsonStr = JSON.stringify(value);
-                        if ((jsonStr === '') || (jsonStr === '[]')) {
-                          jsonStr = '{}';
-                        }
-                        valueStr = "'" + that.mysql_real_escape_string(jsonStr) + "'";
-                      } else if (typeof value === 'boolean') {
-                        var valueBool = !!value;
-                        if (valueBool) {
-                          valueStr = '1';
-                        } else {
-                          valueStr = '0';
-                        }
-                      } else if (is_int(value)) {
-                        valueStr = strval(value);
-                      } else if (value === null) {
-                        valueStr = 'NULL';
-                      } else {
-                        valueStr = "'" + that.mysql_real_escape_string(value) + "'";
-                      }
-                      valuesStr += '`' + that.mysql_real_escape_string(col) + '`=' + valueStr;
-                    }
-                    valuesStr = ' SET ' + valuesStr;
-                    // add a custom update for each row
-                    if (that.opt && updateJson) {
-                      q = 'UPDATE `' + tableStr + '`' + valuesStr + whereStr;
-                      if (nInt === -1) {
-                        q += ';';
-                        qa.push(q);
-                      } else {
-                        if (typeof qInsMap[q] !== 'undefined') {
-                          var qi = qInsMap[q];
-                          qIns[qi].values.push(nInt);
-                        } else {
-                          qIns.push(new QueryUsingInKeyword(q, op_clause, sort_field, nInt));
-                          qInsMap[q] = qIns.length - 1;
-                        }
-                      }
-                    } else {
-                      var andStr = '';
-                      if (nInt >= 0) {
-                        andStr = op_clause + ' `' + sort_field + '`=' + nInt;
-                      }
-                      q = 'UPDATE `' + tableStr + '`' + valuesStr + whereStr + andStr + ';';
-                      qa.push(q);
-                    }
-                  }
-                  if (that.opt) {
-                    for (var i=0; i < qIns.length; ++i) {
-                      var qIn = qIns[i];
-                      q = qIn.getQuery();
-                      qa.push(q);
-                    }
-                  }
-                  promise.resolve(q);
-                });
+                promise.resolve();
               }
             }
           };
@@ -2043,55 +2026,6 @@
     }
     eStr = eStr || ex.toString();
     return callback(eStr);
-  };
-
-/**
- * Store values to create a query with the IN keyword.
- *
- * @version 0.0.9
- * @author DanielWHoward
- */
-
-  /**
-   * Create an object to store values to create a query
-   * with the IN keyword.
-   *
-   * @param prefix A string with most of the query.
-   * @param value The first value for the IN clause.
-   *
-   * @author DanielWHoward
-   */
-  function QueryUsingInKeyword(prefix, op_clause, field, value) {
-    this.prefix = prefix;
-    this.op_clause = op_clause;
-    this.field = field;
-    this.values = [];
-    this.values.push(value);
-  }
-
-  /**
-   * Return a SQL string created from multiple values.
-   *
-   * @param op_clause A name, possibly unused.
-   * @param sort_field An array with syntax specification.
-   * @return A SQL syntax string.
-   *
-   * @author DanielWHoward
-   */
-  QueryUsingInKeyword.prototype.getQuery = function() {
-    var and_clause = '';
-    if (this.values.length === 1) {
-      and_clause = ' `' + this.field + '`=' + this.values[0];
-    } else {
-      for (var i in this.values) {
-        if (and_clause !== '') {
-          and_clause += ', ';
-        }
-        $and_clause += $i;
-      }
-      and_clause = ' `' + this.field + '` IN (' + and_clause + ')';
-    }
-    return this.prefix + this.op_clause + and_clause + ';';
   };
 
 // constructor is the module

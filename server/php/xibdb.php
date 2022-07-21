@@ -999,6 +999,7 @@ class XibDb {
         }
       }
     }
+    $updateJson = ($json_field !== '') && (count($jsonMap) > 0);
     $nInt = $n;
     $limitInt = $limit;
     $whereStr = $where;
@@ -1009,10 +1010,6 @@ class XibDb {
     if (($whereStr !== '') && (substr($whereStr, 0, 1) !== ' ')) {
       $whereStr = ' WHERE ' . $whereStr;
     }
-    $op_clause = ' WHERE';
-    if ($whereStr !== '') {
-      $op_clause = ' AND';
-    }
     $andStr = '';
     if (($sort_field !== '') && ($nInt >= 0)) {
       $andStr = ' WHERE';
@@ -1022,12 +1019,27 @@ class XibDb {
       $andStr .= ' `' . $sort_field . '`=' . $nInt;
     }
 
-    // get the number of rows_affected
-    $q = 'SELECT COUNT(*) AS rows_affected FROM `' . $tableStr . '`' . $whereStr . $andStr . ';';
+    // get the number of rows_affected and save values
+    $q = 'SELECT * FROM `' . $tableStr . '`' . $whereStr . $andStr . $orderByStr . ';';
     $qr = $this->mysql_query($q);
     $rows_affected = 0;
+    $sqlRowMaps = array();
     while ($row = &$this->mysql_fetch_assoc($qr)) {
-      $rows_affected = intval($row['rows_affected']);
+      ++$rows_affected;
+      $rowValues = array();
+      foreach ($row as $col=>$value) {
+        $rowValues[$col] = $value;
+      }
+      // test json_field contents for each affected row
+      if ($updateJson) {
+        $jsonRowMap = json_decode($row[$json_field], true);
+        if ($jsonRowMap === null) {
+          $e = '"' . $this->mysql_real_escape_string($row[$json_field]) . '" value in `' . $json_field . '` column in ' . $table . ' table; ' . $e;
+          $this->fail($e, $q);
+          return null;
+        }
+      }
+      $sqlRowMaps[] = $rowValues;
     }
     $this->mysql_free_query($qr);
 
@@ -1063,102 +1075,44 @@ class XibDb {
       $q = 'UPDATE `' . $tableStr . '`' . $valuesStr . $whereStr . $andStr . ';';
       $qa[] = $q;
     } else {
-      // get the contents of the json_field for each affected row
-      $updateJson = ($json_field !== '') && (count($jsonMap) > 0);
-      $jsonRowMaps = array();
-      if (!$updateJson) {
-        $jsonRowMaps[] = array();
-      } else {
-        $jsonValue = '';
-        $q = 'SELECT `' . $json_field . '` FROM `' . $tableStr . '`' . $whereStr . $andStr . $orderByStr . ';';
-        $qr_reorder = $this->mysql_query($q);
-        while (($row = &$this->mysql_fetch_assoc($qr_reorder)) && ($e === null)) {
-          $jsonValue = $row[$json_field];
-          $jsonRowMap = json_decode($jsonValue, true);
-          if ($jsonRowMap === null) {
-            $e = 'json_decode() returned null';
-          } else {
-            $jsonRowMaps[] = $jsonRowMap;
-          }
-        }
-        $this->mysql_free_query($qr_reorder);
-        if ($e) {
-          $err = '"' . $this->mysql_real_escape_string($jsonValue) . '" value in `' . $json_field . '` column in `' . $tableStr . '` table; ' . $e;
-          $this->fail($err, $q);
-          return null;
-        }
-      }
-      $qIns = array();
-      $qInsMap = array();
-      foreach ($jsonRowMaps as $i=>$jsonRowMap) {
-        // copy freeform values into 'json' field
-        if ($updateJson) {
-          $sqlValuesMap[$json_field] = arrayMerge($jsonRowMap, $jsonMap);
-        }
-        // sort valuesMap keys
-        $sqlValuesKeys = array();
-        foreach ($sqlValuesMap as $key=>$value) {
-          $sqlValuesKeys[] = $key;
-        }
-        sort($sqlValuesKeys);
-        // finally, generate values from valuesMap
-        $valuesStr = '';
-        foreach ($sqlValuesKeys as $col) {
-          $value = $sqlValuesMap[$col];
-          if ($valuesStr !== '') {
-            $valuesStr .= ',';
-          }
-          $valueStr = '';
-          if (is_array($value)) {
-            $jsonStr = json_encode($value);
-            if (($jsonStr === '') || ($jsonStr === '[]')) {
-              $jsonStr = '{}';
+      foreach ($sqlRowMaps as $sqlRowMap) {
+        // construct SET clause
+        $valuesRow = ' SET ';
+        foreach ($sqlRowMap as $col=>$oldValue) {
+          $newValue = $oldValue;
+          if ($updateJson && ($col === $json_field)) {
+            // figure out newValue for json_field
+            $oldMap = json_decode($oldValue, true);
+            $newMap = arrayMerge($oldMap, $jsonMap);
+            $newValue = json_encode($newMap);
+            if (($newValue === '') || ($newValue === '[]')) {
+              $newValue = '{}';
             }
-            $valueStr = "'" . $this->mysql_real_escape_string($jsonStr) . "'";
-          } elseif ($this->mapBool && is_bool($value)) {
-            $valueBool = boolval($value);
-            if ($valueBool) {
-              $valueStr = '1';
-            } else {
-              $valueStr = '0';
+          } elseif (isset($sqlValuesMap[$col])) {
+            $newValue = $sqlValuesMap[$col];
+          }
+          // add changed values to SET clause
+          if ($oldValue !== $newValue) {
+            if ($valuesRow !== ' SET ') {
+              $valuesRow .= ', ';
             }
-          } elseif (is_int($value)) {
-            $valueStr = strval($value);
-          } elseif (is_null($value)) {
-            $valueStr = 'NULL';
-          } else {
-            $valueStr = "'" . $this->mysql_real_escape_string($value) . "'";
+            $valuesRow .= '`' . $this->mysql_real_escape_string($col) . '`="' . $this->mysql_real_escape_string($newValue) . '"';
           }
-          $valuesStr .= '`' . $this->mysql_real_escape_string($col) . '`=' . $valueStr;
         }
-        $values = ' SET ' . $valuesStr;
-        // add a custom update for each row
-        if ($this->opt && $updateJson) {
-          $q = 'UPDATE `' . $tableStr . '`' . $values . $whereStr;
-          if ($nInt === -1) {
-            $q .= ';';
-            $qa[] = $q;
-          } else {
-            if (isset($qInsMap[$q])) {
-              $qi = $qInsMap[$q];
-              $qIns[$qi]->Values[] = $nInt;
-            } else {
-              $qIns[] = new QueryUsingInKeyword($q, $op_clause, $sort_field, $nInt);
-              $qInsMap[$q] = count($qIns) - 1;
-            }
+        // construct WHERE clause
+        $whereRow = ' WHERE ';
+        foreach ($sqlRowMap as $col=>$value) {
+          if ($whereRow !== ' WHERE ') {
+            $whereRow .= ' AND ';
           }
-        } else {
-          $op_and_clause = '';
-          if ($nInt >= 0) {
-            $op_and_clause = $op_clause . ' `' . $sort_field . '`=' . $nInt;
+          $opStr = '=';
+          if (is_numeric($value) && is_float($desc[$col])) {
+              $opStr = ' LIKE ';
           }
-          $q = 'UPDATE `' . $tableStr . '`' . $values . $whereStr . $op_and_clause . ';';
-          $qa[] = $q;
+          $whereRow .= '`' . $this->mysql_real_escape_string($col) . '`' + opStr + '"' . $this->mysql_real_escape_string($value) . '"';
         }
-      }
-      if ($this->opt) {
-        foreach ($qIns as $qIn) {
-          $q = $qIn->getQuery();
+        if ($valuesRow !== ' SET ') {
+          $q = 'UPDATE `' . $tableStr . '`' . $valuesRow . $whereRow . ' LIMIT 1;';
           $qa[] = $q;
         }
       }
@@ -1886,56 +1840,6 @@ class XibDb {
       $this->log->println('E:' . $q);
     }
     throw new Exception($e);
-  }
-}
-
-/**
- * Store values to create a query with the IN keyword.
- *
- * @version 0.0.9
- * @author DanielWHoward
- */
-class QueryUsingInKeyword {
-  /**
-   * Create an object to store values to create a query
-   * with the IN keyword.
-   *
-   * @param prefix A string with most of the query.
-   * @param value The first value for the IN clause.
-   *
-   * @author DanielWHoward
-   */
-  function QueryUsingInKeyword($prefix, $op_clause, $field, $value) {
-    $this->prefix = $prefix;
-    $this->op_clause = $op_clause;
-    $this->field = $field;
-    $this->Values = array();
-    $this->Values[] = $value;
-  }
-
-  /**
-   * Return a SQL string created from multiple values.
-   *
-   * @param op_clause A name, possibly unused.
-   * @param sort_field An array with syntax specification.
-   * @return A SQL syntax string.
-   *
-   * @author DanielWHoward
-   */
-  function getQuery() {
-    $and_clause = '';
-    if (count($this->Values) === 1) {
-      $and_clause = ' `' . $this->field . '`=' . $this->Values[0];
-    } else {
-      foreach ($this->values as $i) {
-        if ($and_clause !== '') {
-          $and_clause .= ', ';
-        }
-        $and_clause .= $i;
-      }
-      $and_clause = ' `' . $this->field . '` IN (' . $and_clause . ')';
-    }
-    return $this->prefix . $this->op_clause . $and_clause . ';';
   }
 }
 
