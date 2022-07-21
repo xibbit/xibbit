@@ -26,12 +26,15 @@
 package xibdb
 
 import (
+	"crypto/rand"
 	"database/sql"
+	"encoding/hex"
 	"encoding/json"
 	"runtime/debug"
 	"errors"
 	"fmt"
 	"log"
+	"math"
 	"reflect"
 	"strconv"
 	"strings"
@@ -60,6 +63,7 @@ type XibDb struct {
 	MapBool          bool
 	Opt              bool
 	log              Logger
+	paramRand        string
 }
 
 /**
@@ -84,6 +88,13 @@ func NewXibDb(config map[string]interface{}) *XibDb {
 	self.log = self
 	if obj, ok := config["log"].(Logger); ok {
 		self.log = obj
+	}
+	// generate a unique unguessable identifier
+	length := 25
+	a := "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789"
+	self.paramRand = ""
+	for i := 0; i < length; i++ {
+		self.paramRand += string(a[self.rand_secure(0, len(a))])
 	}
 	return self
 }
@@ -256,7 +267,8 @@ func (that XibDb) ReadRowsNative(querySpec interface{}, whereSpec interface{}, c
 
 	// read the table
 	q := "SELECT " + columnsStr + " FROM `" + tableStr + "`" + onVarStr + whereStr + orderByStr + ";"
-	rows, e, _ := that.Mysql_query(q)
+	params := map[string]interface{}{}
+	rows, e, _ := that.Mysql_query(q, params)
 	if e != nil {
 		return nil, that.Fail(e, "", q, nil)
 	}
@@ -380,7 +392,8 @@ func (that XibDb) ReadDescNative(querySpec interface{}) (desc map[string]interfa
 		json_column := ""
 		auto_increment_column := ""
 		q := "DESCRIBE `" + tableStr + "`;"
-		rows, e, _ := that.Mysql_query(q)
+		params := map[string]interface{}{}
+		rows, e, _ := that.Mysql_query(q, params)
 		if e != nil {
 			return nil, that.Fail(e, "", q)
 		}
@@ -571,12 +584,13 @@ func (that XibDb) InsertRowNative(querySpec interface{}, whereSpec interface{}, 
 	}
 
 	qa := []string{}
+	params := map[string]interface{}{}
 
 	// update the positions
 	if sort_field != "" {
 		nLen := 0
 		q := "SELECT `" + sort_field + "` FROM `" + tableStr + "`" + whereStr + orderByStr + limitStr + ";"
-		qr_reorder, e, _ := that.Mysql_query(q)
+		qr_reorder, e, _ := that.Mysql_query(q, params)
 		if e != nil {
 			return nil, that.Fail(e, "", q)
 		}
@@ -634,29 +648,9 @@ func (that XibDb) InsertRowNative(querySpec interface{}, whereSpec interface{}, 
 			if valuesStr != "" {
 				valuesStr += ","
 			}
-			valueStr := ""
-			if hasStringKeys(value) || hasNumericKeys(value) {
-				jsonBytes, _ := json.Marshal(jsonMap)
-				jsonStr := string(jsonBytes)
-				if (jsonStr == "") || (jsonStr == "[]") {
-					jsonStr = "{}"
-				}
-				valueStr = "'" + that.Mysql_real_escape_string(jsonStr) + "'"
-			} else if _, ok := value.(bool); ok {
-				valueBool, _ := value.(bool)
-				if valueBool {
-					valueStr = "1"
-				} else {
-					valueStr = "0"
-				}
-			} else if _, ok := value.(int); ok {
-				valueStr = strconv.Itoa(value.(int))
-			} else if value == nil {
-				valueStr = "NULL"
-			} else {
-				valueStr = "'" + that.Mysql_real_escape_string(value.(string)) + "'"
-			}
-			valuesStr += valueStr
+			param := "{{{" + that.paramRand + "--value--" + strconv.Itoa(len(qa)) + "--" + col + "}}}"
+			params[param] = value
+			valuesStr += param
 		}
 		valuesStr = " (" + colsStr + ") VALUES (" + valuesStr + ")"
 	}
@@ -667,9 +661,9 @@ func (that XibDb) InsertRowNative(querySpec interface{}, whereSpec interface{}, 
 	var result *sql.Result = nil
 	for _, q := range qa {
 		if strings.HasPrefix(q, "INSERT INTO ") {
-			result, e, _ = that.Mysql_exec(q)
+			result, e, _ = that.Mysql_exec(q, params)
 		} else {
-			rows, _, _ := that.Mysql_query(q)
+			rows, _, _ := that.Mysql_query(q, params)
 			that.Mysql_free_query(rows)
 		}
 	}
@@ -771,6 +765,7 @@ func (that XibDb) DeleteRowNative(querySpec interface{}, whereSpec interface{}, 
 	sort_field, _ := descMap["sort_column"].(string)
 
 	// decode remaining ambiguous arguments
+	params := map[string]interface{}{}
 	nInt, _ := n.(int)
 	nStr, _ := n.(string)
 	whereStr, _ := where.(string)
@@ -816,7 +811,7 @@ func (that XibDb) DeleteRowNative(querySpec interface{}, whereSpec interface{}, 
 			orderByStr = " ORDER BY `" + sort_field + "` DESC"
 		}
 		q := "SELECT COUNT(*) AS num_rows FROM `" + tableStr + "`" + whereStr + andStr + orderByStr + ";"
-		qr, e, _ := that.Mysql_query(q)
+		qr, e, _ := that.Mysql_query(q, params)
 		if e != nil {
 			return that.Fail(e, "", q)
 		}
@@ -835,13 +830,13 @@ func (that XibDb) DeleteRowNative(querySpec interface{}, whereSpec interface{}, 
 		q = "SELECT " + quotedField + " FROM `" + tableStr + "`" + whereStr + andStr + orderByStr + ";"
 		// verify that non-standard n var yields valid rows
 		if num_rows == 1 {
-			qr, e, _ = that.Mysql_query(q)
+			qr, e, _ = that.Mysql_query(q, params)
 			if sort_field != "" {
 				row := that.Mysql_fetch_assoc(qr)
 				n, _ = row[sort_field].(int)
 			}
 		} else if (num_rows > 1) && (sort_field != "") {
-			qr, e, _ = that.Mysql_query(q)
+			qr, e, _ = that.Mysql_query(q, params)
 			row := that.Mysql_fetch_assoc(qr)
 			n = row[sort_field]
 			if (andStr == "") && (whereStr == "") {
@@ -868,7 +863,7 @@ func (that XibDb) DeleteRowNative(querySpec interface{}, whereSpec interface{}, 
 			limitStr = " LIMIT 1"
 		}
 		q := "SELECT `" + sort_field + "` FROM `" + tableStr + "`" + whereStr + orderByStr + limitStr + ";"
-		qr_reorder, e, _ := that.Mysql_query(q)
+		qr_reorder, e, _ := that.Mysql_query(q, params)
 		if e != nil {
 			return that.Fail(e, "", q)
 		}
@@ -905,7 +900,7 @@ func (that XibDb) DeleteRowNative(querySpec interface{}, whereSpec interface{}, 
 	qa = append([]string{q}, qa...)
 
 	for _, q := range qa {
-		rows, e, _ := that.Mysql_query(q)
+		rows, e, _ := that.Mysql_query(q, params)
 		that.Mysql_free_query(rows)
 		if e != nil {
 			return that.Fail(e, "", q)
@@ -1056,7 +1051,8 @@ func (that XibDb) UpdateRowNative(querySpec interface{}, whereSpec interface{}, 
 
 	// get the number of rows_affected and save values
 	q := "SELECT * FROM `" + tableStr + "`" + whereStr + andStr + orderByStr + ";"
-	qr, e, _ := that.Mysql_query(q)
+	params := map[string]interface{}{}
+	qr, e, _ := that.Mysql_query(q, params)
 	if e != nil {
 		return nil, that.Fail(e, "", q)
 	}
@@ -1086,7 +1082,7 @@ func (that XibDb) UpdateRowNative(querySpec interface{}, whereSpec interface{}, 
 			return nil, that.Fail(nil, "0 rows affected", q)
 		}
 		q = "SELECT COUNT(*) AS rows_affected FROM `" + tableStr + "`" + whereStr + ";"
-		qr, _, _ = that.Mysql_query(q)
+		qr, _, _ = that.Mysql_query(q, params)
 		for qr.Next() {
 			qr.Scan(&rows_affected)
 		}
@@ -1125,27 +1121,31 @@ func (that XibDb) UpdateRowNative(querySpec interface{}, whereSpec interface{}, 
 						newValue = "{}"
 					}
 				} else if _, ok := sqlValuesMap[col]; ok {
-					newValue = fmt.Sprintf("%v", sqlValuesMap[col])
+					newValue = sqlValuesMap[col]
 				}
 				// add changed values to SET clause
 				if oldValue != newValue {
+					param := "{{{" + that.paramRand + "--set--" + strconv.Itoa(len(qa)) + "--" + col + "}}}"
+					params[param] = newValue
 					if valuesRow != " SET " {
 						valuesRow += ", "
 					}
-					valuesRow += "`" + that.Mysql_real_escape_string(col) + "`='" + that.Mysql_real_escape_string(newValue.(string)) + "'"
+					valuesRow += "`" + that.Mysql_real_escape_string(col) + "`=" + param
 				}
 			}
 			// construct WHERE clause
 			whereRow := " WHERE "
 			for col, value := range sqlRowMap {
-				if whereRow != " WHERE " {
-					whereRow += " AND "
-				}
+				param := "{{{" + that.paramRand + "--where--" + strconv.Itoa(len(qa)) + "--" + col + "}}}"
 				opStr := "="
 				if is_numeric(value) && is_float(desc[col]) {
 					opStr = " LIKE "
 				}
-				whereRow += "`" + that.Mysql_real_escape_string(col) + "`" + opStr + "'" + that.Mysql_real_escape_string(fmt.Sprintf("%v", value)) + "'"
+				params[param] = value
+				if whereRow != " WHERE " {
+					whereRow += " AND "
+				}
+				whereRow += "`" + that.Mysql_real_escape_string(col) + "`" + opStr + param
 			}
 			if valuesRow != " SET " {
 				q = "UPDATE `" + tableStr + "`" + valuesRow + whereRow + " LIMIT 1;"
@@ -1155,7 +1155,7 @@ func (that XibDb) UpdateRowNative(querySpec interface{}, whereSpec interface{}, 
 	}
 
 	for _, q := range qa {
-		rows, e, _ := that.Mysql_query(q)
+		rows, e, _ := that.Mysql_query(q, params)
 		if e != nil {
 			return nil, that.Fail(e, "", q)
 		}
@@ -1282,7 +1282,8 @@ func (that XibDb) MoveRowNative(querySpec interface{}, whereSpec interface{}, mS
 
 	// get the length of the array
 	q := "SELECT `" + sort_field + "` FROM `" + tableStr + "`" + whereStr + orderByStr + limitStr + ";"
-	qr_end, e, _ := that.Mysql_query(q)
+	params := map[string]interface{}{}
+	qr_end, e, _ := that.Mysql_query(q, params)
 	if e != nil {
 		return that.Fail(e, "", q)
 	}
@@ -1342,7 +1343,7 @@ func (that XibDb) MoveRowNative(querySpec interface{}, whereSpec interface{}, mS
 	qa = append(qa, q)
 
 	for _, q := range qa {
-		rows, e, _ := that.Mysql_query(q)
+		rows, e, _ := that.Mysql_query(q, params)
 		if e != nil {
 			return that.Fail(e, "", q)
 		}
@@ -1376,19 +1377,57 @@ func (that XibDb) MoveRow(querySpec interface{}, whereSpec interface{}, mSpec in
  *
  * @author DanielWHoward
  */
-func (that XibDb) Mysql_query(query string) (rows *sql.Rows, e error, columnNames []string) {
+func (that XibDb) Mysql_query(query string, a map[string]interface{}) (rows *sql.Rows, e error, columnNames []string) {
+/*	parameterizedQuery := true*/
+	ordinaryQuery := true
+	var link_identifier *sql.DB = nil
+	// convert to real parameterized query
+	placeholder := "?"
+	paramTypes := ""
+	paramQuery := query
+	paramValues := []interface{}{}
+	for aKey, aValue := range a {
+		i := strings.Index(paramQuery, aKey)
+		if i != -1 {
+			if aValueMap, ok := aValue.(map[string]interface{}); ok {
+				jsonBytes, _ := json.Marshal(aValueMap)
+				jsonStr := string(jsonBytes)
+				if (jsonStr == "") || (jsonStr == "[]") {
+					jsonStr = "{}"
+				}
+				aValue = jsonStr
+			}
+			paramTypes += "s"
+			paramValues = append(paramValues, aValue)
+			paramQuery = strings.ReplaceAll(paramQuery, aKey, placeholder)
+		}
+	}
 	if that.DumpSql || that.DryRun {
-		that.log.Println(query)
+		if len(paramValues) == 0 {
+			that.log.Println(query)
+		} else {
+			jsonBytes, _ := json.Marshal(paramValues)
+			jsonStr := string(jsonBytes)
+			that.log.Println(paramQuery + " with params: " + jsonStr)
+		}
 	}
 	columnNames = []string{}
 	if that.DryRun && !strings.HasPrefix(query, "SELECT ") && !strings.HasPrefix(query, "DESCRIBE ") {
 		return
 	}
-	link_identifier := (that.config["link_identifier"]).(*sql.DB)
-	rows, e = link_identifier.Query(query)
-	if e == nil {
-		columnNames, _ = rows.Columns()
-	} else {
+	// execute parameterized or ordinary query
+	if link, ok := that.config["link_identifier"].(*sql.DB); ok {
+		link_identifier = link
+		if ordinaryQuery && (e == nil) {
+			query = that.Xibdb_flatten_query(query, a)
+			rows, e = link_identifier.Query(query)
+			if e == nil {
+				columnNames, _ = rows.Columns()
+			}
+		}
+	}
+	// fail on error
+	if e != nil {
 		if !that.DumpSql && !that.DryRun {
 			that.log.Println(query)
 		}
@@ -1407,16 +1446,49 @@ func (that XibDb) Mysql_query(query string) (rows *sql.Rows, e error, columnName
  *
  * @author DanielWHoward
  */
-func (that XibDb) Mysql_exec(query string) (*sql.Result, error, []string) {
+func (that XibDb) Mysql_exec(query string, a map[string]interface{}) (*sql.Result, error, []string) {
+	var link_identifier *sql.DB = nil
+	var result sql.Result = nil
+	var e error = nil
+	// convert to real parameterized query
+/*	placeholder := "?"
+	paramTypes := ""
+	paramQuery := query
+	paramValues := []string{}
+	for aKey, aValue := range a {
+		i := strings.Index(paramQuery, aKey)
+		if i != -1 {
+			valueStr := aValue.(string)
+			if aValueMap, ok := aValue.(map[string]interface{}); ok {
+				jsonBytes, _ := json.Marshal(aValueMap)
+				jsonStr := string(jsonBytes)
+				if (jsonStr == "") || (jsonStr == "[]") {
+					jsonStr = "{}"
+				}
+				valueStr = jsonStr
+			}
+			paramTypes += "s"
+			paramValues = append(paramValues, valueStr)
+			query = strings.ReplaceAll(aKey, placeholder, paramQuery)
+		}
+	}*/
 	if that.DumpSql || that.DryRun {
-		that.log.Println(query)
+		if len(a) == 0 {
+			that.log.Println(query)
+		} else {
+			jsonBytes, _ := json.Marshal(a)
+			jsonStr := string(jsonBytes)
+			that.log.Println(query + " with params: " + jsonStr)
+		}
 	}
 	columnNames := []string{}
 	if that.DryRun && !strings.HasPrefix(query, "SELECT ") && !strings.HasPrefix(query, "DESCRIBE ") {
 		return nil, nil, columnNames
 	}
-	link_identifier := (that.config["link_identifier"]).(*sql.DB)
-	result, e := link_identifier.Exec(query)
+	// execute parameterized or ordinary query
+	query = that.Xibdb_flatten_query(query, a)
+	link_identifier = (that.config["link_identifier"]).(*sql.DB)
+	result, e = link_identifier.Exec(query)
 	columnNames = []string{}
 	if e != nil {
 		if !that.DumpSql && !that.DryRun {
@@ -1521,6 +1593,57 @@ func (that XibDb) Mysql_insert_id(result *sql.Result) (int, error) {
 }
 
 /**
+ * Return query string with argument map appied.
+ *
+ * An argument map allows the caller to specify his
+ * own string template substitutions.  This allows
+ * xibdb to convert a query to a real parameterized
+ * query in mysql_query().  But this method just does
+ * a dumb substitution to create a query with escaped
+ * strings.
+ *
+ * @param query String The query to execute.
+ * @param a An argument map.
+ * @return The mysql_query() return value.
+ *
+ * @author DanielWHoward
+ */
+func (that XibDb) Xibdb_flatten_query(query string, a map[string]interface{}) string {
+	for name, value := range a {
+		valueStr := ""
+		_, isMap := value.(map[string]interface{})
+		_, isList := value.([]interface{})
+		_, is32 := value.(float32)
+		_, is64 := value.(float64)
+		if isMap || isList {
+			jsonBytes, _ := json.Marshal(value)
+			jsonStr := string(jsonBytes)
+			if (jsonStr == "") || (jsonStr == "[]") {
+				jsonStr = "{}"
+			}
+			valueStr = "'" + that.Mysql_real_escape_string(jsonStr) + "'"
+		} else if valueBool, ok := value.(bool); ok {
+			if valueBool {
+				valueStr = "1"
+			} else {
+				valueStr = "0"
+			}
+		} else if valueInt, ok := value.(int); ok {
+			valueStr = strconv.Itoa(valueInt)
+		} else if is32 || is64 {
+			valueStr = fmt.Sprintf("%v", value)
+		} else if value == nil {
+			valueStr = "NULL"
+		} else {
+			valueStr, _ = value.(string)
+			valueStr = "'" + that.Mysql_real_escape_string(valueStr) + "'"
+		}
+		query = strings.ReplaceAll(query, name, valueStr)
+	}
+	return query
+}
+
+/**
  * Return true if the data in a table, optionally
  * filtered with a WHERE clause, has integers 0 .. n-1
  * in its sort_column such that it is an array.
@@ -1573,7 +1696,8 @@ func (that XibDb) CheckSortColumnConstraint(querySpec interface{}, whereSpec int
 
 		// read the table
 		q := "SELECT `" + sort_field + "` FROM `" + tableStr + "`" + whereStr + orderByStr + ";"
-		rows, e, _ := that.Mysql_query(q)
+		params := map[string]interface{}{}
+		rows, e, _ := that.Mysql_query(q, params)
 		if e != nil {
 			e = errors.New("CheckSortColumnConstraint(): error in " + q)
 		}
@@ -1642,7 +1766,8 @@ func (that XibDb) CheckJsonColumnConstraint(querySpec interface{}, whereSpec int
 
 		// read the table
 		q := "SELECT `" + json_field + "` FROM `" + tableStr + "`" + whereStr + ";"
-		rows, e, _ := that.Mysql_query(q)
+		params := map[string]interface{}{}
+		rows, e, _ := that.Mysql_query(q, params)
 		// read result
 		for row := that.Mysql_fetch_assoc(rows); (row != nil) && (e == nil); row = that.Mysql_fetch_assoc(rows) {
 			jsonValue, _ := row[json_field].(string)
@@ -1868,6 +1993,33 @@ func (that XibDb) ImplementSyntax(key string, syntax []interface{}) (sql string)
 	return
 }
 
+/**
+ * Return a random number in a range.
+ *
+ * @param min int The minimum value.
+ * @param max int The maximum value.
+ * @return int A random value.
+ *
+ * @author DanielWHoward
+ **/
+func (that XibDb) rand_secure(min int, max int) int {
+	log := math.Log2(float64(max - min))
+	bytes := int(math.Floor((log / 8) + 1))
+	bits := int(math.Floor(log + 1))
+	filter := uint(math.Floor(float64(int(1)<<bits - 1)))
+	rnd := uint(0)
+	for {
+		b := make([]byte, bytes)
+		rand.Read(b)
+		n, _ := strconv.ParseUint(hex.EncodeToString(b), 16, 64)
+		rnd = uint(n)
+		rnd = rnd & filter // discard irrelevant bits
+		if !(rnd >= uint(max-min)) {
+			break
+		}
+	}
+	return int(math.Floor(float64(min + int(rnd))))
+}
 
 /**
  * Do nothing for log output.
@@ -1942,36 +2094,6 @@ func array3Merge(a map[string]interface{}, b map[string]interface{}, c map[strin
 		}
 	}
 	return
-}
-
-/**
- * Return true if this is an array and this array
- * is numerically indexed.
- *
- * @param a array An array.
- * @return boolean True if it is a numeric array.
- *
- * @author DanielWHoward
- **/
-func hasNumericKeys(a interface{}) bool {
-	_, ok := a.([]interface{})
-	return ok
-}
-
-/**
- * Return true if this is an array and this array
- * is string indexed (associative).
- *
- * An associative array has at least one string key.
- *
- * @param a array An array.
- * @return boolean True if it is an associative array.
- *
- * @author DanielWHoward
- **/
-func hasStringKeys(a interface{}) bool {
-	_, valid := a.(map[string]interface{})
-	return valid
 }
 
 /**
