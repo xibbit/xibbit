@@ -1,7 +1,7 @@
 {
   "name": "inferno-public-figure",
   "private": true,
-  "version": "1.5.1",
+  "version": "1.5.2",
   "description": "Public Figure webapp using Inferno",
   "repository": "github:xibbit/xibbit",
   "license": "MIT",
