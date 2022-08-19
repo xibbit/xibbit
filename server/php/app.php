@@ -26,6 +26,7 @@
 // @license http://opensource.org/licenses/MIT
 //ini_set('display_errors', 'On');
 //error_reporting(E_ALL);
+mysqli_report(MYSQLI_REPORT_OFF);
 $timeZone = 'America/Los_Angeles';
 date_default_timezone_set($timeZone);
 require_once('./config.php');

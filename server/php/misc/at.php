@@ -30,6 +30,7 @@
  * Usually, every 15 minutes is good enough.  The cron job can
  * be on any server.
  */
+mysqli_report(MYSQLI_REPORT_OFF);
 date_default_timezone_set('America/Los_Angeles');
 require_once('../config.php');
 require_once('../xibdb.php');
