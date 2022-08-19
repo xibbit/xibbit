@@ -24,6 +24,7 @@
 // @version 1.5.1
 // @copyright xibbit 1.5.1 Copyright (c) © 2021 Daniel W. Howard and Sanjana A. Joshi Partnership
 // @license http://opensource.org/licenses/MIT
+mysqli_report(MYSQLI_REPORT_OFF);
 require_once('../config.php');
 require_once('./crypt.php');
 /**

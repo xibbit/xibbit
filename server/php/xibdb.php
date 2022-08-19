@@ -45,7 +45,7 @@ class XibDb {
    *
    * @author DanielWHoward
    */
-  function XibDb($config=array()) {
+  function __construct($config=array()) {
     $this->config = $config;
     $this->cache = array();
     $this->checkConstraints = false;

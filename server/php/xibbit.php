@@ -507,7 +507,7 @@ class XibbitHub {
    *
    * @author DanielWHoward
    **/
-  function XibbitHub($config) {
+  function __construct($config) {
     $config['vars']['hub'] = $this;
     $this->config = $config;
     $this->onfn = array();

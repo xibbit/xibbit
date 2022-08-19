@@ -53,7 +53,7 @@ class pfapp {
    *
    * @author DanielWHoward
    */
-  function pfapp($xibdb, $sql_prefix) {
+  function __construct($xibdb, $sql_prefix) {
     $this->xibdb = $xibdb;
     $this->sql_prefix = $sql_prefix;
     $this->usernamesNotAllowed = array(
