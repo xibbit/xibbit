@@ -121,7 +121,7 @@ func (that XibDb) ReadRowsNative(querySpec interface{}, whereSpec interface{}, c
 
 	// decode the arguments into variables
 	queryMap, ok := querySpec.(map[string]interface{})
-	if !ok {
+	if !ok { // not is_map
 		queryMap = map[string]interface{}{}
 	}
 	queryMap = array3Merge(map[string]interface{}{
@@ -146,12 +146,12 @@ func (that XibDb) ReadRowsNative(querySpec interface{}, whereSpec interface{}, c
 	// decode ambiguous table argument
 	tableArr, okList := table.([]string)
 	tableStr, okStr := table.(string)
-	if okList {
+	if okList { // is_list
 		tableStr = tableArr[0]
 	} else if okStr {
 		tableArr = append(tableArr, tableStr)
 	}
-	if onVarMap, ok := onVar.(map[string]interface{}); ok && (len(tableArr) == 1) {
+	if onVarMap, ok := onVar.(map[string]interface{}); ok && (len(tableArr) == 1) { // is_map
 		for key, _ := range onVarMap {
 			tableArr = append(tableArr, key)
 		}
@@ -194,7 +194,7 @@ func (that XibDb) ReadRowsNative(querySpec interface{}, whereSpec interface{}, c
 			}
 			columnsStr += "`" + tbl + "`.*"
 		}
-	} else if columnArr, ok := columns.([]string); ok {
+	} else if columnArr, ok := columns.([]string); ok { // is_list
 		if len(tableArr) == 1 {
 			// only one table so it's simple
 			for _, col := range columnArr {
@@ -222,7 +222,7 @@ func (that XibDb) ReadRowsNative(querySpec interface{}, whereSpec interface{}, c
 		}
 	}
 	onVarStr, _ := onVar.(string)
-	if onVarMap, ok := onVar.(map[string]interface{}); ok {
+	if onVarMap, ok := onVar.(map[string]interface{}); ok { // both
 		// "on" spec shortcut: assume second table
 		tableNamesInBoth := make([]string, len(tableArr))
 		for _, v1 := range tableArr {
@@ -245,7 +245,7 @@ func (that XibDb) ReadRowsNative(querySpec interface{}, whereSpec interface{}, c
 		onVarStr = " " + onVarStr
 	}
 	whereStr, _ := where.(string)
-	if whereMap, ok := where.(map[string]interface{}); ok {
+	if whereMap, ok := where.(map[string]interface{}); ok { // is_map
 		whereMap = that.ApplyTablesToWhere(whereMap, tableStr)
 		whereStr = that.ImplementWhere(whereMap)
 	}
@@ -366,7 +366,7 @@ func (that XibDb) ReadDescNative(querySpec interface{}) (desc map[string]interfa
 //	}
 
 	tableStr, _ := querySpec.(string)
-	if queryMap, ok := querySpec.(map[string]interface{}); ok {
+	if queryMap, ok := querySpec.(map[string]interface{}); ok { // is_map
 		queryMap = arrayMerge(map[string]interface{}{}, queryMap)
 		tableStr, _ = queryMap["table"].(string)
 	}
@@ -484,7 +484,7 @@ func (that XibDb) InsertRowNative(querySpec interface{}, whereSpec interface{}, 
 
 	// decode the arguments into variables
 	queryMap, ok := querySpec.(map[string]interface{})
-	if !ok {
+	if !ok { // not is_map
 		queryMap = map[string]interface{}{}
 	}
 	queryMap = array3Merge(map[string]interface{}{
@@ -560,7 +560,7 @@ func (that XibDb) InsertRowNative(querySpec interface{}, whereSpec interface{}, 
 	}
 	nInt, _ := n.(int)
 	whereStr, _ := where.(string)
-	if whereMap, ok := where.(map[string]interface{}); ok {
+	if whereMap, ok := where.(map[string]interface{}); ok { // is_map
 		whereStr = that.ImplementWhere(whereMap)
 	}
 	if (whereStr != "") && !strings.HasPrefix(whereStr, " ") {
@@ -736,7 +736,7 @@ func (that XibDb) DeleteRowNative(querySpec interface{}, whereSpec interface{}, 
 
 	// decode the arguments into variables
 	queryMap, ok := querySpec.(map[string]interface{})
-	if !ok {
+	if !ok { // not is_map
 		queryMap = map[string]interface{}{}
 	}
 	queryMap = array3Merge(map[string]interface{}{
@@ -770,7 +770,7 @@ func (that XibDb) DeleteRowNative(querySpec interface{}, whereSpec interface{}, 
 	nInt, _ := n.(int)
 	nStr, _ := n.(string)
 	whereStr, _ := where.(string)
-	if whereMap, ok := where.(map[string]interface{}); ok {
+	if whereMap, ok := where.(map[string]interface{}); ok { // is_map
 		whereStr = that.ImplementWhere(whereMap)
 	}
 	if (whereStr != "") && !strings.HasPrefix(whereStr, " ") {
@@ -957,7 +957,7 @@ func (that XibDb) UpdateRowNative(querySpec interface{}, whereSpec interface{}, 
 
 	// decode the arguments into variables
 	queryMap, ok := querySpec.(map[string]interface{})
-	if !ok {
+	if !ok { // not is_map
 		queryMap = map[string]interface{}{}
 	}
 	queryMap = array3Merge(map[string]interface{}{
@@ -1034,7 +1034,7 @@ func (that XibDb) UpdateRowNative(querySpec interface{}, whereSpec interface{}, 
 	nInt, _ := n.(int)
 	limitInt, _ := limit.(int)
 	whereStr, _ := where.(string)
-	if whereMap, ok := where.(map[string]interface{}); ok {
+	if whereMap, ok := where.(map[string]interface{}); ok { // is_map
 		whereStr = that.ImplementWhere(whereMap)
 	}
 	if (whereStr != "") && !strings.HasPrefix(whereStr, " ") {
@@ -1257,7 +1257,7 @@ func (that XibDb) MoveRowNative(querySpec interface{}, whereSpec interface{}, mS
 
 	// decode the arguments into variables
 	queryMap, ok := querySpec.(map[string]interface{})
-	if !ok {
+	if !ok { // not is_map
 		queryMap = map[string]interface{}{}
 	}
 	queryMap = array3Merge(map[string]interface{}{
@@ -1303,7 +1303,7 @@ func (that XibDb) MoveRowNative(querySpec interface{}, whereSpec interface{}, mS
 
 	// decode remaining ambiguous arguments
 	whereStr, _ := where.(string)
-	if whereMap, ok := where.(map[string]interface{}); ok {
+	if whereMap, ok := where.(map[string]interface{}); ok { // is_map
 		whereMap = that.ApplyTablesToWhere(whereMap, tableStr)
 		whereStr = that.ImplementWhere(whereMap)
 	}
@@ -1572,7 +1572,7 @@ func (that XibDb) Mysql_insert_id(result *sql.Result) (int, error) {
 func (that XibDb) CheckSortColumnConstraint(querySpec interface{}, whereSpec interface{}) (e error) {
 	// decode the arguments into variables
 	queryMap, ok := querySpec.(map[string]interface{})
-	if !ok {
+	if !ok { // not is_map
 		queryMap = map[string]interface{}{}
 	}
 	queryMap = array3Merge(map[string]interface{}{
@@ -1602,7 +1602,7 @@ func (that XibDb) CheckSortColumnConstraint(querySpec interface{}, whereSpec int
 
 	if e == nil {
 		// decode remaining ambiguous arguments
-		if whereMap, ok := where.(map[string]interface{}); ok {
+		if whereMap, ok := where.(map[string]interface{}); ok { // is_map
 			whereStr = that.ImplementWhere(whereMap)
 		}
 		if (whereStr != "") && !strings.HasPrefix(whereStr, " ") {
@@ -1644,7 +1644,7 @@ func (that XibDb) CheckSortColumnConstraint(querySpec interface{}, whereSpec int
 func (that XibDb) CheckJsonColumnConstraint(querySpec interface{}, whereSpec interface{}) (e error) {
 	// decode the arguments into variables
 	queryMap, ok := querySpec.(map[string]interface{})
-	if !ok {
+	if !ok { // not is_map
 		queryMap = map[string]interface{}{}
 	}
 	queryMap = array3Merge(map[string]interface{}{
@@ -1671,7 +1671,7 @@ func (that XibDb) CheckJsonColumnConstraint(querySpec interface{}, whereSpec int
 
 	if e == nil {
 		// decode remaining ambiguous arguments
-		if whereMap, ok := where.(map[string]interface{}); ok {
+		if whereMap, ok := where.(map[string]interface{}); ok { // is_map
 			whereStr = that.ImplementWhere(whereMap)
 		}
 		if (whereStr != "") && !strings.HasPrefix(whereStr, " ") {
@@ -1739,7 +1739,7 @@ func (that XibDb) ApplyTablesToWhere(a map[string]interface{}, table string) (aa
  * @author DanielWHoward
  */
 func (that XibDb) ImplementWhere(whereSpec interface{}) (whereStr string) {
-	if whereMap, ok := whereSpec.(map[string]interface{}); ok {
+	if whereMap, ok := whereSpec.(map[string]interface{}); ok { // is_map
 		whereStr = that.implementCondition(whereMap, "")
 		if whereStr != "" {
 			whereStr = " WHERE " + whereStr
@@ -1763,7 +1763,7 @@ func (that XibDb) ImplementWhere(whereSpec interface{}) (whereStr string) {
  */
 func (that XibDb) implementOn(onVar interface{}) (onVarStr string) {
 	joins := []string{"INNER JOIN", "LEFT JOIN", "RIGHT JOIN", "OUTER JOIN"}
-	if onVarMap, ok := onVar.(map[string]interface{}); ok {
+	if onVarMap, ok := onVar.(map[string]interface{}); ok { // is_map
 		for table, cond := range onVarMap {
 			// INNER JOIN is the default
 			join := joins[0]
@@ -1807,7 +1807,7 @@ func (that XibDb) implementOn(onVar interface{}) (onVarStr string) {
 func (that XibDb) implementCondition(condObj interface{}, onVar string) (cond string) {
 	if condStr, ok := condObj.(string); ok {
 		cond = condStr
-	} else if condMap, ok := condObj.(map[string]interface{}); ok {
+	} else if condMap, ok := condObj.(map[string]interface{}); ok { // is_map
 		conds := []string{}
 		op := " AND "
 		for key, value := range condMap {
@@ -1815,13 +1815,13 @@ func (that XibDb) implementCondition(condObj interface{}, onVar string) (cond st
 			if strings.ToUpper(key) == "OR" {
 				op = " OR "
 			} else if strings.ToUpper(key) != "AND" {
-				if valueList, ok := value.([]interface{}); ok {
+				if valueList, ok := value.([]interface{}); ok { // is_list
 					// assume it is some SQL syntax
 					sub = that.ImplementSyntax(key, valueList)
 					if sub != "" {
 						sub = "(" + sub + ")"
 					}
-				} else if _, ok := value.(map[string]interface{}); ok {
+				} else if _, ok := value.(map[string]interface{}); ok { // is_map
 					// assume it is a sub-clause
 					sub = that.implementCondition(value, "")
 					if sub != "" {
@@ -1879,7 +1879,7 @@ func (that XibDb) ImplementSyntax(key string, syntax []interface{}) (sql string)
 			if len(syntax) == 5 {
 				post, _ = syntax[4].(string)
 			}
-			if valueList, ok := syntax[3].([]string); ok {
+			if valueList, ok := syntax[3].([]string); ok { // is_list
 				for _, value := range valueList {
 					valueStr := pre + value + post
 					valueStr = likeStr + " '" + that.Mysql_real_escape_string(valueStr) + "'"

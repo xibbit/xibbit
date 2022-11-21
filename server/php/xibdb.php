@@ -92,7 +92,7 @@ class XibDb {
 
     // decode the arguments into variables
     $queryMap = $querySpec;
-    if (!is_array($queryMap)
+    if (!is_array($queryMap) // not is_map
         || (count(array_filter(array_keys($queryMap), 'is_string')) === 0)) {
       $queryMap = array();
     }
@@ -118,7 +118,7 @@ class XibDb {
     // decode ambiguous table argument
     $tableStr = '';
     $tableArr = array();
-    if (is_array($table)
+    if (is_array($table) // is_list
         && (count(array_filter(array_keys($table), 'is_string')) === 0)) {
       $tableStr = $table[0];
       $tableArr = $table;
@@ -126,7 +126,7 @@ class XibDb {
       $tableStr = $table;
       $tableArr[] = $table;
     }
-    if (is_array($onVar)
+    if (is_array($onVar) // is_map
         && (count(array_filter(array_keys($onVar), 'is_string')) > 0)
         && (count($tableArr) === 1)) {
       foreach ($onVar as $tbl=>$cond) {
@@ -171,7 +171,7 @@ class XibDb {
         }
         $columnsStr .= '`' . $tbl . '`.*';
       }
-    } elseif (is_array($columns)
+    } elseif (is_array($columns) // is_list
         && (count(array_filter(array_keys($columns), 'is_string')) === 0)) {
       $columnsStr = '';
       $columnArr = $columns;
@@ -202,7 +202,7 @@ class XibDb {
       }
     }
     $onVarStr = $onVar;
-    if (is_array($onVar)) {
+    if (is_array($onVar)) { // both
       // "on" spec shortcut: assume second table
       $tableNamesInBoth = array();
       $tableArrList = (count(array_filter(array_keys($tableArr), 'is_string')) > 0)? array_keys($tableArr): $tableArr;
@@ -220,7 +220,7 @@ class XibDb {
       $onVarStr = ' ' . $onVarStr;
     }
     $whereStr = $where;
-    if (is_array($where)
+    if (is_array($where) // is_map
         && (count(array_filter(array_keys($where), 'is_string')) > 0)) {
       $whereMap = $this->applyTablesToWhere($where, $tableStr);
       $whereStr = $this->implementWhere($whereMap);
@@ -331,7 +331,7 @@ class XibDb {
 //    }
 
     $tableStr = $querySpec;
-    if (is_array($querySpec)
+    if (is_array($querySpec) // is_map
         && (count(array_filter(array_keys($querySpec), 'is_string')) > 0)) {
       $queryMap = array_merge(array(), $querySpec);
       $tableStr = $queryMap['table'];
@@ -440,7 +440,7 @@ class XibDb {
 
     // decode the arguments into variables
     $queryMap = $querySpec;
-    if (!is_array($queryMap)
+    if (!is_array($queryMap) // not is_map
         || (count(array_filter(array_keys($queryMap), 'is_string')) === 0)) {
       $queryMap = array();
     }
@@ -519,7 +519,7 @@ class XibDb {
     }
     $nInt = $n;
     $whereStr = $where;
-    if (is_array($where)
+    if (is_array($where) // is_map
         && (count(array_filter(array_keys($where), 'is_string')) > 0)) {
       $whereStr = $this->implementWhere($where);
     }
@@ -689,7 +689,7 @@ class XibDb {
 
     // decode the arguments into variables
     $queryMap = $querySpec;
-    if (!is_array($queryMap)
+    if (!is_array($queryMap) // not is_map
         || (count(array_filter(array_keys($queryMap), 'is_string')) === 0)) {
       $queryMap = array();
     }
@@ -725,7 +725,7 @@ class XibDb {
     $nInt = $n;
     $nStr = $n;
     $whereStr = $where;
-    if (is_array($where)
+    if (is_array($where) // is_map
         && (count(array_filter(array_keys($where), 'is_string')) > 0)) {
       $whereStr = $this->implementWhere($where);
     }
@@ -918,7 +918,7 @@ class XibDb {
 
     // decode the arguments into variables
     $queryMap = $querySpec;
-    if (!is_array($queryMap)
+    if (!is_array($queryMap) // not is_map
         || (count(array_filter(array_keys($queryMap), 'is_string')) === 0)) {
       $queryMap = array();
     }
@@ -998,7 +998,7 @@ class XibDb {
     $nInt = $n;
     $limitInt = $limit;
     $whereStr = $where;
-    if (is_array($where)
+    if (is_array($where) // is_map
         && (count(array_filter(array_keys($where), 'is_string')) > 0)) {
       $whereStr = $this->implementWhere($where);
     }
@@ -1224,7 +1224,7 @@ class XibDb {
 
     // decode the arguments into variables
     $queryMap = $querySpec;
-    if (!is_array($queryMap)
+    if (!is_array($queryMap) // not is_map
         || (count(array_filter(array_keys($queryMap), 'is_string')) === 0)) {
       $queryMap = array();
     }
@@ -1274,7 +1274,7 @@ class XibDb {
 
     // decode remaining ambiguous arguments
     $whereStr = $where;
-    if (is_array($where)
+    if (is_array($where) // is_map
         && (count(array_filter(array_keys($where), 'is_string')) > 0)) {
       $whereMap = $this->applyTablesToWhere($where, $tableStr);
       $whereStr = $this->implementWhere($whereMap);
@@ -1534,7 +1534,7 @@ class XibDb {
 
     // decode the arguments into variables
     $queryMap = $querySpec;
-    if (!is_array($queryMap)
+    if (!is_array($queryMap) // not is_map
         || (count(array_filter(array_keys($queryMap), 'is_string')) === 0)) {
       $queryMap = array();
     }
@@ -1565,7 +1565,7 @@ class XibDb {
 
     if ($e === null) {
       // decode remaining ambiguous arguments
-      if (is_array($where)
+      if (is_array($where) // is_map
           && (count(array_filter(array_keys($where), 'is_string')) > 0)) {
         $whereStr = $this->implementWhere($where);
       }
@@ -1607,7 +1607,7 @@ class XibDb {
 
     // decode the arguments into variables
     $queryMap = $querySpec;
-    if (!is_array($queryMap)
+    if (!is_array($queryMap) // not is_map
         || (count(array_filter(array_keys($queryMap), 'is_string')) === 0)) {
       $queryMap = array();
     }
@@ -1635,7 +1635,7 @@ class XibDb {
 
     if ($e === null) {
       // decode remaining ambiguous arguments
-      if (is_array($where)
+      if (is_array($where) // is_map
           && (count(array_filter(array_keys($where), 'is_string')) > 0)) {
         $whereStr = $this->implementWhere($where);
       }
@@ -1697,7 +1697,7 @@ class XibDb {
    */
   function implementWhere($whereSpec) {
     $whereStr = '';
-    if (is_array($whereSpec)
+    if (is_array($whereSpec) // is_map
         && (count(array_filter(array_keys($whereSpec), 'is_string')) > 0)) {
       $whereStr = $this->implementCondition($whereSpec);
       if ($whereStr !== '') {
@@ -1723,7 +1723,7 @@ class XibDb {
   function implementOn($onVar) {
     $joins = array('INNER JOIN', 'LEFT JOIN', 'RIGHT JOIN', 'OUTER JOIN');
     $onVarStr = '';
-    if (is_array($onVar)
+    if (is_array($onVar) // is_map
         && (count(array_filter(array_keys($onVar), 'is_string')) > 0)) {
       foreach ($onVar as $table=>$cond) {
         // INNER JOIN is the default
@@ -1762,7 +1762,7 @@ class XibDb {
     $cond = '';
     if (is_string($condObj)) {
       $cond = $condObj;
-    } elseif (is_array($condObj)
+    } elseif (is_array($condObj) // is_map
         && (count(array_filter(array_keys($condObj), 'is_string')) > 0)) {
       $condMap = $condObj;
       $conds = array();
@@ -1772,11 +1772,11 @@ class XibDb {
         if (strtoupper($key) === 'OR') {
           $op = ' OR ';
         } elseif (strtoupper($key) !== 'AND') {
-          if (is_array($value)) {
-            if (count(array_filter(array_keys($value), 'is_string')) === 0) {
+          if (is_array($value)) { // both
+            if (count(array_filter(array_keys($value), 'is_string')) === 0) { // is_list
               // assume it is some SQL syntax
               $sub = $this->implementSyntax($key, $value);
-            } else {
+            } else { // is_map
               // assume it is a sub-clause
               $sub = $this->implementCondition($value);
             }
@@ -1835,7 +1835,7 @@ class XibDb {
         if (count($syntax) === 5) {
           $post = $syntax[4];
         }
-        if (is_array($syntax[3])
+        if (is_array($syntax[3]) // is_list
             && (count(array_filter(array_keys($syntax[3]), 'is_string')) === 0)) {
           foreach ($syntax[3] as $value) {
             $valueStr = $pre . $value . $post;

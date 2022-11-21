@@ -95,7 +95,7 @@ class pfapp {
     $keywords = array('AND', 'OR');
     if (is_string($a) && (preg_match('/^[A-Za-z0-9]+\\.[A-Za-z0-9]+$/', $a) === 1) && !in_array(strtoupper($a), $keywords)) {
       $a = $this->sql_prefix.$a;
-    } elseif (is_array($a)) {
+    } elseif (is_array($a)) { // both
       $b = array();
       if (has_numeric_keys($a)) {
         foreach ($a as $value) {
@@ -172,7 +172,7 @@ class pfapp {
    * @author DanielWHoward
    */
   function readDesc($table) {
-    if (is_array($table)) {
+    if (is_array($table)) { // is_map
       $args = array_merge(array(
       ), $table);
       $table = $args['table'];

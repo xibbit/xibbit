@@ -103,7 +103,7 @@
 
     // decode the arguments into variables
     var queryMap = querySpec;
-    if ((typeof queryMap !== 'object')
+    if ((typeof queryMap !== 'object') // not is_map
         || (queryMap.constructor.name !== 'Object')) {
       queryMap = {};
     }
@@ -129,7 +129,7 @@
     // decode ambiguous table argument
     var tableStr = '';
     var tableArr = [];
-    if (((typeof table) === 'object')
+    if (((typeof table) === 'object') // is_list
         && (table.constructor.name === 'Array')) {
       tableStr = table[0];
       tableArr = table;
@@ -137,7 +137,7 @@
       tableStr = table;
       tableArr.push(table);
     }
-    if ((typeof onVar === 'object')
+    if ((typeof onVar === 'object') // is_map
         && (onVar.constructor.name === 'Object')
         && (tableArr.length === 1)) {
       for (var key in onVar) {
@@ -191,7 +191,7 @@
           }
           columnsStr += '`' + tbl + '`.*';
         }
-      } else if (((typeof columns) === 'object')
+      } else if (((typeof columns) === 'object') // is_list
           && (columns.constructor.name === 'Array')) {
         columnsStr = '';
         var columnArr = columns;
@@ -224,7 +224,7 @@
         }
       }
       var onVarStr = onVar;
-      if ((typeof onVar === 'object')
+      if ((typeof onVar === 'object') // both
           && (['Object', 'Array'].indexOf(onVar.constructor.name) >= 0)) {
         // "on" spec shortcut: assume second table
         var tableNamesInBoth = [];
@@ -243,7 +243,7 @@
         onVarStr = ' ' + onVarStr;
       }
       var whereStr = where;
-      if ((typeof where === 'object')
+      if ((typeof where === 'object') // is_map
           && (where.constructor.name === 'Object')) {
         var whereMap = that.applyTablesToWhere(where, tableStr);
         whereStr = that.implementWhere(whereMap);
@@ -302,7 +302,7 @@
             if ((json_field !== '') && (row[json_field] !== null)) {
               try {
                 var jsonMap = JSON.parse(row[json_field]);
-                if ((typeof jsonMap !== 'object')
+                if ((typeof jsonMap !== 'object') // not is_map
                     || (jsonMap.constructor.name !== 'Object')) {
                   throw 'JSON.parse() error';
                 }
@@ -387,7 +387,7 @@
 //    }
 
     var tableStr = querySpec;
-    if ((typeof querySpec === 'object')
+    if ((typeof querySpec === 'object') // is_map
         && (querySpec.constructor.name === 'Object')) {
       var queryMap = arrayMerge({}, querySpec);
       tableStr = queryMap.table;
@@ -524,7 +524,7 @@
 
     // decode the arguments into variables
     var queryMap = querySpec;
-    if ((typeof queryMap !== 'object')
+    if ((typeof queryMap !== 'object') // not is_map
         || (queryMap.constructor.name !== 'Object')) {
       queryMap = {};
     }
@@ -606,7 +606,7 @@
       }
       var nInt = n;
       var whereStr = where;
-      if ((typeof where === 'object')
+      if ((typeof where === 'object') // is_map
           && (where.constructor.name === 'Object')) {
         whereStr = that.implementWhere(where);
       }
@@ -819,7 +819,7 @@
 
     // decode the arguments into variables
     var queryMap = querySpec;
-    if ((typeof queryMap !== 'object')
+    if ((typeof queryMap !== 'object') // not is_map
         || (queryMap.constructor.name !== 'Object')) {
       queryMap = {};
     }
@@ -856,7 +856,7 @@
       var nInt = n;
       var nStr = n;
       var whereStr = where;
-      if ((typeof where === 'object')
+      if ((typeof where === 'object') // is_map
           && (where.constructor.name === 'Object')) {
         whereStr = that.implementWhere(where);
       }
@@ -882,7 +882,7 @@
             if ((typeof n === 'string') && (nStr !== '')) {
               try {
                 var nMap = JSON.parse(nStr);
-                if ((typeof nMap !== 'object')
+                if ((typeof nMap !== 'object') // not is_map
                     || (nMap.constructor.name !== 'Object')) {
                   throw 'JSON.parse() error';
                 }
@@ -1110,7 +1110,7 @@
 
     // decode the arguments into variables
     var queryMap = querySpec;
-    if ((typeof queryMap !== 'object')
+    if ((typeof queryMap !== 'object') // not is_map
         || (queryMap.constructor.name !== 'Object')) {
       queryMap = {};
     }
@@ -1191,7 +1191,7 @@
       var nInt = n;
       var limitInt = limit;
       var whereStr = where;
-      if ((typeof where === 'object')
+      if ((typeof where === 'object') // is_map
           && (where.constructor.name === 'Object')) {
         whereStr = that.implementWhere(where);
       }
@@ -1459,7 +1459,7 @@
 
     // decode the arguments into variables
     var queryMap = querySpec;
-    if ((typeof queryMap !== 'object')
+    if ((typeof queryMap !== 'object') // not is_map
         || (queryMap.constructor.name !== 'Object')) {
       queryMap = {};
     }
@@ -1507,7 +1507,7 @@
 
       // decode remaining ambiguous arguments
       var whereStr = where;
-      if ((typeof where === 'object')
+      if ((typeof where === 'object') // is_map
           && (where.constructor.name === 'Object')) {
         whereMap = that.applyTablesToWhere(where, tableStr);
         whereStr = that.implementWhere(whereMap);
@@ -1829,7 +1829,7 @@
   XibDb.prototype.implementWhere = function(whereSpec) {
     var that = this;
     var whereStr = '';
-    if ((typeof whereSpec === 'object')
+    if ((typeof whereSpec === 'object') // is_map
         && (whereSpec.constructor.name === 'Object')) {
       whereStr = that.implementCondition(whereSpec);
       if (whereStr !== '') {
@@ -1856,7 +1856,7 @@
     var that = this;
     var joins = ['INNER JOIN', 'LEFT JOIN', 'RIGHT JOIN', 'OUTER JOIN'];
     var onVarStr = '';
-    if ((typeof onVar === 'object')
+    if ((typeof onVar === 'object') // is_map
         && (onVar.constructor.name === 'Object')) {
       for (var table in onVar) {
         if (!onVar.hasOwnProperty(table)) {
@@ -1905,7 +1905,7 @@
     var cond = '';
     if ((typeof condObj) == 'string') {
       cond = condObj;
-    } else if ((typeof condObj === 'object')
+    } else if ((typeof condObj === 'object') // is_map
         && (condObj.constructor.name === 'Object')) {
       var condMap = condObj;
       var conds = [];
@@ -1919,14 +1919,14 @@
         if (key.toUpperCase() === 'OR') {
           op = ' OR ';
         } else if (key.toUpperCase() !== 'AND') {
-          if (((typeof value) === 'object')
+          if (((typeof value) === 'object') // is_list
               && (value.constructor.name === 'Array')) {
             // assume it is some SQL syntax
             sub = that.implementSyntax(key, value);
             if (sub !== '') {
               sub = '(' + sub + ')';
             }
-          } else if (((typeof value) === 'object')
+          } else if (((typeof value) === 'object') // is_map
               && (value.constructor.name === 'Object')) {
             // assume it is a sub-clause
             sub = that.implementCondition(value);
@@ -1985,7 +1985,7 @@
         if (syntax.length === 5) {
           post = syntax[4];
         }
-        if (((typeof syntax[3]) === 'object')
+        if (((typeof syntax[3]) === 'object') // is_list
             && (syntax[3].constructor.name === 'Array')) {
           for (var i=0; i < syntax[3].length; ++i) {
             var value = syntax[3][i];
