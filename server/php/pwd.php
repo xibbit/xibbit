@@ -156,14 +156,14 @@ function pwd_hash($pwd, $shadow='', $scheme='', $verify=false) {
       case '5':
         // SHA-256
         $salt = ($shadow === '')? pwd_salt(): explode('$', $shadow);
-        $salt = is_array($salt)? $salt[2]: $salt;
+        $salt = is_array($salt)? $salt[2]: $salt; // is_numeric_array
         $shadow = hash('sha256', $salt.$pwd);
         $shadow = '$5$'.$salt.'$'.$shadow;
         break;
       case '6':
         // SHA-512
         $salt = ($shadow === '')? pwd_salt(): explode('$', $shadow);
-        $salt = is_array($salt)? $salt[2]: $salt;
+        $salt = is_array($salt)? $salt[2]: $salt; // is_numeric_array
         $shadow = hash('sha512', $salt.$pwd);
         $shadow = '$6$'.$salt.'$'.$shadow;
         break;

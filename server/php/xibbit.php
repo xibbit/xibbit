@@ -786,7 +786,7 @@ class XibbitHub {
         // process the event
         $events = array();
         $handled = false;
-        if (!is_array($event)) {
+        if (!is_array($event)) { // is_map
           $event = array();
           $event['e'] = 'malformed--json';
           $events[] = $event;
@@ -1134,7 +1134,7 @@ class XibbitHub {
    **/
   function trigger($event) {
     // handle an array of events by triggering individual events
-    if (is_array($event)
+    if (is_array($event) // is_numeric_array
         && (count(array_filter(array_keys($event), 'is_string')) === 0)) {
       $events = array();
       for ($e=0; $e < count($event); ++$e) {
@@ -1326,7 +1326,7 @@ class XibbitHub {
     }
     // always return an array of events
     $events = array($ret);
-    if (is_array($ret)
+    if (is_array($ret) // is_numeric_array
         && count(array_filter(array_keys($ret), 'is_string')) === 0) {
       $events = $ret;
     }

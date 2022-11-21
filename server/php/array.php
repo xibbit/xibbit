@@ -33,7 +33,7 @@
  * @author DanielWHoward
  **/
 function has_numeric_keys($a) {
-  return is_array($a)
+  return is_array($a) // is_numeric_array
     && (count(array_filter(array_keys($a), 'is_string')) === 0);
 }
 /**
@@ -47,7 +47,7 @@ function has_numeric_keys($a) {
  * @author DanielWHoward
  **/
 function has_string_keys($a) {
-  return is_array($a)
+  return is_array($a) // is_map
     && (count(array_filter(array_keys($a), 'is_string')) > 0);
 }
 /**
