@@ -55,14 +55,14 @@ class AjaxStylePromise {
   }
 
   Future<http.Response> go() async {
-    String method = opts['type'];
+    String method = opts['type'] as String;
     Map<String, String> headers = {
       'Content-Type': 'application/json',
       ...persistentHeaders
     };
-    String data = opts['data'];
-    String url = opts['url'];
-    Future future;
+    String data = opts['data'] as String;
+    String url = opts['url'] as String;
+    late Future future;
     if (method == 'GET') {
       url += '?' + data;
       _logger.fine('AjaxStylePromise ${method} ${url}');
@@ -113,7 +113,7 @@ AjaxStylePromise ajax(Map<String, Object> opts) {
 class Xibbit {
   var config;
   bool instanceSent = false;
-  Future<SharedPreferences> instance;
+  late Future<SharedPreferences> instance;
   var seqEvents = [];
   var requestEvents = Map<int, Object>();
   var waitingEvents = [];
@@ -131,7 +131,7 @@ class Xibbit {
   /// Create an Xibbit object.
   /// @author DanielWHoward
   ///
-  Xibbit(Map<String, Object> config) {
+  Xibbit(Map config) {
     /* jshint validthis: true */
     var self = this;
     self.config = config;
@@ -139,7 +139,7 @@ class Xibbit {
       self.config['log'] = false;
     }
     // set defaults for socket.io
-    if (!(self.config['socketio'] is Map<String, Object>)) {
+    if (!(self.config['socketio'] is Map)) {
       self.config['socketio'] = {};
     }
     if (self.config['socketio']['start'] != false) {
@@ -188,7 +188,7 @@ class Xibbit {
     }
     WidgetsFlutterBinding.ensureInitialized();
     self.instance = SharedPreferences.getInstance();
-    self.getInstanceValue().then((String instance) {
+    self.getInstanceValue().then((String? instance) {
       self.log('xibbit.instance=' + (instance ?? 'null'));
     });
     self.requestEvents = {};
@@ -212,12 +212,15 @@ class Xibbit {
   /// Return the instance value or null.
   /// @author DanielWHoward
   ///
-  Future<String> getInstanceValue() async {
+  Future<String?> getInstanceValue() async {
     var self = this;
     SharedPreferences prefs = await self.instance;
-    String instance;
+    String? instance;
     try {
-      instance = jsonDecode(prefs.getString(self.sessionKey))['instance'];
+      instance = prefs.getString(self.sessionKey);
+      if (instance != null) {
+        instance = jsonDecode(instance)['instance'];
+      }
     } catch (e) {}
     return instance;
   }
@@ -252,7 +255,7 @@ class Xibbit {
   /// simple session storage API is provided for users.
   /// @author DanielWHoward
   ///
-  dynamic getSessionValue([String key]) async {
+  dynamic getSessionValue([String? key]) async {
     var self = this;
     SharedPreferences prefs = await self.instance;
     final Map value = jsonDecode(prefs.getString(self.sessionKey) ?? '{}');
@@ -327,7 +330,7 @@ class Xibbit {
   /// process a response.
   /// @author DanielWHoward
   ///
-  void send(Map<String, Object> event, Function callback) {
+  void send(Map event, Function callback) {
     var self = this;
     if (!self.connected) {
       self.waitingEvents.add({'event': event, 'callback': callback});
@@ -338,17 +341,15 @@ class Xibbit {
     } else {
       event['_id'] = self.eventId++;
       if (self.config['log'] || event.containsKey('_log')) {
-        var msg = this.reorderJson(jsonEncode(event),
-          ['type', 'to', 'from', '_id'],
-          ['i', 'e']
-        );
+        var msg = this.reorderJson(
+            jsonEncode(event), ['type', 'to', 'from', '_id'], ['i', 'e']);
         self.log(msg, self.logColors['request']);
       }
       if (callback != null) {
         // shallow clone
         final evt = Map<String, Object>.from(event);
         evt['_response'] = {'callback': callback};
-        this.requestEvents[event['_id']] = evt;
+        this.requestEvents[event['_id'] as int] = evt;
       }
       if (this.socket != null) {
         var marshalledEvent = event; //JSON.stringify(event); //golang
@@ -376,7 +377,7 @@ class Xibbit {
     if ((method == 'socket.io') && !self.config['socketio']['start']) {
       var query = {};
       if ((self.config['socketio']['transports'] == 'polling')) {
-        String instanceValue = await self.getInstanceValue();
+        String? instanceValue = await self.getInstanceValue();
         if (instanceValue != null) {
           query['instance'] = instanceValue;
         }
@@ -387,7 +388,7 @@ class Xibbit {
         sampleUrl = url();
       }
       var isPhp = sampleUrl.endsWith('.php');
-      var host = '';
+      String host = '';
       if (sampleUrl.startsWith('http')) {
         var pos = sampleUrl.indexOf('/');
         for (var s = 0; (pos != -1) && (s < 2); ++s) {
@@ -397,8 +398,6 @@ class Xibbit {
           pos = sampleUrl.length;
         }
         host = sampleUrl.substring(0, pos);
-      } else {
-        host = null;
       }
       String transport = self.config['socketio']['transports'];
       List<String> transports = [transport];
@@ -443,8 +442,9 @@ class Xibbit {
       });
       self.socket.on('client', (event) {
         // deep clone
-        event = json.decode(json.encode(event));
-        self.dispatchEvent(event);
+        var encodedEvent = json.encode(event);
+        var clonedEvent = json.decode(encodedEvent);
+        self.dispatchEvent(clonedEvent);
       });
       self.initInstance(method);
     }
@@ -480,7 +480,7 @@ class Xibbit {
   initInstance(String method) async {
     var self = this;
     Map<String, Object> instanceEvent = {'type': '_instance'};
-    String instanceValue = await self.getInstanceValue();
+    String? instanceValue = await self.getInstanceValue();
     if (instanceValue != null) {
       instanceEvent['instance'] = instanceValue;
       if (self.config['socketio']['transports'] == 'polling') {
@@ -489,12 +489,12 @@ class Xibbit {
       }
     }
     // send _instance event
-    self.send(instanceEvent, (Map<String, Object> event) {
+    self.send(instanceEvent, (Map event) {
       // process _instance event
       if (self.config['socketio']['transports'] == 'polling') {
         self.socket.io.engine.transport.query['instance'] = event['instance'];
       }
-      self.preserveSession(event['instance']);
+      self.preserveSession(event['instance'] as String);
       // send any waiting events
       for (final event in self.waitingEvents) {
         self.send(event['event'], event['callback']);
@@ -510,15 +510,15 @@ class Xibbit {
   /// Dispatch events from the server to client listeners.
   /// @author DanielWHoward
   ///
-  dispatchEvent(Map<String, Object> event) {
+  dispatchEvent(Map event) {
     if ((event != null) && (event['_id'] != null)) {
       final _id = event['_id'];
       // show the response on the console
       this.log(event);
       // send the response event to the callback
       if (this.requestEvents[_id] != null) {
-        Map<String, Object> request = this.requestEvents[_id];
-        Map<String, Object> response = request['_response'];
+        Map<String, Object> request = this.requestEvents[_id] as Map<String, Object>;
+        Map<String, Object> response = request['_response'] as Map<String, Object>;
         Function callback = response['callback'] as Function;
         this.requestEvents.remove(_id);
         callback(event);
@@ -536,7 +536,7 @@ class Xibbit {
       var eventStr = jsonEncode(event);
       var keys = new List<String>.from(this.recentEvents.keys);
       keys.forEach((key) {
-        if ((this.recentEvents[key].millisecondsSinceEpoch + debounceMs) <
+        if ((this.recentEvents[key]!.millisecondsSinceEpoch + debounceMs) <
             now.millisecondsSinceEpoch) {
           this.recentEvents.remove(key);
         }
@@ -561,10 +561,10 @@ class Xibbit {
   /// Do a short poll.
   /// @author DanielWHoward
   ///
-  xioPoll([Map<String, Object> events]) async {
+  xioPoll([Map? events]) async {
     var self = this;
     String query = '';
-    String instanceValue = await self.getInstanceValue();
+    String? instanceValue = await self.getInstanceValue();
     if (instanceValue != null) {
       query += 'instance=' + instanceValue + '&';
     }
@@ -596,7 +596,7 @@ class Xibbit {
         });
       } else if (event is Map<String, Object>) {
         if ((event['type'] == '_instance') && (event['instance'] != null)) {
-          self.preserveSession(event['instance']);
+          self.preserveSession(event['instance'] as String);
         }
       } else {
         self.log(event, self.logColors['response_error']);
@@ -624,8 +624,8 @@ class Xibbit {
       if (self.config['poll']['start'] != null &&
           self.socket == null &&
           events == null) {
-        var delay = self._pollStarted +
-            self.config['poll']['min'] -
+        int delay = self._pollStarted +
+            (self.config['poll']['min'] as int) -
             DateTime.now().millisecondsSinceEpoch;
         delay = (self.config['poll']['strategy'] == 'long') ? 0 : delay;
         Future.delayed(Duration(milliseconds: (delay < 0) ? 0 : delay), () {
@@ -704,7 +704,7 @@ class Xibbit {
   ///
   Map<String, Object> createUploadFormData(event) {
     var fd = {};
-    return fd;
+    return fd as Map<String, Object>;
   }
 
   ///
@@ -730,7 +730,7 @@ class Xibbit {
     var targets = [];
     var sMap = jsonDecode(s);
     // separate into an array of objects/maps
-    for (i=0; i < (first.length + last.length + 1); ++i) {
+    for (i = 0; i < (first.length + last.length + 1); ++i) {
       var k = '';
       targets.add({});
       if (i < first.length) {
@@ -746,14 +746,14 @@ class Xibbit {
     targets[first.length] = sMap;
     // build JSON string from array of objects/maps
     s = '';
-    for (i=0; i < targets.length; ++i) {
+    for (i = 0; i < targets.length; ++i) {
       var target = targets[i];
       if (target.length > 0) {
         var sTarget = jsonEncode(target);
         if (s == '') {
           s = sTarget;
         } else {
-          s = s.substring(0, s.length-1) + "," + sTarget.substring(1);
+          s = s.substring(0, s.length - 1) + "," + sTarget.substring(1);
         }
       }
     }
@@ -779,21 +779,21 @@ class Xibbit {
   /// Log string or event to the console.
   /// @author DanielWHoward
   ///
-  void log(Object obj, [String color]) {
-    String msg = obj is String ? obj : null;
-    Map<String, Object> event = obj is Map<String, Object> ? obj : null;
+  void log(Object obj, [String? color]) {
+    String? msg = obj is String ? obj : null;
+    Map? event = obj is Map ? obj : null;
     var stacktrace = ((event != null) && (event['e_stacktrace'] != null))
         ? event['e_stacktrace']
         : null;
     // use color enum or standard color name
-    color = this.logColors[color] != null ? this.logColors[color] : color;
+    color = color != null && this.logColors[color] != null ? this.logColors[color] : color;
     if (this.config['log'] ||
-        ((event != null) && (event['_log'] is bool) && event['_log'])) {
+        ((event != null) && (event['_log'] is bool) && event['_log'] as bool)) {
       if (obj is String) {
         // log colored text to the console
         print(msg);
       } else {
-        if (event.containsKey('e')) {
+        if (event!.containsKey('e')) {
           // response errors are pink; notification errors are brown
           color = event['_id'] != null
               ? this.logColors['response_error']
@@ -816,10 +816,7 @@ class Xibbit {
               : this.logColors['notification'];
           msg = jsonEncode(event);
         }
-        msg = this.reorderJson(msg,
-          ['type', 'to', 'from', '_id'],
-          ['i', 'e']
-        );
+        msg = this.reorderJson(msg, ['type', 'to', 'from', '_id'], ['i', 'e']);
         this.log(msg, color);
       }
     }

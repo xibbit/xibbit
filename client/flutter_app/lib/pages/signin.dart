@@ -34,7 +34,7 @@ import '../actions/login.dart';
 class SigninPage extends StatefulWidget {
   final Store<dynamic> store;
 
-  SigninPage({Key key, this.store}) : super(key: key);
+  SigninPage({Key? key, required this.store}) : super(key: key);
 
   @override
   _SigninPage createState() => _SigninPage(store: store);
@@ -45,7 +45,7 @@ class _SigninPage extends State<SigninPage> {
 
   final _formKey = GlobalKey<FormState>();
 
-  _SigninPage({this.store});
+  _SigninPage({required this.store});
 
   String _msg = '';
 
@@ -85,7 +85,7 @@ class _SigninPage extends State<SigninPage> {
                   controller: emailController,
                   focusNode: emailFocus,
                   validator: (value) {
-                    if (value.isEmpty) {
+                    if (value!.isEmpty) {
                       return 'Enter your email address.';
                     }
                     return null;
@@ -99,7 +99,7 @@ class _SigninPage extends State<SigninPage> {
                   controller: pwdController,
                   focusNode: pwdFocus,
                   validator: (value) {
-                    if (value.isEmpty) {
+                    if (value!.isEmpty) {
                       return 'Enter your password.';
                     }
                     return null;
@@ -107,7 +107,7 @@ class _SigninPage extends State<SigninPage> {
                 ),
                 Padding(
                   padding: const EdgeInsets.symmetric(vertical: 16.0),
-                  child: RaisedButton(
+                  child: ElevatedButton(
                     onPressed: () {
                       String email = emailController.text;
                       String pwd = pwdController.text;

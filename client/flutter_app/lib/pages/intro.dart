@@ -33,7 +33,7 @@ import './signin.dart';
 class IntroPage extends StatelessWidget {
   final Store<dynamic> store;
 
-  IntroPage({Key key, this.store}) : super(key: key);
+  IntroPage({Key? key, required this.store}) : super(key: key);
 
   @override
   Widget build(BuildContext context) {
@@ -54,7 +54,7 @@ class IntroPage extends StatelessWidget {
                 children: <Widget>[
                   Padding(
                     padding: const EdgeInsets.symmetric(horizontal: 8.0),
-                    child: RaisedButton(
+                    child: ElevatedButton(
                       onPressed: () {
                         signUp(store, context);
                       },
@@ -63,7 +63,7 @@ class IntroPage extends StatelessWidget {
                   ),
                   Padding(
                     padding: const EdgeInsets.symmetric(horizontal: 8.0),
-                    child: RaisedButton(
+                    child: ElevatedButton(
                       onPressed: () {
                         signIn(store, context);
                       },

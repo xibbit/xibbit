@@ -34,7 +34,7 @@ import '../../actions/event.dart';
 
 class Session {
   Session();
-  Map<String, Object> load() {
+  Map<String, Object>? load() {
     return null;
   }
 
@@ -53,7 +53,7 @@ final resolve = (a) => a;
  * backend.
  */
 class XibbitService {
-  Xibbit xibbit;
+  late Xibbit xibbit;
   // load the session
   Map<String, Object> session = {
     'loggedIn': false,
@@ -67,7 +67,6 @@ class XibbitService {
     var self = this;
     var preserveSession = true;
     var loadSession = () {
-      return {};
     };
     self.setSessionValue = (key, value) {
       loadSession();
@@ -144,7 +143,7 @@ class XibbitService {
    */
   bool isLoggedIn() {
     var self = this;
-    return self.session['loggedIn'];
+    return self.session['loggedIn'] as bool;
   }
 
   /**
@@ -153,7 +152,7 @@ class XibbitService {
    */
   bool isCollectingMoreInfo() {
     var self = this;
-    List collectUserFields = self.session['collectUserFields'];
+    List collectUserFields = self.session['collectUserFields'] as List;
     return collectUserFields.length > 0;
   }
 
@@ -162,7 +161,7 @@ class XibbitService {
   ///
   collectedUserFields([fields]) {
     var self = this;
-    List collectUserFields = self.session['collectUserFields'];
+    List collectUserFields = self.session['collectUserFields'] as List;
     if (collectUserFields.length > 0) {
       // convert to an array of collected values
       if (!fields || (fields == true)) {
@@ -171,7 +170,7 @@ class XibbitService {
       // remove collected fields from the uncollected fields
       fields = difference(self.session['collectUserFields'], fields);
       self.setSessionValue('collectUserFields', fields);
-      collectUserFields = self.session['collectUserFields'];
+      collectUserFields = self.session['collectUserFields'] as List;
       if (collectUserFields.length == 0) {
         self.setSessionValue('loggedIn', true);
       }
@@ -181,11 +180,11 @@ class XibbitService {
   /**
    * Send an event to the backend.
    */
-  send(Map<String, Object> event, Function callback) {
+  send(Map event, Function callback) {
     var self = this;
-    var retVal = self.xibbit.send(event, (Map<String, Object> evt) {
+    var retVal = self.xibbit.send(event, (Map evt) {
       var loggingIn = false;
-      var fields = List<Map<String, Object>>();
+      var fields = [];
       if ((evt['e'] == null) && (evt['i'] != null)) {
         var type = event['type'] as String;
         if ((type.length >= 5 && type.substring(0, 5) == 'login') ||
@@ -205,7 +204,7 @@ class XibbitService {
                     : {};
                 args['route'] = field;
                 return args;
-              });
+              }) as List<Map<String, Object>>;
               self.setSessionValue('collectUserFields', fields);
             } else {
               self.setSessionValue('loggedIn', loggingIn);

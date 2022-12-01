@@ -27,7 +27,7 @@
 /// A base class for actions.
 ///
 class ReduxAction {
-  Map payload;
+  late Map payload;
   ReduxAction(Map<String, Object> payload) {
     this.payload = payload;
   }
@@ -58,8 +58,8 @@ reducerMap,
 ///
 final ReducerMapper combineReducers =
     (Map<String, Function> reducerMap,
-    [Object castToAction]) =>
-        ({Object state, ReduxAction action}) {
+    [Object? castToAction]) =>
+        ({Object? state, ReduxAction? action}) {
           final Function castAction =
             castToAction == null ? (action) => action :
             castToAction as Function;
@@ -81,7 +81,7 @@ final ReducerMapper combineReducers =
         }
         newState[key] = newValueState;
       });
-      return changed ? newState : state;
+      return (changed ? newState : state) as Object;
     };
 
 final flutterReducer = (Reducer myReducer) =>

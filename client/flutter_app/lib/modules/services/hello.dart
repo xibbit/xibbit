@@ -34,16 +34,16 @@ import './xibbitservice.dart';
  * and make it available to the app.
  */
 class Hello {
-  Future<Object> event;
+  late Future<Object> event;
 
   Hello() {}
 
   void send() {
     Map<String, Object> evt = {'type': 'init'};
-    this.event = xibbitService.send(evt, (event) => this.apply(event));
+    xibbitService.send(evt, (event) => this.apply(event));
   }
 
-  apply(Map<String, Object> event) {
-    print('init event returned ' + event['i']);
+  apply(Map event) {
+    print('init event returned ' + (event['i'] as String));
   }
 }

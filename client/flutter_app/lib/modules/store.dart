@@ -27,4 +27,4 @@ import 'package:redux/redux.dart';
 import '../reducers/index.dart';
 
 // a single global store
-final store = Store<Map>(rootReducer, initialState: initialState);
+final store = Store<Map>(rootReducer, initialState: initialState as Map<dynamic, dynamic>);

@@ -39,7 +39,7 @@ final loginSelectors = combineSelectors(
 ///
 /// Put login state.
 ///
-bool loginReducer({bool state = false, Action action}) {
+bool loginReducer({bool state = false, required Action action}) {
   ActionTypes type = action.type;
   switch (type) {
     case ActionTypes.Login:
@@ -55,7 +55,7 @@ bool loginReducer({bool state = false, Action action}) {
 ///
 /// Save login state.
 ///
-Map eventsReducer({Map state = emptyMap, Action action}) {
+Map eventsReducer({Map state = emptyMap, required Action action}) {
   ActionTypes type = action.type;
   switch (type) {
     case ActionTypes.Event:
@@ -127,7 +127,7 @@ const Map<String, String> defaultProfile = {
 /// Put profile state.
 ///
 Map<String, String> profileReducer(
-    {Map<String, String> state = defaultProfile, Action action}) {
+    {Map<String, String> state = defaultProfile, required Action action}) {
   ActionTypes type = action.type;
   switch (type) {
     case ActionTypes.SetProfile:
@@ -171,9 +171,9 @@ final reducerMap = remap(Map<String, Function>(), rootConfig, 'reducer');
 final selectorMap = remap(Map<String, Function>(), rootConfig, 'selector');
 
 final initialState =
-    getInitialState(reducerMap, Action({'type': ActionTypes.Init}));
+    getInitialState(reducerMap as Map<String, Function>, Action({'type': ActionTypes.Init}));
 
-final rootReducer = flutterReducer(combineReducers(reducerMap, downcast));
+final rootReducer = flutterReducer(combineReducers(reducerMap as Map<String, Function>, downcast));
 
 class _getLoginSelectors {
   dynamic _selectors;

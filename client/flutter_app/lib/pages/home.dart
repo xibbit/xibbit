@@ -33,7 +33,7 @@ import './profile.dart';
 class HomePage extends StatelessWidget {
   final Store<dynamic> store;
 
-  HomePage({Key key, this.store}) : super(key: key);
+  HomePage({Key? key, required this.store}) : super(key: key);
 
   @override
   Widget build(BuildContext context) {

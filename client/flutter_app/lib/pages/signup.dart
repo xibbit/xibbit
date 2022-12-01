@@ -32,7 +32,7 @@ import '../modules/services/xibbitservice.dart';
 class SignupPage extends StatefulWidget {
   final Store<dynamic> store;
 
-  SignupPage({Key key, this.store}) : super(key: key);
+  SignupPage({Key? key, required this.store}) : super(key: key);
 
   @override
   _SignupPage createState() => _SignupPage(store: store);
@@ -45,7 +45,7 @@ class _SignupPage extends State<SignupPage> {
 
   String _msg = '';
 
-  _SignupPage({this.store});
+  _SignupPage({required this.store});
 
   TextEditingController userController = new TextEditingController();
   FocusNode userFocus = new FocusNode();
@@ -84,7 +84,7 @@ class _SignupPage extends State<SignupPage> {
                 controller: userController,
                 focusNode: userFocus,
                 validator: (value) {
-                  if (value.isEmpty) {
+                  if (value!.isEmpty) {
                     return 'Enter your user name.';
                   }
                   return null;
@@ -98,7 +98,7 @@ class _SignupPage extends State<SignupPage> {
                 controller: emailController,
                 focusNode: emailFocus,
                 validator: (value) {
-                  if (value.isEmpty) {
+                  if (value!.isEmpty) {
                     return 'Enter your email address.';
                   }
                   return null;
@@ -112,7 +112,7 @@ class _SignupPage extends State<SignupPage> {
                 controller: pwdController,
                 focusNode: pwdFocus,
                 validator: (value) {
-                  if (value.isEmpty) {
+                  if (value!.isEmpty) {
                     return 'Enter your password.';
                   }
                   return null;
@@ -120,7 +120,7 @@ class _SignupPage extends State<SignupPage> {
               ),
               Padding(
                 padding: const EdgeInsets.symmetric(vertical: 16.0),
-                child: RaisedButton(
+                child: ElevatedButton(
                   child: Text('Sign Up'),
                   onPressed: () {
                     String username = userController.text;

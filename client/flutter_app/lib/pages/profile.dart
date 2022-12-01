@@ -34,7 +34,7 @@ import '../reducers/index.dart';
 class ProfilePage extends StatefulWidget {
   final Store<dynamic> store;
 
-  ProfilePage({Key key, this.store}) : super(key: key);
+  ProfilePage({Key? key, required this.store}) : super(key: key);
 
   @override
   _ProfilePage createState() => _ProfilePage(store: store);
@@ -47,7 +47,7 @@ class _ProfilePage extends State<ProfilePage> {
 
   String _msg = '';
 
-  _ProfilePage({this.store}) {
+  _ProfilePage({required this.store}) {
     nameController = TextEditingController(
         text: rootSelectors(store.state).getProfileSelectors().getName());
     xibbitService.send({'type': 'user_profile'}, (event) {
@@ -57,7 +57,7 @@ class _ProfilePage extends State<ProfilePage> {
     });
   }
 
-  TextEditingController nameController;
+  late TextEditingController nameController;
   FocusNode nameFocus = new FocusNode();
 
   TextEditingController addressController = new TextEditingController();
@@ -97,7 +97,7 @@ class _ProfilePage extends State<ProfilePage> {
                         controller: nameController,
                         focusNode: nameFocus,
                         validator: (value) {
-                          if (value.isEmpty) {
+                          if (value!.isEmpty) {
                             return 'Enter your name.';
                           }
                           return null;
@@ -120,7 +120,7 @@ class _ProfilePage extends State<ProfilePage> {
                         controller: addressController,
                         focusNode: addressFocus,
                         validator: (value) {
-                          if (value.isEmpty) {
+                          if (value!.isEmpty) {
                             return 'Enter your address.';
                           }
                           return null;
@@ -162,7 +162,7 @@ class _ProfilePage extends State<ProfilePage> {
                         controller: cityController,
                         focusNode: cityFocus,
                         validator: (value) {
-                          if (value.isEmpty) {
+                          if (value!.isEmpty) {
                             return 'Enter your city.';
                           }
                           return null;
@@ -187,7 +187,7 @@ class _ProfilePage extends State<ProfilePage> {
                             controller: stateController,
                             focusNode: stateFocus,
                             validator: (value) {
-                              if (value.isEmpty) {
+                              if (value!.isEmpty) {
                                 return 'Enter your state.';
                               }
                               return null;
@@ -212,7 +212,7 @@ class _ProfilePage extends State<ProfilePage> {
                             controller: postalController,
                             focusNode: postalFocus,
                             validator: (value) {
-                              if (value.isEmpty) {
+                              if (value!.isEmpty) {
                                 return 'Enter your postal code.';
                               }
                               return null;
@@ -227,9 +227,9 @@ class _ProfilePage extends State<ProfilePage> {
               ]),
               Padding(
                 padding: const EdgeInsets.symmetric(vertical: 16.0),
-                child: RaisedButton(
+                child: ElevatedButton(
                   onPressed: () {
-                    if (_formKey.currentState.validate()) {
+                    if (_formKey.currentState!.validate()) {
                       String name = nameController.text;
                       String address = addressController.text;
                       String address2 = address2Controller.text;
@@ -265,7 +265,7 @@ class _ProfilePage extends State<ProfilePage> {
               ),
               Padding(
                 padding: const EdgeInsets.symmetric(vertical: 16.0),
-                child: RaisedButton(
+                child: ElevatedButton(
                   onPressed: () {
                     xibbitService.send({
                       'type': 'logout',

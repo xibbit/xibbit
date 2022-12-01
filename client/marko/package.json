@@ -6,18 +6,17 @@
   "repository": "github:xibbit/xibbit",
   "license": "MIT",
   "dependencies": {
-    "jquery": "^3.6.0",
-    "js-sha256": "^0.9.0",
-    "marko": "^4.23.15",
+    "jquery": "^3.0.0",
+    "js-sha256": "^0.8.0",
+    "marko": "^4.24.6",
     "marko-starter": "xibbit/marko-starter#middleware"
   },
   "devDependencies": {
-    "eslint": "^7.22.0",
-    "eslint-config-prettier": "^8.1.0",
-    "eslint-plugin-prettier": "^3.3.1",
-    "http-proxy-middleware": "^1.0.6",
-    "marko-prettyprint": "^2.0.0",
-    "prettier": "^2.2.1"
+    "eslint": "^8.28.0",
+    "eslint-config-prettier": "^8.5.0",
+    "eslint-plugin-prettier": "^4.2.1",
+    "http-proxy-middleware": "^2.0.6",
+    "prettier": "^2.8.0"
   },
   "scripts": {
     "build": "NODE_ENV=production marko-starter build",

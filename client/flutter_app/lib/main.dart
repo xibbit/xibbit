@@ -32,8 +32,8 @@ import './pages/home.dart';
 
 void main() {
   Logger.root.level = Level.OFF; // defaults to Level.INFO
-  Logger.root.onRecord.listen((record) {
-    print('${record.level.name}: ${record.message}');
+  Logger.root.onRecord.listen((LogRecord record) {
+    debugPrint('${record.level.name}: ${record.message}');
   });
 
   runApp(MyApp(store: store));
@@ -43,7 +43,7 @@ class MyApp extends StatelessWidget {
   // This widget is the root of your application.
   final Store<dynamic> store;
 
-  MyApp({Key key, this.store}) {
+  MyApp({Key? key, required this.store}) {
     Hello hello = Hello();
 
     hello.send();
