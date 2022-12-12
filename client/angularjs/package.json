@@ -1,7 +1,7 @@
 {
   "name": "angularjs-public-figure",
   "private": true,
-  "version": "1.5.2",
+  "version": "1.5.3",
   "description": "Public Figure webapp using AngularJS",
   "repository": "github:xibbit/xibbit",
   "license": "MIT",

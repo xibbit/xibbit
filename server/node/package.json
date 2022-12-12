@@ -1,7 +1,7 @@
 {
   "name": "public-figure-nodejs",
   "private": true,
-  "version": "1.5.2",
+  "version": "1.5.3",
   "description": "Public Figure webapp served from Node.js",
   "repository": "github:xibbit/xibbit",
   "license": "MIT",

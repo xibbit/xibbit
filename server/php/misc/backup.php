@@ -1,7 +1,7 @@
 <?php
 // The MIT License (MIT)
 //
-// xibbit 1.5.2 Copyright (c) © 2021 Daniel W. Howard and Sanjana A. Joshi Partnership
+// xibbit 1.5.3 Copyright (c) © 2021 Daniel W. Howard and Sanjana A. Joshi Partnership
 //
 // Permission is hereby granted, free of charge, to any person obtaining a copy
 // of this software and associated documentation files (the "Software"), to deal
@@ -21,8 +21,8 @@
 // OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 // SOFTWARE.
 //
-// @version 1.5.2
-// @copyright xibbit 1.5.2 Copyright (c) © 2021 Daniel W. Howard and Sanjana A. Joshi Partnership
+// @version 1.5.3
+// @copyright xibbit 1.5.3 Copyright (c) © 2021 Daniel W. Howard and Sanjana A. Joshi Partnership
 // @license http://opensource.org/licenses/MIT
 mysqli_report(MYSQLI_REPORT_OFF);
 require_once('../config.php');
@@ -65,7 +65,7 @@ function backup() {
     '<?php',
     '// The MIT License (MIT)',
     '//',
-    '// xibbit 1.5.2 Copyright (c) © 2021 Daniel W. Howard and Sanjana A. Joshi Partnership',
+    '// xibbit 1.5.3 Copyright (c) © 2021 Daniel W. Howard and Sanjana A. Joshi Partnership',
     '//',
     '// Permission is hereby granted, free of charge, to any person obtaining a copy',
     '// of this software and associated documentation files (the "Software"), to deal',
@@ -85,8 +85,8 @@ function backup() {
     '// OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE',
     '// SOFTWARE.',
     '//',
-    '// @version 1.5.2',
-    '// @copyright xibbit 1.5.2 Copyright (c) © 2021 Daniel W. Howard and Sanjana A. Joshi Partnership',
+    '// @version 1.5.3',
+    '// @copyright xibbit 1.5.3 Copyright (c) © 2021 Daniel W. Howard and Sanjana A. Joshi Partnership',
     '// @license http://opensource.org/licenses/MIT',
     'require \'config.php\';',
     'require \'pwd.php\';',

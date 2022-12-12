@@ -1,7 +1,7 @@
 {
   "name": "mithril-public-figure",
   "private": true,
-  "version": "1.5.2",
+  "version": "1.5.3",
   "description": "Public Figure webapp using Mithril",
   "repository": "github:xibbit/xibbit",
   "license": "MIT",
