@@ -85,7 +85,8 @@ class XibDb {
         $e = $this->checkJsonColumnConstraint($querySpec, $whereSpec);
       }
       if ($e !== null) {
-        throw new Exception("pre-check: " . $e->getMessage());
+        $this->fail('pre-check: ' . $e->getMessage());
+        return null;
       }
     }
 
@@ -290,7 +291,8 @@ class XibDb {
         $e = $this->checkJsonColumnConstraint($querySpec, $whereSpec);
       }
       if ($e !== null) {
-        throw new Exception("post-check: " . $e->getMessage());
+        $this->fail('post-check: ' . $e->getMessage());
+        return null;
       }
     }
 
@@ -323,7 +325,8 @@ class XibDb {
 //    if ($this->checkConstraints) {
 //      $e = $this->checkJsonColumnConstraint($querySpec);
 //      if ($e !== null) {
-//        throw new Exception("pre-check: " . $e->getMessage());
+//        $this->fail('pre-check: ' . $e->getMessage());
+//        return null;
 //      }
 //    }
 
@@ -392,7 +395,8 @@ class XibDb {
 //    if ($this->checkConstraints) {
 //      $e = $this->checkJsonColumnConstraint($querySpec);
 //      if ($e !== null) {
-//        throw new Exception("post-check: " . $e->getMessage());
+//        $this->fail('post-check: ' . $e->getMessage());
+//        return null;
 //      }
 //    }
 
@@ -429,7 +433,8 @@ class XibDb {
         $e = $this->checkJsonColumnConstraint($querySpec, $whereSpec);
       }
       if ($e !== null) {
-        throw new Exception("pre-check: " . $e->getMessage());
+        $this->fail('pre-check: ' . $e->getMessage());
+        return null;
       }
     }
 
@@ -567,7 +572,8 @@ class XibDb {
         $nInt = 0;
       }
       if ($nInt > $nLen) {
-        throw new Exception('`n` value out of range');
+        $this->fail('`n` value out of range', $q);
+        return null;
       }
 
       // add sort field to sqlValuesMap
@@ -615,7 +621,15 @@ class XibDb {
     $qr = null;
 
     foreach ($qa as $q) {
-      $qr = &$this->mysql_query($q);
+      try {
+        if ($qr !== null) {
+          $this->mysql_free_query($qr);
+        }
+        $qr = &$this->mysql_query($q);
+      } catch (Exception $e) {
+        $this->fail($e, $q);
+        return null;
+      }
     }
 
     if (($auto_increment_field !== '') && (qr !== null)) {
@@ -631,7 +645,8 @@ class XibDb {
         $e = $this->checkJsonColumnConstraint($querySpec, $whereSpec);
       }
       if ($e !== null) {
-        throw new Exception("post-check: " . $e->getMessage());
+        $this->fail('post-check: ' . $e->getMessage());
+        return null;
       }
     }
 
@@ -667,7 +682,8 @@ class XibDb {
         $e = $this->checkJsonColumnConstraint($querySpec, $whereSpec);
       }
       if ($e !== null) {
-        throw new Exception("pre-check: " . $e->getMessage());
+        $this->fail('pre-check: ' . $e->getMessage());
+        return null;
       }
     }
 
@@ -786,7 +802,8 @@ class XibDb {
         $this->mysql_free_query($qr);
       } else {
         $e = 'xibdb.DeleteRow():num_rows:' . $num_rows;
-        $this->fail($e);
+        $this->fail($e, $q);
+        return null;
       }
     }
 
@@ -829,7 +846,8 @@ class XibDb {
       $this->mysql_free_query($qr_reorder);
       if ($nInt >= $nLen) {
         $e = '`n` value out of range';
-        $this->fail($e);
+        $this->fail($e, $q);
+        return null;
       }
     }
 
@@ -839,7 +857,13 @@ class XibDb {
     $qr = null;
 
     foreach ($qa as $q) {
-      $qr = &$this->mysql_query($q);
+      try {
+        $qr = &$this->mysql_query($q);
+        $this->mysql_free_query($qr);
+      } catch (Exception $e) {
+        $this->fail($e, $q);
+        return null;
+      }
     }
 
     // check constraints
@@ -849,7 +873,8 @@ class XibDb {
         $e = $this->checkJsonColumnConstraint($querySpec, $whereSpec);
       }
       if ($e !== null) {
-        throw new Exception("post-check: " . $e->getMessage());
+        $this->fail('post-check: ' . $e->getMessage());
+        return null;
       }
     }
 
@@ -886,7 +911,8 @@ class XibDb {
         $e = $this->checkJsonColumnConstraint($querySpec, $whereSpec);
       }
       if ($e !== null) {
-        throw new Exception("pre-check: " . $e->getMessage());
+        $this->fail('pre-check: ' . $e->getMessage());
+        return null;
       }
     }
 
@@ -1004,8 +1030,8 @@ class XibDb {
     if ($rows_affected === 0) {
       if ($andStr === '') {
         $e = '0 rows affected';
-        $this->log->println($q);
-        $this->fail($e);
+        $this->fail($e, $q);
+        return null;
       }
       $q = 'SELECT COUNT(*) AS rows_affected FROM `' . $tableStr . '`' . $whereStr . ';';
       $qr = $this->mysql_query($q);
@@ -1018,12 +1044,12 @@ class XibDb {
       } else {
         $e = '0 rows affected';
       }
-      $this->log->println($q);
-      $this->fail($e);
+      $this->fail($e, $q);
+      return null;
     } elseif (($limitInt !== -1) && ($rows_affected > $limitInt)) {
       $e = '' . $rows_affected . ' rows affected but limited to ' . $limitInt . ' rows';
-      $this->log->println($q);
-      $this->fail($e);
+      $this->fail($e, $q);
+      return null;
     }
 
     $qa = array();
@@ -1054,7 +1080,8 @@ class XibDb {
         $this->mysql_free_query($qr_reorder);
         if ($e) {
           $err = '"' . $this->mysql_real_escape_string($jsonValue) . '" value in `' . $json_field . '` column in `' . $tableStr . '` table; ' . $e;
-          $this->fail($err);
+          $this->fail($err, $q);
+          return null;
         }
       }
       $qIns = array();
@@ -1138,11 +1165,11 @@ class XibDb {
     foreach ($qa as $q) {
       try {
         $qr = &$this->mysql_query($q);
+        $this->mysql_free_query($qr);
       } catch (Exception $e) {
-        print $q;
-        throw $e;
+        $this->fail($e, $q);
+        return null;
       }
-      $this->mysql_free_query($qr);
     }
 
     // check constraints
@@ -1152,7 +1179,8 @@ class XibDb {
         $e = $this->checkJsonColumnConstraint($querySpec, $whereSpec);
       }
       if ($e !== null) {
-        throw new Exception("post-check: " . $e->getMessage());
+        $this->fail('post-check: ' . $e->getMessage());
+        return null;
       }
     }
 
@@ -1189,7 +1217,8 @@ class XibDb {
         $e = $this->checkJsonColumnConstraint($querySpec, $whereSpec);
       }
       if ($e !== null) {
-        throw new Exception("pre-check: " . $e->getMessage());
+        $this->fail('pre-check: ' . $e->getMessage());
+        return null;
       }
     }
 
@@ -1233,12 +1262,14 @@ class XibDb {
     if ($sort_field !== '') {
       $orderByStr = ' ORDER BY `' . $sort_field . '` DESC';
     } else {
-      throw new Exception($tableStr . ' does not have a sort_field');
+      $this->fail($tableStr . ' does not have a sort_field');
+      return null;
     }
     $limitStr = ' LIMIT 1';
 
     if ($m === $n) {
-      throw new Exception('`m` and `n` are the same so nothing to do');
+      $this->fail('`m` and `n` are the same so nothing to do');
+      return null;
     }
 
     // decode remaining ambiguous arguments
@@ -1268,10 +1299,12 @@ class XibDb {
     }
     $this->mysql_free_query($qr_end);
     if (($m < 0) || ($m >= $nLen)) {
-      throw new Exception('`m` value out of range');
+      $this->fail('`m` value out of range', $q);
+      return null;
     }
     if (($n < 0) || ($n >= $nLen)) {
-      throw new Exception('`n` value out of range');
+      $this->fail('`n` value out of range', $q);
+      return null;
     }
 
     $qa = array();
@@ -1320,8 +1353,13 @@ class XibDb {
     $qr = null;
 
     foreach ($qa as $q) {
-      $qr = &$this->mysql_query($q);
-      $this->mysql_free_query($qr);
+      try {
+        $qr = &$this->mysql_query($q);
+        $this->mysql_free_query($qr);
+      } catch (Exception $e) {
+        $this->fail($e, $q);
+        return null;
+      }
     }
 
     // check constraints
@@ -1331,7 +1369,8 @@ class XibDb {
         $e = $this->checkJsonColumnConstraint($querySpec, $whereSpec);
       }
       if ($e !== null) {
-        throw new Exception("post-check: " . $e->getMessage());
+        $this->fail('post-check: ' . $e->getMessage());
+        return null;
       }
     }
 
@@ -1372,11 +1411,9 @@ class XibDb {
       $result = mysql_query($query);
       $e = mysql_error();
     }
+    // fail on error
     if ($e !== '') {
-      if (!$this->dumpSql && !$this->dryRun) {
-        $this->log->println($query);
-      }
-      throw new Exception($e);
+      $this->fail($e, $query);
     }
     return $result;
   }
@@ -1433,7 +1470,7 @@ class XibDb {
       mysql_free_result($result);
     }
     if ($e !== '') {
-      throw new Exception($e);
+      $this->fail($e);
     }
   }
 
@@ -1831,7 +1868,8 @@ class XibDb {
    *
    * @author DanielWHoward
    */
-  function println() {
+  function println($s) {
+    print($s);
   }
 
   /**
@@ -1839,10 +1877,11 @@ class XibDb {
    *
    * @author DanielWHoward
    */
-  function fail() {
-    $args = func_get_args();
-    $msg = implode(' ', $args);
-    throw new Exception($msg);
+  function fail($e, $q='') {
+    if ($q !== '') {
+      $this->log->println('E:' . $q);
+    }
+    throw new Exception($e);
   }
 }
 
