@@ -53,6 +53,7 @@
     this.dryRun = false;
     this.dumpSql = false;
     this.opt = true;
+    this.log = config.log || this;
   }
 
   /**
@@ -85,7 +86,7 @@
     callback = callback || function() {};
 
     if (that.dumpSql || that.dryRun) {
-      console.debug('readRowsNative()');
+      that.log.println('readRowsNative()');
     }
 
     // check constraints
@@ -96,7 +97,7 @@
         e = that.checkJsonColumnConstraint(querySpec, whereSpec);
       }
       if (e !== null) {
-        callback('pre-check: ' + e.Error());
+        return that.fail(e, 'pre-check', '', callback);
       }
     }
 
@@ -313,7 +314,7 @@
                   obj[key] = value;
                 }
               } catch (e) {
-                console.error(e);
+                that.log.println(e);
               }
             }
             objs.push(obj);
@@ -370,7 +371,7 @@
     var config = this.config;
 
     if (that.dumpSql || that.dryRun) {
-      console.debug('readDescNative()');
+      that.log.println('readDescNative()');
     }
 
     // check constraints
@@ -381,8 +382,7 @@
 //        e = that.checkJsonColumnConstraint(querySpec, whereSpec);
 //      }
 //      if (e !== null) {
-//        callback('pre-check: ' + e.Error());
-//        return;
+//        return that.fail(e, 'pre-check', '', callback);
 //      }
 //    }
 
@@ -406,7 +406,7 @@
       var q = 'DESCRIBE `' + tableStr + '`;';
       this.mysql_query(q, function(e, rows, f) {
         if (e) {
-          console.error(q);
+          return that.fail(e, '', q, callback);
         }
         for (var r=0; r < rows.length; ++r) {
           var rowdesc = rows[r];
@@ -457,8 +457,7 @@
 //            e = that.checkJsonColumnConstraint(querySpec, whereSpec);
 //          }
 //          if (e !== null) {
-//            callback('post-check: ' + e.Error());
-//            return;
+//            return that.fail(e, 'post-check', '', callback);
 //          }
 //        }
 
@@ -508,7 +507,7 @@
     callback = callback || function() {};
 
     if (that.dumpSql || that.dryRun) {
-      console.debug('insertRowNative()');
+      that.log.println('insertRowNative()');
     }
 
     // check constraints
@@ -519,7 +518,7 @@
         e = that.checkJsonColumnConstraint(querySpec, whereSpec);
       }
       if (e !== null) {
-        callback('pre-check: ' + e.Error());
+        return that.fail(e, 'pre-check', '', callback);
       }
     }
 
@@ -664,7 +663,7 @@
                 nInt = 0;
               }
               if (nInt > nLen) {
-                throw new Exception('`n` value out of range');
+                return that.fail(null, '`n` value out of range', q, callback);
               }
 
               // add sort field to sqlValuesMap
@@ -746,7 +745,7 @@
               e = that.checkJsonColumnConstraint(querySpec, whereSpec);
             }
             if (e !== null) {
-              callback('post-check: ' + e, valuesMap);
+              return that.fail(e, 'post-check', '', callback);
             }
           }
 
@@ -804,7 +803,7 @@
     var e = null;
 
     if (that.dumpSql || that.dryRun) {
-      console.debug('deleteRowNative()');
+      that.log.println('deleteRowNative()');
     }
 
     // check constraints
@@ -814,7 +813,7 @@
         e = that.checkJsonColumnConstraint(querySpec, whereSpec);
       }
       if (e !== null) {
-        callback('pre-check: ' + e.Error());
+        return that.fail(e, 'pre-check', '', callback);
       }
     }
 
@@ -914,7 +913,7 @@
             var q = 'SELECT COUNT(*) AS num_rows FROM `' + tableStr + '`' + whereStr + andStr + orderByStr + ';';
             that.mysql_query(q, function(e, rows) {
               if (e) {
-                return callback(e);
+                return that.fail(e, '', q, callback);
               }
               var num_rows = 0;
               for (var r=0; r < rows.length; ++r) {
@@ -951,8 +950,7 @@
                   promise.resolve(true);
                 });
               } else {
-                var e = 'xibdb.DeleteRow():num_rows:' + num_rows;
-                callback(e);
+                return that.fail(null, 'xibdb.DeleteRow():num_rows:' + num_rows, '', callback);
               }
             });
           }
@@ -1001,9 +999,7 @@
                 }
                 that.mysql_free_query(rows);
                 if (nInt >= nLen) {
-                  e = '`n` value out of range';
-                  callback(e);
-                  return;
+                  return that.fail(null, '`n` value out of range', '', callback);
                 }
                 promise.resolve(true);
               });
@@ -1037,7 +1033,7 @@
                 e = that.checkJsonColumnConstraint(querySpec, whereSpec);
               }
               if (e !== null) {
-                callback('post-check: ' + e);
+                return that.fail(e, 'post-check', '', callback);
               }
             }
             callback(null, true);
@@ -1097,7 +1093,7 @@
     callback = callback || function() {};
 
     if (that.dumpSql || that.dryRun) {
-      console.debug('updateRowNative()');
+      that.log.println('updateRowNative()');
     }
 
     // check constraints
@@ -1108,8 +1104,7 @@
         e = that.checkJsonColumnConstraint(querySpec, whereSpec);
       }
       if (e !== null) {
-        callback('pre-check: ' + e.Error());
-        return;
+        return that.fail(e, 'pre-check', '', callback);
       }
     }
 
@@ -1223,8 +1218,7 @@
 
         if (rows_affected === 0) {
           if (andStr === '') {
-            var e = '0 rows affected';
-            callback(e);
+            return that.fail(null, '0 rows affected', q, callback);
           } else {
             q = 'SELECT COUNT(*) AS rows_affected FROM `' + tableStr + '`' + whereStr + ';';
             that.mysql_query(q, function(e, rows) {
@@ -1239,14 +1233,12 @@
               } else {
                 e = '0 rows affected';
               }
-              callback(e);
+              return that.fail(null, e, q, callback);
             });
           }
           return;
         } else if ((limitInt !== -1) && (rows_affected > limitInt)) {
-          e = '' + rows_affected + ' rows affected but limited to ' + limitInt + ' rows';
-          callback(e);
-          return;
+          return that.fail(null, '' + rows_affected + ' rows affected but limited to ' + limitInt + ' rows', q, callback);
         }
 
         var qa = [];
@@ -1390,7 +1382,7 @@
                 e = that.checkJsonColumnConstraint(querySpec, whereSpec);
               }
               if (e !== null) {
-                callback('post-check: ' + e);
+                return that.fail(e, 'post-check', '', callback);
               }
             }
             callback(null, true);
@@ -1451,7 +1443,7 @@
     var e = null;
 
     if (that.dumpSql || that.dryRun) {
-      console.debug('moveRowNative()');
+      that.log.println('moveRowNative()');
     }
 
     // check constraints
@@ -1461,7 +1453,7 @@
         e = that.checkJsonColumnConstraint(querySpec, whereSpec);
       }
       if (e !== null) {
-        callback('pre-check: ' + e.Error());
+        return that.fail(e, 'pre-check', '', callback);
       }
     }
 
@@ -1505,14 +1497,12 @@
       if (sort_field !== '') {
         orderByStr = ' ORDER BY `' + sort_field + '` DESC';
       } else {
-        callback(tableStr + ' does not have a sort_field');
-        return;
+        return that.fail('', tableStr + ' does not have a sort_field', '', callback);
       }
       var limitStr = ' LIMIT 1';
 
       if (m === n) {
-        callback('`m` and `n` are the same so nothing to do');
-        return;
+        return that.fail('', '`m` and `n` are the same so nothing to do', '', callback);
       }
 
       // decode remaining ambiguous arguments
@@ -1543,12 +1533,10 @@
         }
         that.mysql_free_query(rows);
         if ((m < 0) || (m >= nLen)) {
-          callback('`m` value out of range');
-          return;
+          return that.fail(null, '`m` value out of range', q, callback);
         }
         if ((n < 0) || (n >= nLen)) {
-          callback('`n` value out of range');
-          return;
+          return that.fail(null, '`n` value out of range', q, callback);
         }
 
         var qa = [];
@@ -1616,7 +1604,7 @@
               e = that.checkJsonColumnConstraint(querySpec, whereSpec);
             }
             if (e !== null) {
-              callback('post-check: ' + e);
+              return that.fail(e, 'post-check', '', callback);
             }
           }
 
@@ -1661,7 +1649,7 @@
   XibDb.prototype.mysql_query = function(query, callback) {
     var that = this;
     if (that.dumpSql || that.dryRun) {
-      console.debug(query);
+      that.log.println(query);
     }
     if (that.dryRun && (!query.startsWith('SELECT ') && !query.startsWith('DESCRIBE '))) {
       return callback({
@@ -2024,6 +2012,32 @@
       sql = clauses.join(op);
     }
     return sql;
+  };
+
+  /**
+   * Do nothing for log output.
+   *
+   * @param {string} s The string to log.
+   8
+   * @author DanielWHoward
+   */
+  XibDb.prototype.println = function(s) {
+    console.debug(s);
+  };
+
+  /**
+   * Throw an exception to create a stack trace.
+   *
+   * @author DanielWHoward
+   */
+  XibDb.prototype.fail = function(ex, eStr, q, callback) {
+    var that = this;
+    q = q || '';
+    if (q !== '') {
+      that.log.println('E:' + q);
+    }
+    eStr = eStr || ex.toString();
+    return callback(eStr);
   };
 
 /**
