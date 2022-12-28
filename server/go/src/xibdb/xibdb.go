@@ -626,7 +626,12 @@ func (that XibDb) InsertRowNative(querySpec interface{}, whereSpec interface{}, 
 
 	// finally, generate valuesStr from valuesMap
 	if len(sqlValuesMap) > 0 {
+		colsStr := ""
 		for col, value := range sqlValuesMap {
+			if colsStr != "" {
+				colsStr += ","
+			}
+			colsStr += "`" + that.Mysql_real_escape_string(col) + "`"
 			if valuesStr != "" {
 				valuesStr += ","
 			}
@@ -652,9 +657,9 @@ func (that XibDb) InsertRowNative(querySpec interface{}, whereSpec interface{}, 
 			} else {
 				valueStr = "'" + that.Mysql_real_escape_string(value.(string)) + "'"
 			}
-			valuesStr += "`" + that.Mysql_real_escape_string(col) + "`=" + valueStr
+			valuesStr += valueStr
 		}
-		valuesStr = " SET " + valuesStr
+		valuesStr = " (" + colsStr + ") VALUES (" + valuesStr + ")"
 	}
 
 	q := "INSERT INTO `" + tableStr + "`" + valuesStr + ";"

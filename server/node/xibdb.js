@@ -678,12 +678,17 @@
       promises.resolve(function() {
         // finally, generate valuesStr from valuesMap
         if (Object.keys(sqlValuesMap).length > 0) {
+          var colsStr = '';
           var valuesStr = '';
           for (var col in sqlValuesMap) {
             if (!sqlValuesMap.hasOwnProperty(col)) {
               continue;
             }
             var value = sqlValuesMap[col];
+            if (colsStr !== '') {
+              colsStr += ',';
+            }
+            colsStr += '`' + that.mysql_real_escape_string(col) + '`';
             if (valuesStr !== '') {
               valuesStr += ',';
             }
@@ -709,9 +714,9 @@
             } else {
               valueStr = "'" + that.mysql_real_escape_string(value) + "'";
             }
-            valuesStr += '`' + that.mysql_real_escape_string(col) + '`=' + valueStr;
+            valuesStr += valueStr;
           }
-          valuesStr = ' SET ' + valuesStr;
+          valuesStr = ' (' + colsStr + ') VALUES (' + valuesStr + ')';
         }
 
         var q = 'INSERT INTO `' + tableStr + '`' + valuesStr + ';';
