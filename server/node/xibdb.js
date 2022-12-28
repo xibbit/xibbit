@@ -693,7 +693,7 @@
             } else if (value === null) {
               valueStr = 'NULL';
             } else {
-              valueStr = '"' + that.mysql_real_escape_string(value) + '"';
+              valueStr = "'" + that.mysql_real_escape_string(value) + "'";
             }
             valuesStr += '`' + that.mysql_real_escape_string(col) + '`=' + valueStr;
           }
@@ -1296,7 +1296,7 @@
                         if ((jsonStr === '') || (jsonStr === '[]')) {
                           jsonStr = '{}';
                         }
-                        valueStr = '"' + that.mysql_real_escape_string(jsonStr) + '"';
+                        valueStr = "'" + that.mysql_real_escape_string(jsonStr) + "'";
                       } else if (typeof value === 'boolean') {
                         var valueBool = !!value;
                         if (valueBool) {
@@ -1309,7 +1309,7 @@
                       } else if (value === null) {
                         valueStr = 'NULL';
                       } else {
-                        valueStr = '"' + that.mysql_real_escape_string(value) + '"';
+                        valueStr = "'" + that.mysql_real_escape_string(value) + "'";
                       }
                       valuesStr += '`' + that.mysql_real_escape_string(col) + '`=' + valueStr;
                     }
@@ -1921,19 +1921,19 @@
             // assume it is some SQL syntax
             sub = that.implementSyntax(key, value);
             if (sub !== '') {
-              sub = '('+sub+ ')';
+              sub = '(' + sub + ')';
             }
           } else if (((typeof value) === 'object')
               && (value.constructor.name === 'Object')) {
             // assume it is a sub-clause
             sub = that.implementCondition(value);
             if (sub !== '') {
-              sub = '('+sub+ ')';
+              sub = '(' + sub + ')';
             }
           } else {
             sub = that.mysql_real_escape_string(value);
             if (onVar === '') {
-              sub = "'"+sub+ "'";
+              sub = "'" + sub + "'";
             } else {
               sub = '`' + sub.replace(/\./g, '`.`') + '`';
             }
@@ -1971,7 +1971,7 @@
       var op = ' OR ';
       var clauses = [];
       var col = syntax[1];
-      var likeStr = '`'+col+'` LIKE';
+      var likeStr = '`' + col + '` LIKE';
       if (syntax.length === 3) {
         var valueStr = syntax[2];
         valueStr = likeStr + " '" + that.mysql_real_escape_string(valueStr) + "'";
@@ -2003,7 +2003,7 @@
       var clauses = [];
       for (var v=0; v < syntax.length; ++v) {
         var valueStr = syntax[i];
-        valueStr = '`'+key+"`='" + that.mysql_real_escape_string(valueStr) + "'";
+        valueStr = '`' + key + "`='" + that.mysql_real_escape_string(valueStr) + "'";
         clauses.append(valueStr);
       }
       sql = clauses.join(op);
