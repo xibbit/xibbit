@@ -576,7 +576,7 @@ class XibDb {
           if (($jsonStr === '') || ($jsonStr === '[]')) {
             $jsonStr = '{}';
           }
-          $valueStr = '"' . $this->mysql_real_escape_string($jsonStr) . '"';
+          $valueStr = "'" . $this->mysql_real_escape_string($jsonStr) . "'";
         } elseif ($this->mapBool && is_bool($value)) {
           $valueBool = $value;
           if ($valueBool) {
@@ -589,7 +589,7 @@ class XibDb {
         } elseif (is_null($value)) {
           $valueStr = 'NULL';
         } else {
-          $valueStr = '"' . $this->mysql_real_escape_string($value) . '"';
+          $valueStr = "'" . $this->mysql_real_escape_string($value) . "'";
         }
         $valuesStr .= '`' . $this->mysql_real_escape_string($col) . '`=' . $valueStr;
       }
@@ -723,7 +723,7 @@ class XibDb {
             } else {
               $andStr .= ' AND ';
             }
-            $andStr .= $col . '=\'' . $value . '\'';
+            $andStr .= $col . "='" . $value . "'";
           }
         } else {
           $andStr .= $nStr;
@@ -1070,7 +1070,7 @@ class XibDb {
             if (($jsonStr === '') || ($jsonStr === '[]')) {
               $jsonStr = '{}';
             }
-            $valueStr = '"' . $this->mysql_real_escape_string($jsonStr) . '"';
+            $valueStr = "'" . $this->mysql_real_escape_string($jsonStr) . "'";
           } elseif ($this->mapBool && is_bool($value)) {
             $valueBool = boolval($value);
             if ($valueBool) {
@@ -1083,7 +1083,7 @@ class XibDb {
           } elseif (is_null($value)) {
             $valueStr = 'NULL';
           } else {
-            $valueStr = '"' . $this->mysql_real_escape_string($value) . '"';
+            $valueStr = "'" . $this->mysql_real_escape_string($value) . "'";
           }
           $valuesStr .= '`' . $this->mysql_real_escape_string($col) . '`=' . $valueStr;
         }

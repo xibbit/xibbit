@@ -613,7 +613,7 @@ func (that XibDb) InsertRowNative(querySpec interface{}, whereSpec interface{}, 
 				if (jsonStr == "") || (jsonStr == "[]") {
 					jsonStr = "{}"
 				}
-				valueStr = "\"" + that.Mysql_real_escape_string(jsonStr) + "\""
+				valueStr = "'" + that.Mysql_real_escape_string(jsonStr) + "'"
 			} else if _, ok := value.(bool); ok {
 				valueBool, _ := value.(bool)
 				if valueBool {
@@ -626,7 +626,7 @@ func (that XibDb) InsertRowNative(querySpec interface{}, whereSpec interface{}, 
 			} else if value == nil {
 				valueStr = "NULL"
 			} else {
-				valueStr = "\"" + that.Mysql_real_escape_string(value.(string)) + "\""
+				valueStr = "'" + that.Mysql_real_escape_string(value.(string)) + "'"
 			}
 			valuesStr += "`" + that.Mysql_real_escape_string(col) + "`=" + valueStr
 		}
@@ -1122,7 +1122,7 @@ func (that XibDb) UpdateRowNative(querySpec interface{}, whereSpec interface{}, 
 					if (jsonStr == "") || (jsonStr == "[]") {
 						jsonStr = "{}"
 					}
-					valueStr = "\"" + that.Mysql_real_escape_string(jsonStr) + "\""
+					valueStr = "'" + that.Mysql_real_escape_string(jsonStr) + "'"
 				} else if  _, ok := value.(bool); ok {
 					valueBool, _ := value.(bool)
 					if valueBool {
@@ -1135,7 +1135,7 @@ func (that XibDb) UpdateRowNative(querySpec interface{}, whereSpec interface{}, 
 				} else if value == nil {
 					valueStr = "NULL"
 				} else {
-					valueStr = "\"" + that.Mysql_real_escape_string(value.(string)) + "\""
+					valueStr = "'" + that.Mysql_real_escape_string(value.(string)) + "'"
 				}
 				valuesStr += "`" + that.Mysql_real_escape_string(col) + "`=" + valueStr
 			}
