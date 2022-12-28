@@ -586,6 +586,10 @@ class XibDb {
     if (count($sqlValuesMap) > 0) {
       $colsStr = '';
       foreach ($sqlValuesMap as $col => $value) {
+        if ($colsStr !== '') {
+          $colsStr .= ',';
+        }
+        $colsStr .= '`' . $this->mysql_real_escape_string($col) . '`';
         if ($valuesStr !== '') {
           $valuesStr .= ',';
         }
@@ -610,9 +614,9 @@ class XibDb {
         } else {
           $valueStr = "'" . $this->mysql_real_escape_string($value) . "'";
         }
-        $valuesStr .= '`' . $this->mysql_real_escape_string($col) . '`=' . $valueStr;
+        $valuesStr .= $valueStr;
       }
-      $valuesStr = ' SET ' . $valuesStr;
+      $valuesStr = ' (' . $colsStr . ') VALUES (' . $valuesStr . ')';
     }
 
     $q = 'INSERT INTO `' . $tableStr . '`' . $valuesStr . ';';
