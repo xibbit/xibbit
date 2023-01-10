@@ -95,6 +95,8 @@ class _SignupPage extends State<SignupPage> {
                   hintText: 'Your email address',
                   labelText: 'Email address',
                 ),
+                enableSuggestions: false,
+                autocorrect: false,
                 controller: emailController,
                 focusNode: emailFocus,
                 validator: (value) {
@@ -109,6 +111,9 @@ class _SignupPage extends State<SignupPage> {
                   hintText: 'Your password',
                   labelText: 'Password',
                 ),
+                obscureText: true,
+                enableSuggestions: false,
+                autocorrect: false,
                 controller: pwdController,
                 focusNode: pwdFocus,
                 validator: (value) {
