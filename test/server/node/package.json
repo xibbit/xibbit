@@ -1,0 +1,20 @@
+{
+  "name": "public-figure-nodejs",
+  "private": true,
+  "version": "1.5.3",
+  "description": "Public Figure webapp served from Node.js",
+  "repository": "github:xibbit/xibbit",
+  "license": "MIT",
+  "dependencies": {
+    "bluebird": "^3.0.1",
+    "express": "^4.5.0",
+    "moment-timezone": "^0.3.0",
+    "morgan": ">= 1.0.0",
+    "multer": "^1.4.5-lts.1",
+    "mysql": "^2.3.0",
+    "nodemailer": ">= 6.0.0",
+    "socket.io": "^2.0.1",
+    "twin-bcrypt": "^2.0.0",
+    "url": "^0.4.9"
+  }
+}
