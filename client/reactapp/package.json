@@ -5,6 +5,7 @@
   "description": "Public Figure webapp using React",
   "repository": "github:xibbit/xibbit",
   "license": "MIT",
+  "homepage": ".",
   "proxy": "http://localhost:80/xibbit/server",
   "dependencies": {
     "@testing-library/jest-dom": "^5.11.4",
