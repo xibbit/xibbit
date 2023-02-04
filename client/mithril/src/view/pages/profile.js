@@ -117,7 +117,7 @@ export default function() {
                                 </div>
                                 <div class="form-control">
                                     <div>Postal</div>
-                                    <input type="text" value={ state.profile.zip } oninput={ e => { state.profile.state = e.target.zip; } } placeholder="Postal code" />
+                                    <input type="text" value={ state.profile.zip } oninput={ e => { state.profile.zip = e.target.value; } } placeholder="Postal code" />
                                 </div>
                             </div>
                         </div>
