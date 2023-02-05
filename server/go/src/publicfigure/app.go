@@ -114,6 +114,7 @@ func main() {
 		"react":     "../../client/reactapp/build",
 		"angularjs": "../../client/angularjs/app",
 		"inferno":   "../../client/infernoapp/build",
+		"marko":     "../../client/marko/dist",
 		"mithril":   "../../client/mithril/dist",
 	}
 	clientFolder := clientFolders["angularjs"]
