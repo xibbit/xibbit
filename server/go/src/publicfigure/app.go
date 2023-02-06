@@ -127,20 +127,22 @@ func main() {
 		} else if strings.HasPrefix(filepath, "/socketio/socket.io.js") {
 			context.FileFromFS("socketio/socket.io.js", http.Dir("./static"))
 		} else if strings.HasPrefix(filepath, "/user/profile/upload_photo") {
-			file, _, err := context.Request.FormFile("user_profile_upload_photo_image")
+			file, header, err := context.Request.FormFile("user_profile_upload_photo_image")
 			if err != nil {
 				context.String(http.StatusBadRequest, fmt.Sprintf("file err : %s", err.Error()))
 				return
 			}
+			// show how to get sid but do nothing with it
 			sid := context.PostForm("sid")
-			fmt.Println("sid")
-			fmt.Println(sid)
+			sid = sid
 			instance := context.PostForm("instance")
 			session := hub.GetSessionByInstance(instance)
-			//filename := header.Filename
+			// get upload filename from user's browser
+			filename := header.Filename
 			eventReply, _ := hub.Trigger(map[string]interface{}{
 				"type": "user_profile_upload_photo",
 				"image": map[string]interface{}{
+					"filename": filename,
 					"tmp_name": file,
 				},
 				"_session": session["session_data"],
