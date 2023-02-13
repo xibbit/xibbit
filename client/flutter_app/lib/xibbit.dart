@@ -487,6 +487,9 @@ class Xibbit {
     var self = this;
     Map<String, Object> instanceEvent = {'type': '_instance'};
     String? instanceValue = await self.getInstanceValue();
+    //HACK mobile apps do not need to use instanceValue but it
+    // should harmless; fix servers the crash, though
+    instanceValue = null;
     if (instanceValue != null) {
       instanceEvent['instance'] = instanceValue;
       if (self.config['socketio']['transports'] == 'polling') {
