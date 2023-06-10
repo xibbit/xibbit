@@ -35,3 +35,9 @@ var server_base = {
   php: '/xibbit/server/php',
   django: '/static'
 };
+var server_eio_protocol = {
+  go: 3,
+  node: 3,
+  php: 3,
+  django: 4
+};

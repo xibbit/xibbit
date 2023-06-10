@@ -106,6 +106,7 @@ class XibbitService {
       'preserveSession': preserveSession,
       'seq': true,
       'socketio': {
+        'eio_protocol': server_eio_protocol[server_platform],
         'start': true,
         'transports': client_transports,
         'min': (client_transports.indexOf('xio') != -1) ? 3000 : null,

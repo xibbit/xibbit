@@ -68,9 +68,6 @@ class _ProfilePage extends State<ProfilePage> {
     String username = (xibbitService.session['me'] as Map)['username'];
     var publicFolder = server_base[server_platform] + '/public/images';
     _userProfileImageUrl = publicFolder + '/' + username + '.png';
-    if (server_platform == 'django') {
-      _userProfileImageUrl = '/public/images/$username.png';
-    }
     _profileImageUrl = '$_userProfileImageUrl?r=${_rnd.nextInt(1000)}';
     xibbitService.send({
       'type': 'user_profile'

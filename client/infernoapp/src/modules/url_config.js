@@ -35,13 +35,20 @@ var server_base = {
   php: '/php',
   django: '/static'
 };
+var server_eio_protocol = {
+  go: 3,
+  node: 3,
+  php: 3,
+  django: 4
+};
 
 const url_config = {
   client_base,
   client_debug,
   client_transports,
   server_platform,
-  server_base
+  server_base,
+  server_eio_protocol
 };
 
 export default url_config;

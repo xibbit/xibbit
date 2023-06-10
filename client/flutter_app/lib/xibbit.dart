@@ -34,8 +34,8 @@ import 'package:path/path.dart';
 import 'package:cross_file/cross_file.dart';
 import 'package:logging/logging.dart';
 import 'package:shared_preferences/shared_preferences.dart';
-import 'package:socket_io_client_flutter/socket_io_client_flutter.dart';
-import 'package:socket_io_client_flutter/src/engine/transport/xhr_transport.dart';
+import 'package:socket_io_client_flutter/http/req.dart';
+import 'package:socket_io_client_flutter/socket_io_client_flutter.dart' as io;
 
 final Logger _logger = Logger('xibbit');
 
@@ -248,7 +248,7 @@ class Xibbit {
   ///
   void trigger(type, event) {
     var self = this;
-    Function fn = self.fns[type];
+    Function? fn = self.fns[type];
     if (fn != null) {
       fn(event);
     }
@@ -437,7 +437,8 @@ class Xibbit {
         params = url;
         url = '';
       }
-      self.socket = (url != '') ? io(url, params) : io(params);
+      var vio = io.getEioProtocolVersion(self.config['socketio']['eio_protocol'])['io'];
+      self.socket = (url != '') ? vio(url, params) : vio(params);
       self.connected = true;
       self.config['socketio']['start'] = true;
       self.socket.on('disconnect', (unusedEvent) {
@@ -526,8 +527,10 @@ class Xibbit {
       this.log(event);
       // send the response event to the callback
       if (this.requestEvents[_id] != null) {
-        Map<String, Object> request = this.requestEvents[_id] as Map<String, Object>;
-        Map<String, Object> response = request['_response'] as Map<String, Object>;
+        Map<String, Object> request =
+            this.requestEvents[_id] as Map<String, Object>;
+        Map<String, Object> response =
+            request['_response'] as Map<String, Object>;
         Function callback = response['callback'] as Function;
         this.requestEvents.remove(_id);
         callback(event);
@@ -711,7 +714,8 @@ class Xibbit {
   /// Return a file upload structure.
   /// @author DanielWHoward
   ///
-  Future<http.MultipartRequest> createUploadFormData(String method, String url, Map event) async {
+  Future<http.MultipartRequest> createUploadFormData(
+      String method, String url, Map event) async {
     var uri = Uri.parse(url);
     var fd = http.MultipartRequest(method, uri);
 
@@ -721,14 +725,11 @@ class Xibbit {
       if (k != 'type') {
         if (event[k] is XFile) {
           var stream =
-            http.ByteStream(DelegatingStream.typed(event[k].openRead()));
+              http.ByteStream(DelegatingStream.typed(event[k].openRead()));
           var length = File(event[k].path).lengthSync();
           var multipartFileSign = http.MultipartFile(
-            event['type'] + '_' + k,
-            stream,
-            length,
-            filename: basename(event[k].path)
-          );
+              event['type'] + '_' + k, stream, length,
+              filename: basename(event[k].path));
           fd.files.add(multipartFileSign);
         } else {
           fd.fields[k] = event[k];
@@ -772,29 +773,29 @@ class Xibbit {
       for (var k in o.keys) {
         if (event[k] is XFile) {
           XFile file = event[k];
-          odd[k] = {
-            'type': 'File',
-            'absolute': file.path
-          };
+          odd[k] = {'type': 'File', 'absolute': file.path};
         } else {
           odd[k] = o[k];
         }
       }
       return odd;
     }
+
     var fd = createUploadFormData('POST', url, event);
     // log the upload event to the console
     log(jsonEncode(copyOddClasses(event)), logColors['request']);
 
     var request = await fd;
-    request.headers.addAll({
-      "Accept": "application/json"
-    });
+    request.headers.addAll({"Accept": "application/json"});
+
     request.headers.addAll(FlutterHttpRequest.headers);
 
     var response = await request.send();
 
-    response.stream.transform(utf8.decoder).transform(json.decoder).listen((data) {
+    response.stream
+        .transform(utf8.decoder)
+        .transform(json.decoder)
+        .listen((data) {
       if (response.statusCode == 200) {
         var color = logColors['response'];
         if (data is List) {
@@ -806,7 +807,8 @@ class Xibbit {
             event['e_stacktrace'] = getStringFromDirtyHtml(data);
           } else {
             event['e'] = 'Format Error';
-            event['e_stacktrace'] = 'response is not an array or an HTML string';
+            event['e_stacktrace'] =
+                'response is not an array or an HTML string';
             event['e_data'] = data;
           }
         }
@@ -831,9 +833,9 @@ class Xibbit {
         } else {
           color = logColors['app_error'];
           event['e'] = 'Error';
-          event['e_stacktrace'] = responseData is String?
-            getStringFromDirtyHtml(responseData):
-            'response is not a string';
+          event['e_stacktrace'] = responseData is String
+              ? getStringFromDirtyHtml(responseData)
+              : 'response is not a string';
         }
         //HACK add a response ID so the event will have the right color
         event['_id'] = eventId++;
@@ -922,7 +924,9 @@ class Xibbit {
         ? event['e_stacktrace']
         : null;
     // use color enum or standard color name
-    color = color != null && this.logColors[color] != null ? this.logColors[color] : color;
+    color = color != null && this.logColors[color] != null
+        ? this.logColors[color]
+        : color;
     if (this.config['log'] ||
         ((event != null) && (event['_log'] is bool) && event['_log'] as bool)) {
       if (obj is String) {

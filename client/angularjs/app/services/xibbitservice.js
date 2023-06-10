@@ -23,7 +23,7 @@
 // @version 1.5.3
 // @copyright xibbit 1.5.3 Copyright (c) © 2021 Daniel W. Howard and Sanjana A. Joshi Partnership
 // @license http://opensource.org/licenses/MIT
-/* global _, xibbit, client_debug, client_transports, server_platform, server_base */
+/* global _, xibbit, client_debug, client_transports, server_platform, server_base, server_eio_protocol */
 'use strict';
 
 /**
@@ -110,6 +110,7 @@ angular.module('myApp')
       preserveSession: preserveSession,
       seq: true,
       socketio: {
+        eio_protocol: server_eio_protocol[server_platform],
         start: true,
         transports: client_transports,
         min: (client_transports.indexOf('xio') !== -1)? 3000: null,

@@ -72,6 +72,7 @@ global.xibbitObject = new XibbitService({
   preserveSession: true,
   seq: true,
   socketio: {
+    eio_protocol: url_config.server_eio_protocol[url_config.server_platform],
     start: true,
     transports: url_config.client_transports,
     min: (url_config.client_transports.indexOf('xio') !== -1)? 3000: null,
