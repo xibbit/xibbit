@@ -370,7 +370,8 @@ const xibbit = (function() {
             params = url;
             url = '';
           }
-          self.socket = url ? io(url, params): io(params);
+          var vio = io.getEioProtocolVersion(self.config['socketio']['eio_protocol']).io;
+          self.socket = url ? vio(url, params): vio(params);
           self.connected = true;
           self.config.socketio.start = true;
           self.socket.on('disconnect', function() {
@@ -754,6 +755,7 @@ const xibbit = (function() {
       callback(event);
     });
   };
+
   /**
    * Return a string with HTML tags turned into string characters.
    * @author DanielWHoward
