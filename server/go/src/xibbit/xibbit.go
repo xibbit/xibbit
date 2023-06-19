@@ -812,7 +812,10 @@ func (self *XibbitHub) Start(method string) {
 				keysToSkip := []string{"_session", "_conn"}
 				for _, session := range self.Sessions {
 					events := []map[string]interface{}{}
-					session["session_data"].(map[string]interface{})["instance_id"] = session["instance_id"]
+					instance, ok := session["instance_id"].(string)
+					if ok {
+						session["session_data"].(map[string]interface{})["instance_id"] = instance
+					}
 					events = self.Receive(events, session["session_data"].(map[string]interface{}), false)
 					for _, event := range events {
 						if _conn, ok := session["_conn"].(map[string]interface{}); ok {
