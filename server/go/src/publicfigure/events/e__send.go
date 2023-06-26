@@ -54,7 +54,8 @@ func E__send(event map[string]interface{}, vars map[string]interface{}) map[stri
 		if !ok {
 			log.Println("__send did not get event.to")
 		}
-		now := time.Now().Format("2006-01-02 15:04:05")
+		nowStr := time.Now().Format("2006-01-02 15:04:05")
+		now, _ := time.Parse("2006-01-02 15:04:05", nowStr)
 		sent := false
 		eventFrom := eventMap["from"]
 		if eventFrom == nil {

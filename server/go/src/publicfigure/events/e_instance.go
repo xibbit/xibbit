@@ -43,7 +43,8 @@ func E_instance(event map[string]interface{}, vars map[string]interface{}) map[s
 	useInstances, ok := vars["useInstances"].(bool)
 
 	if ok && useInstances {
-		now := time.Now().Format("2006-01-02 15:04:05")
+		nowStr := time.Now().Format("2006-01-02 15:04:05")
+		now, _ := time.Parse("2006-01-02 15:04:05", nowStr)
 		localSid := ""
 		uid, _ := event["_session"].(map[string]interface{})["uid"].(int)
 		instance := event["instance"].(string)

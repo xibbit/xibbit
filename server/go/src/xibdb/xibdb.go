@@ -38,6 +38,7 @@ import (
 	"reflect"
 	"strconv"
 	"strings"
+	"time"
 )
 
 type Logger interface {
@@ -323,7 +324,7 @@ func (that XibDb) ReadRowsNative(querySpec interface{}, whereSpec interface{}, c
 			if key == "class" {
 				key = "clazz"
 			}
-			valueStr, _ := value.(string)
+			valueStr, valueIsStr := value.(string)
 			if key == json_field {
 				// add non-SQL JSON data later
 				_ = 0
@@ -343,6 +344,8 @@ func (that XibDb) ReadRowsNative(querySpec interface{}, whereSpec interface{}, c
 				obj[key] = intval(value)
 			} else if is_numeric(value) && is_float(desc[key]) {
 				obj[key] = floatval(value)
+			} else if _, ok := desc[key].(time.Time); valueIsStr && ok {
+				obj[key], _ = time.Parse("2006-01-02 15:04:05", valueStr)
 			} else {
 				val := []map[string]interface{}{}
 				e = json.Unmarshal([]byte(valueStr), &val)
@@ -456,6 +459,8 @@ func (that XibDb) ReadDescNative(querySpec interface{}) (desc map[string]interfa
 				desc[field] = floatval(0)
 			} else if strings.Contains(typ, "double") {
 				desc[field] = doubleval(0)
+			} else if strings.Contains(typ, "datetime") {
+				desc[field], _ = time.Parse("2006-01-02 15:04:05", "1970-01-01 00:00:00")
 			} else {
 				desc[field] = ""
 			}
@@ -1469,6 +1474,8 @@ func (that XibDb) Mysql_query(query string, a map[string]interface{}) (rows *sql
 				} else {
 					aValue = 0
 				}
+			} else if aValueTime, ok := aValue.(time.Time); ok {
+				aValue = aValueTime.Format("2006-01-02 15:04:05")
 			}
 			paramTypes += "s"
 			paramValues = append(paramValues, aValue)
@@ -1725,6 +1732,9 @@ func (that XibDb) Xibdb_flatten_query(query string, a map[string]interface{}) st
 			valueStr = fmt.Sprintf("%v", value)
 		} else if value == nil {
 			valueStr = "NULL"
+		} else if valueTime, ok := value.(time.Time); ok {
+			valueStr = valueTime.Format("2006-01-02 15:04:05")
+			valueStr = "'" + that.Mysql_real_escape_string(valueStr) + "'"
 		} else {
 			valueStr, _ = value.(string)
 			valueStr = "'" + that.Mysql_real_escape_string(valueStr) + "'"

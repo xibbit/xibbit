@@ -62,6 +62,8 @@ function sortJsonNative($o) {
     if (strpos($s, '.') === false) {
       $s .= '.0';
     }
+  } elseif ($o instanceof DateTime) {
+    $s = '"' . str_replace('"', "\\\"", $o->format('Y-m-d H:i:s')) . '"';
   } elseif (is_string($o)) {
     $s = '"' . str_replace('"', "\\\"", strval($o)) . '"';
   }
@@ -146,6 +148,7 @@ $xdb = new XibDb(array(
 ));
 
 $now = '2023-01-13 19:21:00';
+$now = new DateTime($now);
 
 $xdb->dumpSql = false;
 $xdb->dryRun = false;

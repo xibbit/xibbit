@@ -29,6 +29,8 @@ var XibDb = require('../../../server/node/xibdb');
 var mysql = require('mysql');
 const util = require('util');
 
+var mapDateStrategy = 1;
+
 function sortJsonNative(o, key) {
   var s = '';
   if ((typeof o === 'object') && (o.constructor.name === 'Array')) {
@@ -71,8 +73,17 @@ function sortJsonNative(o, key) {
       s += '.0';
     }
   } else if (Object.prototype.toString.call(o) === '[object Date]') {
-    //var utcOffset = new Date('1970-01-01 00:00:00').getTime();
-    o = (new Date(o.getTime())).toISOString().slice(0, 19).replace('T', ' ');
+    var utcOffset = 16 * 3600000;
+    if (mapDateStrategy === 1) {
+      utcOffset = (new Date()).getTimezoneOffset() * 60 * 1000;
+      //TODO fix this; this equation is random but worked for PST
+      utcOffset = (2 * utcOffset) + 3600000;
+    } else if (mapDateStrategy === 2) {
+      utcOffset = - new Date('1970-01-01 00:00:00').getTime();
+      //TODO fix this; this equation is random but worked for PST
+      utcOffset = 0;
+    }
+    o = (new Date(o.getTime() - utcOffset)).toISOString().slice(0, 19).replace('T', ' ');
     s = '"' + o + '"';
   } else if (typeof o === 'string') {
     s = '"' + (''+o).split('"').join("\\\"") + '"';
@@ -169,11 +180,20 @@ var xdb = new XibDb({
   'sort_column': 'n', // array index column name
   'link_identifier': link,
 });
+xdb.mapDateStrategy = mapDateStrategy;
 
 var now = '2023-01-13 19:21:00';
-now[10] = 'T';
-now += 'Z';
+if ([1].indexOf(mapDateStrategy) !== -1) {
+  now[10] = 'T';
+  now += 'Z';
+}
 now = new Date(now);
+var utcOffset = (new Date()).getTimezoneOffset() * 60 * 1000;
+if ([0, 2].indexOf(mapDateStrategy) !== -1) {
+  utcOffset = 0;
+}
+now = new Date(now.getTime() - utcOffset);
+console.log(now);
 
 var q = '';
 
@@ -912,9 +932,13 @@ await assertDb('insert #24', xdb, ['testplants', 'testratings'], false, [
 	//
 
 try {
+  var vals = "(`id`,`category`,`val`,`colors`,`seeds`,`total`,`price`,`created`,`n`,`json`) VALUES (0,'fruit','blueberry',' blue ',0,18,0.22,'2023-01-13 19:21:00',13,'{\"stains\":true}')";
+  if ([0].indexOf(mapDateStrategy) !== -1) {
+    vals   = "(`id`,`category`,`val`,`colors`,`seeds`,`total`,`price`,`created`,`n`,`json`) VALUES (0,'fruit','blueberry',' blue ',0,18,0.22,'2023-01-14 03:21:00',13,'{\"stains\":true}')";
+  }
   await xdb.insertRowNative({
     "table": "testplants",
-    "values": "(`id`,`category`,`val`,`colors`,`seeds`,`total`,`price`,`created`,`n`,`json`) VALUES (0,'fruit','blueberry',' blue ',0,18,0.22,'2023-01-13 11:21:00',13,'{\"stains\":true}')",
+    "values": vals,
     "where": {
       "category": "fruit",
     },

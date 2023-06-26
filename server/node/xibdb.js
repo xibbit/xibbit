@@ -51,6 +51,7 @@ var crypto = require('crypto');
     this.config = config;
     this.cache = {};
     this.mapBool = true;
+    this.mapDateStrategy = 0;
     this.checkConstraints = false;
     this.autoCommit = config.autoCommit || true;
     this.dryRun = false;
@@ -297,6 +298,18 @@ var crypto = require('crypto');
                 obj[key] = intval(value);
               } else if (is_numeric(value) && is_float(desc[key])) {
                 obj[key] = floatval(value);
+              } else if ((typeof value === 'string') && (Object.prototype.toString.call(desc[key]) === '[object Date]')) {
+                value[10] = 'T';
+                value += 'Z';
+                obj[key] = new Date(value);
+              } else if ((Object.prototype.toString.call(value) === '[object Date]') && (Object.prototype.toString.call(desc[key]) === '[object Date]')) {
+                var utcOffset = 0;
+                if (that.mapDateStrategy === 1) {
+                  utcOffset = (new Date()).getTimezoneOffset() * 60 * 1000;
+                } else if (that.mapDateStrategy === 2) {
+                  utcOffset = - new Date('1970-01-01 00:00:00').getTime();
+                }
+                obj[key] = new Date(value.getTime() + utcOffset);
               } else {
                 var val = value;
                 try {
@@ -452,6 +465,8 @@ var crypto = require('crypto');
             desc[field] = floatval(0.001);
           } else if (typ.indexOf('double') >= 0) {
             desc[field] = doubleval(0.000001);
+          } else if (typ.indexOf('datetime') >= 0) {
+            desc[field] = new Date('1970-01-01T00:00:00Z');
           } else {
             desc[field] = '';
           }
@@ -1397,6 +1412,22 @@ var crypto = require('crypto');
                   continue;
                 }
                 var value = sqlRowMap[col];
+                if (Object.prototype.toString.call(desc[col]) === '[object Date]') {
+                  var utcOffset = 0;
+                  if (that.mapDateStrategy === 0) {
+                    //TODO skip WHERE condition because Date() from MySQL driver has a weird offset
+                    continue;
+                  } else if (that.mapDateStrategy === 1) {
+                    utcOffset = (new Date()).getTimezoneOffset() * 60 * 1000;
+                    //TODO fix this; this equation is random but worked for PST
+                    utcOffset = (2 * utcOffset) + 3600000;
+                  } else if (that.mapDateStrategy === 2) {
+                    utcOffset = - new Date('1970-01-01 00:00:00').getTime();
+                    //TODO skip WHERE condition because Date() from MySQL driver has a weird offset
+                    continue;
+                  }
+                  value = new Date(value.getTime() - utcOffset);
+                }
                 param = '{{{' + that.paramRand + '--where--' + qa.length + '--' + col + '}}}';
                 var opStr = '=';
                 if (is_numeric(value) && is_float(desc[col])) {
@@ -1788,7 +1819,13 @@ var crypto = require('crypto');
             aValue = 0;
           }
         } else if (Object.prototype.toString.call(aValue) === '[object Date]') {
-          aValue = aValue.toISOString().slice(0, 19).replace('T', ' ');
+          var utcOffset = 0;
+          if (that.mapDateStrategy === 1) {
+            utcOffset = (new Date()).getTimezoneOffset() * 60 * 1000;
+          } else if (that.mapDateStrategy === 2) {
+            utcOffset = - new Date('1970-01-01 00:00:00').getTime();
+          }
+          aValue = (new Date(aValue.getTime() + utcOffset)).toISOString().slice(0, 19).replace('T', ' ');
         }
         paramTypes += 's';
         paramValues.push(aValue);
@@ -1995,6 +2032,15 @@ var crypto = require('crypto');
         valueStr = value.toString();
       } else if (value === null) {
         valueStr = 'NULL';
+      } else if (Object.prototype.toString.call(value) === '[object Date]') {
+        var utcOffset = 0;
+        if (that.mapDateStrategy === 1) {
+          utcOffset = (new Date()).getTimezoneOffset() * 60 * 1000;
+        } else if (that.mapDateStrategy === 2) {
+          utcOffset = - new Date('1970-01-01 00:00:00').getTime();
+        }
+        valueStr = (new Date(value.getTime() + utcOffset)).toISOString().slice(0, 19).replace('T', ' ');
+        valueStr = "'" + that.mysql_real_escape_string(valueStr) + "'";
       } else {
         valueStr = "'" + that.mysql_real_escape_string(value) + "'";
       }

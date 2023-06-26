@@ -54,6 +54,7 @@ self.on('api', '__send', function(event, vars, callback) {
     }
     var toStr = event.event.to;
     var now = moment(new Date()).tz(config.time_zone).format('YYYY-MM-DD HH:mm:ss');
+    now = new Date();
     var sent = false;
     // get the sender
     eventFrom = event.event.from? event.event.from: 'x';

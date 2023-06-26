@@ -264,6 +264,8 @@ class XibDb {
           $obj[$key] = intval($value);
         } elseif (is_numeric($value) && is_float($desc[$key])) {
           $obj[$key] = floatval($value);
+        } elseif (is_string($value) && ($desc[$key] instanceof DateTime)) {
+          $obj[$key] = DateTime::createFromFormat('Y-m-d H:i:s', $value);
         } else {
           $val = $value;
           try {
@@ -373,6 +375,8 @@ class XibDb {
           $desc[$field] = floatval(0);
         } elseif (strpos($typ, 'double') !== false) {
           $desc[$field] = doubleval(0);
+        } elseif (strpos($typ, 'datetime') !== false) {
+          $desc[$field] = DateTime::createFromFormat('Y-m-d H:i:s', '1970-01-01 00:00:00');
         } else {
           $desc[$field] = '';
         }
@@ -1389,6 +1393,8 @@ class XibDb {
           } else {
             $aValue = 0;
           }
+        } elseif ($aValue instanceof DateTime) {
+          $aValue = $aValue->format('Y-m-d H:i:s');
         }
         $paramTypes .= 's';
         $paramValues[] = $aValue;
@@ -1671,6 +1677,9 @@ class XibDb {
         $valueStr = strval($value);
       } elseif (is_null($value)) {
         $valueStr = 'NULL';
+      } elseif ($value instanceof DateTime) {
+        $valueStr = $value->format('Y-m-d H:i:s');
+        $valueStr = "'" . $this->mysql_real_escape_string($valueStr) . "'";
       } else {
         $valueStr = "'" . $this->mysql_real_escape_string($value) . "'";
       }
