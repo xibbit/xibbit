@@ -39,6 +39,7 @@ self.on('api', '_instance', (event, {hub, pf, useInstances}, callback) => {
 
   if (useInstances) {
     var now = moment(new Date()).tz(config.time_zone).format('YYYY-MM-DD HH:mm:ss');
+    now = new Date();
     var localSid = '';
     var uid = event._session.uid || 0;
     var instance = event.instance;

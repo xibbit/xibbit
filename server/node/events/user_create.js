@@ -52,7 +52,9 @@ self.on('api', 'user_create', (event, {pf}, callback) => {
   pwd_hash(event.pwd, '', '', false, function(e, hashedPwd) {
 
   var now = moment(new Date()).tz(config.time_zone).format('YYYY-MM-DD HH:mm:ss');
+  now = new Date();
   var nullDateTime = '1970-01-01 00:00:00';
+  nullDateTime = new Date('1970-01-01T00:00:00Z');
   // see if the user is already in the database
   pf.readOneRow({
     table: 'users',

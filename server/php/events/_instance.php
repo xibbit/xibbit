@@ -38,6 +38,7 @@ $self->on('api', '_instance', function($event, $vars) {
 
   if ($useInstances) {
     $now = date('Y-m-d H:i:s', time());
+    $now = DateTime::createFromFormat('Y-m-d H:i:s', $now);
     $localSid = isset($_REQUEST['sid'])? $_REQUEST['sid']: '';
     $uid = isset($event['_session']['uid'])? $event['_session']['uid']: 0;
     $instance = $event['instance'];

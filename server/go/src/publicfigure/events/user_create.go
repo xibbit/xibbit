@@ -62,8 +62,10 @@ func User_create(event map[string]interface{}, vars map[string]interface{}) map[
 	email := event["email"].(string)
 	hashedPwd, _ := pwd.Pwd_hash(event["pwd"].(string), "", "", false)
 
-	now := time.Now().Format("2006-01-02 15:04:05")
-	nullDateTime := "1970-01-01 00:00:00"
+	nowStr := time.Now().Format("2006-01-02 15:04:05")
+	now, _ := time.Parse("2006-01-02 15:04:05", nowStr)
+	nullDateTimeStr := "1970-01-01 00:00:00"
+	nullDateTime, _ := time.Parse("2006-01-02 15:04:05", nullDateTimeStr)
 	// see if the user is already in the database
 	me, _ := pf.ReadOneRow(map[string]interface{}{
 		"table": "users",

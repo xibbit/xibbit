@@ -50,7 +50,9 @@ $self->on('api', 'user_create', function($event, $vars) {
   $hashedPwd = pwd_hash($event['pwd']);
 
   $now = date('Y-m-d H:i:s', time());
+  $now = DateTime::createFromFormat('Y-m-d H:i:s', $now);
   $nullDateTime = '1970-01-01 00:00:00';
+  $nullDateTime = DateTime::createFromFormat('Y-m-d H:i:s', $nullDateTime);
   // see if the user is already in the database
   $me = $pf->readOneRow(array(
     'table'=>'users',

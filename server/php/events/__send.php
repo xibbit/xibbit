@@ -47,6 +47,7 @@ $self->on('api', '__send', function($event, $vars) {
     }
     $toStr = $event['event']['to'];
     $now = date('Y-m-d H:i:s', time());
+    $now = DateTime::createFromFormat('Y-m-d H:i:s', $now);
     $sent = false;
     // get the sender
     $eventFrom = isset($event['event']['from'])? $event['event']['from']: 'x';
