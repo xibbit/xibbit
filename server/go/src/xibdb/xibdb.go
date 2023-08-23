@@ -174,7 +174,17 @@ func (that XibDb) ReadRowsNative(querySpec interface{}, whereSpec interface{}, c
 
 	// decode remaining ambiguous arguments
 	columnsStr, _ := columns.(string)
-	if columnArr, ok := columns.([]string); ok {
+	if (len(tableArr) >= 2) && (columnsStr == "*") {
+		// convert '*' to '`table2`.*, `table3`.*'
+		columnsStr = ""
+		for t := 1; t < len(tableArr); t++ {
+			tbl := tableArr[t]
+			if columnsStr != "" {
+				columnsStr += ", "
+			}
+			columnsStr += "`" + tbl + "`.*"
+		}
+	} else if columnArr, ok := columns.([]string); ok {
 		if len(tableArr) == 1 {
 			// only one table so it's simple
 			for _, col := range columnArr {
@@ -184,19 +194,20 @@ func (that XibDb) ReadRowsNative(querySpec interface{}, whereSpec interface{}, c
 				columnsStr += "`" + col + "`"
 			}
 		} else if len(tableArr) >= 2 {
-			// assume '*' columns from first table
-			columnsStr += "`" + tableStr + "`.*"
+			// pick specific columns from first table
 			for _, col := range columnArr {
-				if strings.Index(col, ".") == -1 {
-					// assume column is from second table
-					columnsStr += ", `" + tableArr[1] + "`.`" + col + "`"
-				} else {
-					// do not assume table; table is specified
-					parts := strings.SplitAfterN(col, ".", 2)
-					tablePart := parts[0]
-					colPart := parts[1]
-					columnsStr += ", `" + tablePart + "`.`" + colPart + "`"
+				if columnsStr != "" {
+					columnsStr += ", "
 				}
+				columnsStr += "`" + tableStr + "`.`" + col + "`"
+			}
+			// assume '*' columns from remaining tables
+			for t := 1; t < len(tableArr); t++ {
+				tbl := tableArr[t]
+				if columnsStr != "" {
+					columnsStr += ", "
+				}
+				columnsStr += "`" + tbl + "`.*"
 			}
 		}
 	}

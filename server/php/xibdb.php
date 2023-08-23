@@ -160,7 +160,19 @@ class XibDb {
 
     // decode remaining ambiguous arguments
     $columnsStr = $columns;
-    if (is_array($columns)) {
+    if ((count($tableArr) >= 2) && is_string($columns) && ($columnsStr === '*')) {
+      // convert '*' to '`table2`.*, `table3`.*'
+      $columnsStr = '';
+      for ($t=1; $t < count($tableArr); ++$t) {
+        $tbl = $tableArr[$t];
+        if ($columnsStr !== '') {
+          $columnsStr .= ', ';
+        }
+        $columnsStr .= '`' . $tbl . '`.*';
+      }
+    } elseif (is_array($columns)
+        && (count(array_filter(array_keys($columns), 'is_string')) === 0)) {
+      $columnsStr = '';
       $columnArr = $columns;
       if (count($tableArr) === 1) {
         // only one table so it's simple
@@ -170,20 +182,21 @@ class XibDb {
           }
           $columnsStr .= '`' . $col . '`';
         }
-      } else if (count($tableArr) >= 2) {
-        // assume '*' columns from first table
-        $columnsStr .= '`' . $tableStr . '`.*';
+      } elseif (count($tableArr) >= 2) {
+        // pick specific columns from first table
         foreach ($columnArr as $col) {
-          if (strpos($col, '.') === false) {
-            // assume column is from second table
-            $columnsStr .= ', `' . $tableArr[1] . '`.`' . $col . '`';
-          } else {
-            // do not assume table; table is specified
-            $parts = explode('.', $col, 2);
-            $tablePart = $parts[0];
-            $colPart = $parts[1];
-            $columnsStr .= ', `' . $tablePart . '`.`' . $colPart . '`';
+          if ($columnsStr !== '') {
+            $columnsStr .= ', ';
           }
+          $columnsStr .= '`' . $tableStr . '`.`' . $col . '`';
+        }
+        // assume '*' columns from remaining tables
+        for ($t=1; $t < count($tableArr); ++$t) {
+          $tbl = $tableArr[$t];
+          if ($columnsStr !== '') {
+            $columnsStr .= ', ';
+          }
+          $columnsStr .= '`' . $tbl . '`.*';
         }
       }
     }

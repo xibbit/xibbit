@@ -180,30 +180,45 @@
 
       // decode remaining ambiguous arguments
       var columnsStr = columns;
-      if (columns instanceof Array) {
+      if ((tableArr.length >= 2) && (typeof columns === 'string') && (columnsStr === '*')) {
+        // convert '*' to '`table2`.*, `table3`.*'
+        columnsStr = '';
+        for (var t=1; t < tableArr.length; ++t) {
+          var tbl = tableArr[t];
+          if (columnsStr !== '') {
+            columnsStr += ', ';
+          }
+          columnsStr += '`' + tbl + '`.*';
+        }
+      } else if (((typeof columns) === 'object')
+          && (columns.constructor.name === 'Array')) {
+        columnsStr = '';
         var columnArr = columns;
         if (tableArr.length === 1) {
           // only one table so it's simple
-          for (var col in columnArr) {
+          for (var c=0; c < columnArr.length; ++c) {
+            var col = columnArr[c];
             if (columnsStr !== '') {
               columnsStr += ', ';
             }
             columnsStr += '`' + col + '`';
           }
         } else if (tableArr.length >= 2) {
-          // assume '*' columns from first table
-          columnsStr += '`' + tableStr + '`.*';
-          for (var col in columnArr) {
-            if (col.indexOf('.') === -1) {
-              // assume column is from second table
-              columnsStr += ', `' + tableArr[1] + '`.`' + col + '`';
-            } else {
-              // do not assume table; table is specified
-              var parts = col.split('.', 2);
-              var tablePart = parts[0];
-              var colPart = parts[1];
-              columnStr += ', `' + tablePart + '`.`' + colPart + '`';
+          // pick specific columns from first table
+          for (var c=0; c < columnArr.length; ++c) {
+            var col = columnArr[c];
+            if (columnsStr !== '') {
+              columnsStr += ', ';
             }
+            columnsStr += '`' + tableStr + '`.`' + col + '`';
+          }
+          // assume '*' columns from remaining tables
+          for (var t=1; t < tableArr.length; ++t) {
+            var tbl = tableArr[t];
+            if (columnsStr !== '') {
+              columnsStr += ', ';
+            }
+            columnsStr += '`' + tbl + '`.*';
           }
         }
       }
