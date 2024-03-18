@@ -675,6 +675,14 @@ class XibbitHub {
   }
 
   /**
+   * Shut down this hub instance.
+   *
+   * @author DanielWHoward
+   **/
+  function stopHub() {
+  }
+
+  /**
    * Return the Socket.IO instance.
    *
    * This might be the Socket.IO server instance

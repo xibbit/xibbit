@@ -98,6 +98,14 @@ module.exports = function() {
   }
 
   /**
+   * Shut down this hub instance.
+   *
+   * @author DanielWHoward
+   **/
+  XibbitHub.prototype.stopHub = function() {
+  };
+
+  /**
    * Return the Socket.IO instance.
    *
    * This might be the Socket.IO server instance

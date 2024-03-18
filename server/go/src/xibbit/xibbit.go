@@ -173,6 +173,14 @@ func NewXibbitHub(config map[string]interface{}) *XibbitHub {
 }
 
 /**
+ * Shut down this hub instance.
+ *
+ * @author DanielWHoward
+ **/
+func (self *XibbitHub) StopHub() {
+}
+
+/**
  * Return the Socket.IO instance.
  *
  * This might be the Socket.IO server instance
