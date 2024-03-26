@@ -603,7 +603,7 @@ class XibbitHub {
    *
    * @author DanielWHoward
    **/
-  function __construct($config) {
+  function __construct($config, $init=true) {
     $config['vars']['hub'] = $this;
     $this->config = $config;
     $this->suppressCloneSession = false;
@@ -629,40 +629,49 @@ class XibbitHub {
     } elseif (isset($this->config['mysqli']) && isset($this->config['mysqli']['SQL_PREFIX'])) {
       $this->prefix = $this->config['mysqli']['SQL_PREFIX'];
     }
-    $this->useSocketIO = isset($_REQUEST['EIO'])
-        && isset($_REQUEST['transport'])
-        && ($_REQUEST['transport'] === 'polling');
+    $this->useSocketIO = false;
+    if ($init) {
+      $this->useSocketIO = isset($_REQUEST['EIO'])
+          && isset($_REQUEST['transport'])
+          && ($_REQUEST['transport'] === 'polling');
+    }
+    $this->packetsBuffer = '';
+    $this->pollingThread = false;
     if ($this->useSocketIO) {
       $this->packetsBuffer = file_get_contents('php://input');
       $this->pollingThread = ($this->packetsBuffer === '');
     }
     $this->outputStream = new XibbitHubOutputStream();
-    // pseudo $_SESSION
-    $this->socketSession = new SocketSession(array(
-      'prefix'=>$this->prefix,
-      'impl'=>$this
-    ), !$this->useSocketIO && !isset($_COOKIE['SOCKSESSID']));
-    $this->socketSession->load();
-    // create separate instance for every tab even though they share session cookie
-    if (isset($_REQUEST['instance'])) {
-      $instance = $_REQUEST['instance'];
-      if (!isset($_SESSION['instance_'.$instance])) {
-        $_SESSION['instance_'.$instance] = array(
-          'instance'=>$instance
-        );
-        // save pseudo $_SESSION
-        $this->socketSession->save();
-      }
-      if (is_string($instance) && ($instance !== '') && isset($_SESSION['instance_'.$instance])) {
-        $this->sessions[0]['session_data'] = $_SESSION['instance_'.$instance];
-        $this->sessions[0]['session_data']['instance_id'] = $this->sessions[0]['session_data']['instance'];
-        unset($this->sessions[0]['session_data']['instance']);
+    if ($init) {
+      // pseudo $_SESSION
+      $this->socketSession = new SocketSession(array(
+        'prefix'=>$this->prefix,
+        'impl'=>$this
+      ), !$this->useSocketIO && !isset($_COOKIE['SOCKSESSID']));
+      $this->socketSession->load();
+      // create separate instance for every tab even though they share session cookie
+      if (isset($_REQUEST['instance'])) {
+        $instance = $_REQUEST['instance'];
+        if (!isset($_SESSION['instance_'.$instance])) {
+          $_SESSION['instance_'.$instance] = array(
+            'instance'=>$instance
+          );
+          // save pseudo $_SESSION
+          $this->socketSession->save();
+        }
+        if (is_string($instance) && ($instance !== '') && isset($_SESSION['instance_'.$instance])) {
+          $this->sessions[0]['session_data'] = $_SESSION['instance_'.$instance];
+          $this->sessions[0]['session_data']['instance_id'] = $this->sessions[0]['session_data']['instance'];
+          unset($this->sessions[0]['session_data']['instance']);
+        }
       }
     }
     if (!isset($this->config['poll'])) {
       $this->config['poll'] = array();
     }
-    $this->touch($this->sessions[0]['session_data']);
+    if ($init) {
+      $this->touch($this->sessions[0]['session_data']);
+    }
   }
 
   /**
