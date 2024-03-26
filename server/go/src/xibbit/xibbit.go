@@ -42,6 +42,43 @@ import (
 	"time"
 )
 
+type ILog interface {
+	Println(msg string, lvl int)
+}
+
+/**
+ * An output stream.
+ *
+ * @package xibbit
+ * @author DanielWHoward
+ **/
+type LogMeImpl struct {
+}
+
+/**
+ * Constructor.
+ *
+ * @author DanielWHoward
+ **/
+func NewLogMeImpl() *LogMeImpl {
+	self := new(LogMeImpl)
+	return self
+}
+
+/**
+ * Write data to the stream.
+ *
+ * @author DanielWHoward
+ **/
+func (self *LogMeImpl) Println(msg string, lvl int) {
+	log.Println(strconv.Itoa(lvl) + ":" + msg)
+}
+
+type XibbitHubOutputStream interface {
+	write(sock socketio.Conn, data map[string]interface{})
+	flush()
+}
+
 /**
  * A socket handling hub object that makes it
  * easy to set up sockets, dispatch client socket
@@ -1338,4 +1375,168 @@ func (self *XibbitHub) Mysql_errno(e error) int {
  **/
 func (self *XibbitHub) Mysql_errstr(e error) string {
 	return e.Error()
+}
+
+/**
+ * Create XibbitHub required tables.
+ *
+ * @author DanielWHoward
+ **/
+func (self *XibbitHub) CreateDatabaseTables(log ILog, users string) {
+	now := time.Now().Format("2006-01-02 15:04:05")
+	// create the sockets table
+	//  this table contains all the sockets
+	//
+	//  a socket persists until the page is reloaded
+	//  an instance/user persists across page reloads
+	q := "CREATE TABLE `" + self.prefix + "sockets` ( "
+	q += "`id` bigint(20) unsigned NOT NULL auto_increment,"
+	q += "`sid` text,"
+	q += "`connected` datetime NOT NULL," // 2014-12-23 06:00:00 (PST)
+	q += "`touched` datetime NOT NULL," // 2014-12-23 06:00:00 (PST)
+	q += "`props` text,"
+	q += "UNIQUE KEY `id` (`id`));"
+	_, e, _ := self.Mysql_query(q)
+	if (e == nil) {
+		log.Println(q, 0)
+	} else {
+		if self.Mysql_errno(e) == 1050 {
+			log.Println("Table " + self.prefix + "sockets already exists!", 1)
+		} else {
+			log.Println("Table " + self.prefix + " had a MySQL error (" + strconv.Itoa(self.Mysql_errno(e)) + "): " + self.Mysql_errstr(e), 2)
+		}
+	}
+
+	// create the sockets_events table
+	//  this table holds undelivered events/messages for sockets
+	q = "CREATE TABLE `" + self.prefix + "sockets_events` ( "
+	q += "`id` bigint(20) unsigned NOT NULL auto_increment,"
+	q += "`sid` text,"
+	q += "`event` mediumtext,"
+	q += "`touched` datetime NOT NULL," // 2014-12-23 06:00:00 (PST)
+	q += "UNIQUE KEY `id` (`id`));"
+	_, e, _ = self.Mysql_query(q)
+	if (e == nil) {
+		log.Println(q, 0)
+	} else {
+		if self.Mysql_errno(e) == 1050 {
+			log.Println("Table " + self.prefix + "sockets_events already exists!", 1)
+		} else {
+			log.Println("Table " + self.prefix + " had a MySQL error (" + strconv.Itoa(self.Mysql_errno(e)) + "): " + self.Mysql_errstr(e), 2)
+		}
+	}
+
+	// create the sockets_sessions table
+	//  this table does double duty
+	//  the 'global' row is a shared, persistent, global var
+	//  the other rows contain session data that replaces PHP's
+	//    session_start() function which is inflexible
+	q = "CREATE TABLE `" + self.prefix + "sockets_sessions` ( "
+	q += "`id` bigint(20) unsigned NOT NULL auto_increment,"
+	q += "`socksessid` varchar(25) NOT NULL,"
+	q += "`connected` datetime NOT NULL," // 2014-12-23 06:00:00 (PST)
+	q += "`touched` datetime NOT NULL," // 2014-12-23 06:00:00 (PST)
+	q += "`vars` text,"
+	q += "UNIQUE KEY `id` (`id`),"
+	q += "UNIQUE KEY `socksessid` (`socksessid`));"
+	_, e, _ = self.Mysql_query(q)
+	if (e == nil) {
+		log.Println(q, 0)
+	} else {
+		if self.Mysql_errno(e) == 1050 {
+			log.Println("Table " + self.prefix + "sockets_sessions already exists!", 1)
+		} else {
+			log.Println("Table " + self.prefix + " had a MySQL error (" + strconv.Itoa(self.Mysql_errno(e)) + "): " + self.Mysql_errstr(e), 2)
+		}
+	}
+	// add the global row to the sockets_sessions table
+	q = "SELECT id FROM " + self.prefix + "sockets_sessions"
+	_, e, _ = self.Mysql_query(q)
+	num_rows := 0
+	if num_rows == 0 {
+		values := []string{}
+		values = append(values, "0, 'global', '" + now + "', '" + now + "', '{}'")
+		for _, value := range values {
+			q = "INSERT INTO " + self.prefix + "sockets_sessions VALUES (" + value + ")"
+			_, e, _ = self.Mysql_query(q)
+			if (e != nil) {
+				log.Println("<div class=\"error\">INSERT INTO: Table " + self.prefix + "sockets_sessions had a MySQL error (" + strconv.Itoa(self.Mysql_errno(e)) + "): " + self.Mysql_errstr(e) + "</div>\n", 2)
+				log.Println("<div class=\"error\">" + q + "</div>\n", 2)
+			} else {
+				log.Println(q, 0)
+			}
+		}
+	} else {
+		log.Println("Table " + self.prefix + "sockets_sessions already has data!", 1)
+	}
+
+	// create the users table
+	if users != "" {
+		q = "CREATE TABLE `" + self.prefix + "users` ( "
+		q += "`id` bigint(20) unsigned NOT NULL auto_increment,"
+		q += "`uid` bigint(20) unsigned NOT NULL,"
+		q += "`username` text,"
+		q += "`email` text,"
+		q += "`pwd` text,"
+		q += "`created` datetime NOT NULL," // 2014-12-23 06:00:00 (PST)
+		q += "`connected` datetime NOT NULL," // 2014-12-23 06:00:00 (PST)
+		q += "`touched` datetime NOT NULL," // 2014-12-23 06:00:00 (PST)
+		q += users + ","
+		q += "UNIQUE KEY `id` (`id`));"
+		_, e, _ = self.Mysql_query(q)
+		if (e == nil) {
+			log.Println(q, 0)
+		} else {
+			if self.Mysql_errno(e) == 1050 {
+				log.Println("Table " + self.prefix + "users already exists!", 1)
+			} else {
+				log.Println("Table " + self.prefix + "users had a MySQL error (" + strconv.Itoa(self.Mysql_errno(e)) + "): " + self.Mysql_errstr(e), 2)
+			}
+		}
+	}
+}
+
+/**
+ * Drop XibbitHub required tables.
+ *
+ * @author DanielWHoward
+ **/
+func (self *XibbitHub) DropDatabaseTables(log ILog, users bool) {
+	// this table only has temporary data
+	q := "DROP TABLE `" + self.prefix + "sockets`;"
+	_, e, _ := self.Mysql_query(q)
+	if e == nil {
+		log.Println(q, 0)
+	} else {
+		log.Println(self.Mysql_errstr(e), 2)
+	}
+
+	// this table only has temporary data
+	q = "DROP TABLE `" + self.prefix + "sockets_events`;"
+	_, e, _ = self.Mysql_query(q)
+	if e == nil {
+		log.Println(q, 0)
+	} else {
+		log.Println(self.Mysql_errstr(e), 2)
+	}
+
+	// this table only has temporary data
+	q = "DROP TABLE `" + self.prefix + "sockets_sessions`;"
+	_, e, _ = self.Mysql_query(q)
+	if e == nil {
+		log.Println(q, 0)
+	} else {
+		log.Println(self.Mysql_errstr(e), 2)
+	}
+
+	// required for XibbitHub but might have persistent data
+    if users {
+		q = "DROP TABLE `" + self.prefix + "users`;"
+		_, e, _ = self.Mysql_query(q)
+		if e == nil {
+			log.Println(q, 0)
+		} else {
+			log.Println(self.Mysql_errstr(e), 2)
+		}
+	}
 }

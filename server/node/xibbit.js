@@ -1570,5 +1570,165 @@ module.exports = function() {
     return e.toString();
   };
 
+  /**
+   * Create XibbitHub required tables.
+   *
+   * @author DanielWHoward
+   **/
+  XibbitHub.prototype.createDatabaseTables = function(log, users, callback) {
+    users = users || '';
+    var self = this;
+    var now = moment(new Date()).tz(self.config.time_zone).format('YYYY-MM-DD HH:mm:ss');
+    var cb1 = function(table, q, callback) {
+      self.mysql_query(q, function(e, qr) {
+        if (!e) {
+          log.println(q, 0);
+        } else if (self.mysql_errno(e) == 1050) {
+          log.println('Table ' + self.prefix + table + ' already exists!', 1);
+        } else {
+          log.println('Table ' + self.prefix + table + ' had a MySQL error (' + self.mysql_errno(e) + '): ' + self.mysql_errstr(e));
+          log.println(q);
+        }
+        callback();
+      });
+    }
+    var cb2 = function(table, q, callback) {
+      self.mysql_query(q, function(e, qr) {
+        if (!e) {
+          log.println(q, 0);
+        } else {
+          log.println('INSERT INTO: Table ' + self.prefix + table + ' had a MySQL error (' + self.mysql_errno(e) + '): ' + self.mysql_errstr(e));
+          log.println(q);
+        }
+        callback();
+      });
+    }
+    var cb3 = function(table, q, callback) {
+      self.mysql_query(q, function(e, qr) {
+        if (qr.length === 0) {
+          var pp = [];
+          var values = [];
+          values.push("0, 'global', '" + now + "', '" + now + "', '{}'");
+          for (var v=0; v < values.length; ++v) {
+            var value = values[v];
+            q = 'INSERT INTO ' + self.prefix + table + ' VALUES (' + value + ')';
+            pp.push([self.prefix + table, q, cb2]);
+          }
+          // execute the callbacks
+          var p = callback;
+          for (var i=pp.length - 1; i >= 0; i--) {
+            p = (function(i, p) { return function() { pp[i][2](pp[i][0], pp[i][1], p); } })(i, p);
+          }
+          p();
+        } else {
+          log.println('Table ' + self.prefix + table + ' already has data!', 1);
+          callback();
+        }
+      });
+    }
+    // create the sockets table
+    //  this table contains all the sockets
+    //
+    //  a socket persists until the page is reloaded
+    //  an instance/user persists across page reloads
+    var pp = [];
+    var q = 'CREATE TABLE `' + self.prefix + 'sockets` ( '
+      + '`id` bigint(20) unsigned NOT NULL auto_increment,'
+      + '`sid` text,'
+      + '`connected` datetime NOT NULL,' // 2014-12-23 06:00:00 (PST)
+      + '`touched` datetime NOT NULL,' // 2014-12-23 06:00:00 (PST)
+      + '`props` text,'
+      + 'UNIQUE KEY `id` (`id`));';
+    pp.push(['sockets', q, cb1]);
+    // create the sockets_events table
+    //  this table holds undelivered events/messages for sockets
+    q = 'CREATE TABLE `' + self.prefix + 'sockets_events` ( '
+      + '`id` bigint(20) unsigned NOT NULL auto_increment,'
+      + '`sid` text,'
+      + '`event` mediumtext,'
+      + '`touched` datetime NOT NULL,' // 2014-12-23 06:00:00 (PST)
+      + 'UNIQUE KEY `id` (`id`));';
+    pp.push(['sockets_events', q, cb1]);
+    // create the sockets_sessions table
+    //  this table does double duty
+    //  the 'global' row is a shared, persistent, global var
+    //  the other rows contain session data that replaces PHP's
+    //    session_start() function which is inflexible
+    q = 'CREATE TABLE `' + self.prefix + 'sockets_sessions` ( '
+      + '`id` bigint(20) unsigned NOT NULL auto_increment,'
+      + '`socksessid` varchar(25) NOT NULL,'
+      + '`connected` datetime NOT NULL,' // 2014-12-23 06:00:00 (PST)
+      + '`touched` datetime NOT NULL,' // 2014-12-23 06:00:00 (PST)
+      + '`vars` text,'
+      + 'UNIQUE KEY `id` (`id`),'
+      + 'UNIQUE KEY `socksessid` (`socksessid`));';
+    pp.push(['sockets_sessions', q, cb1]);
+    // add the global row to the sockets_sessions table
+    var q = 'SELECT id FROM ' + self.prefix + 'sockets_sessions;';
+    pp.push(['sockets_sessions', q, cb3]);
+    // create the users stable
+    if (users) {
+      q = 'CREATE TABLE `' + self.prefix + 'users` ( '
+        + '`id` bigint(20) unsigned NOT NULL auto_increment,'
+        + '`uid` bigint(20) unsigned NOT NULL,'
+        + '`username` text,'
+        + '`email` text,'
+        + '`pwd` text,'
+        + '`created` datetime NOT NULL,' // 2014-12-23 06:00:00 (PST)
+        + '`connected` datetime NOT NULL,' // 2014-12-23 06:00:00 (PST)
+        + '`touched` datetime NOT NULL,' // 2014-12-23 06:00:00 (PST)
+        + users + ','
+        + 'UNIQUE KEY `id` (`id`));';
+      pp.push(['users', q, cb1]);
+    }
+
+    // execute the callbacks
+    var p = callback;
+    for (var i=pp.length - 1; i >= 0; i--) {
+      p = (function(i, p) { return function() { pp[i][2](pp[i][0], pp[i][1], p); } })(i, p);
+    }
+    p();
+  };
+
+  /**
+   * Drop XibbitHub required tables.
+   *
+   * @author DanielWHoward
+   **/
+  XibbitHub.prototype.dropDatabaseTables = function(log, users, callback) {
+    users = users || false;
+    var self = this;
+    var cb = function(q, callback) {
+      self.mysql_query(q, function(e, qr) {
+        if (!e) {
+          log.println(q, 0);
+        } else {
+          log.println(self.mysql_errstr(e));
+        }
+        callback();
+      });
+    }
+    var q = [];
+    // this table only has temporary data
+    q.push('DROP TABLE `' + self.prefix + 'sockets`;');
+    // this table only has temporary data
+    q.push('DROP TABLE `' + self.prefix + 'sockets_events`;');
+    // this table only has temporary data
+    q.push('DROP TABLE `' + self.prefix + 'sockets_sessions`;');
+    // required for XibbitHub but might have persistent data
+    if (users) {
+      q.push('DROP TABLE `' + self.prefix + 'users`;');
+    }
+
+    // execute the callbacks
+    var p = callback;
+    for (var i=q.length - 1; i >= 0; i--) {
+      p = (function(i, p) { return function() { cb(q[i], p); } })(i, p);
+    }
+    p();
+  };
+
+  XibbitHub.XibbitHubOutputStream = XibbitHubOutputStream;
+
   return XibbitHub;
 };
