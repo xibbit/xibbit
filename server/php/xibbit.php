@@ -2201,5 +2201,37 @@ class XibbitHub {
     }
     return mysql_real_escape_string($unescaped_string);
   }
+
+  /**
+   * Flexible mysql_errno() function.
+   *
+   * @return The mysql_errno() return value.
+   *
+   * @author DanielWHoward
+   **/
+  function mysql_errno() {
+    if (isset($this->config['mysqli'])) {
+      return $this->config['mysqli']['link']->errno;
+    } elseif (isset($this->config['mysql']) && isset($this->config['mysql']['link'])) {
+      return mysql_errno($this->config['mysql']['link']);
+    }
+    return mysql_errno();
+  }
+
+  /**
+   * Flexible mysql_error() function.
+   *
+   * @return The mysql_error() return value.
+   *
+   * @author DanielWHoward
+   **/
+  function mysql_errstr() {
+    if (isset($this->config['mysqli'])) {
+      return $this->config['mysqli']['link']->error;
+    } elseif (isset($this->config['mysql']) && isset($this->config['mysql']['link'])) {
+      return mysql_error($this->config['mysql']['link']);
+    }
+    return mysql_error();
+  }
 }
 ?>

@@ -1316,3 +1316,26 @@ func (self *XibbitHub) Mysql_real_escape_string(unescaped_string string) string 
 	escaped_string = strings.ReplaceAll(escaped_string, "\x1a", "\\\x1a")
 	return escaped_string
 }
+
+/**
+ * Flexible mysql_errno() function.
+ *
+ * @return The mysql_errno() return value.
+ *
+ * @author DanielWHoward
+ **/
+func (self *XibbitHub) Mysql_errno(e error) int {
+	errno, _ := strconv.Atoi(e.Error()[6:10])
+	return errno
+}
+
+/**
+ * Flexible mysql_error() function.
+ *
+ * @return The mysql_error() return value.
+ *
+ * @author DanielWHoward
+ **/
+func (self *XibbitHub) Mysql_errstr(e error) string {
+	return e.Error()
+}
