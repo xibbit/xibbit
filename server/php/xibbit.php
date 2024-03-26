@@ -1245,7 +1245,7 @@ class XibbitHub {
         if (isset($eventReply['_session'])) {
           unset($eventReply['_session']);
         }
-        $events = array_concat($events, $eventReply);
+        $events = $this->array_concat($events, $eventReply);
       }
     }
     return $events;
@@ -1596,7 +1596,7 @@ class XibbitHub {
       $q = 'DELETE FROM `'.$this->prefix.'sockets_events` WHERE `id` IN ('.$idStr.');';
       $qr = &$this->mysql_query($q);
       usort($newEvents, array($this, 'cmp'));
-      return array_merge($events, $newEvents);
+      return $this->array_concat($events, $newEvents);
     } else {
       // provide special __receive event for alternative event system
       $eventReply = $this->trigger(array(
@@ -1803,6 +1803,18 @@ class XibbitHub {
       .'WHERE NOT EXISTS (SELECT * FROM `'.$this->prefix.$table2.'` '
       .'WHERE `'.$column2.'`=`'.$this->prefix.$table.'`.`'.$column.'`);';
     $qr = &$this->mysql_query($q);
+  }
+
+  /**
+   * Concatenate arrays with numerical indices.
+   *
+   * @param $a array An array to concentate.
+   * @return array The concatenated array.
+   *
+   * @author DanielWHoward
+   **/
+  function array_concat($a, $b, $c=array(), $d=array()) {
+    return array_merge($a, $b, $c, $d);
   }
 
   /**
