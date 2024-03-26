@@ -1548,5 +1548,27 @@ module.exports = function() {
       .replace(/\x1a/g, '\\\x1a');
   };
 
+  /**
+   * Flexible mysql_errno() function.
+   *
+   * @return The mysql_errno() return value.
+   *
+   * @author DanielWHoward
+   **/
+  XibbitHub.prototype.mysql_errno = function(e) {
+    return e.errno;
+  };
+
+  /**
+   * Flexible mysql_error() function.
+   *
+   * @return The mysql_error() return value.
+   *
+   * @author DanielWHoward
+   **/
+  XibbitHub.prototype.mysql_errstr = function(e) {
+    return e.toString();
+  };
+
   return XibbitHub;
 };
