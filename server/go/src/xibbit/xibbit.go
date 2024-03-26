@@ -690,12 +690,7 @@ func (self *XibbitHub) Start(method string) {
 				if instanceMatched {
 					created = "recreated"
 				} else {
-					var length = 25
-					var a = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789"
-					instance = ""
-					for i := 0; i < length; i++ {
-						instance += string(a[self.RandSecure(0, len(a))])
-					}
+					instance = self.GenerateInstance()
 					created = "created"
 				}
 				// create a new instance for every tab even though they share session cookie
@@ -1183,6 +1178,21 @@ func (self *XibbitHub) UpdateEvent(event map[string]interface{}, clone map[strin
 		}
 	}
 	return event
+}
+
+/**
+ * Return a random instance ID.
+ *
+ * @author DanielWHoward
+ **/
+func (self *XibbitHub) GenerateInstance() (instance string) {
+	var length = 25
+	var a = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789"
+	instance = ""
+	for i := 0; i < length; i++ {
+		instance += string(a[self.RandSecure(0, len(a))])
+	}
+	return
 }
 
 /**

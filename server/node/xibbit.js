@@ -514,12 +514,7 @@ module.exports = function() {
             if (instanceMatched) {
               created = 'recreated';
             } else {
-              var length = 25;
-              var a = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789';
-              instance = '';
-              for (var i=0; i < length; i++) {
-                instance += a[self.rand_secure(0, a.length)];
-              }
+              instance = self.generateInstance();
               created = 'created';
             }
             // create a new instance for every tab even though they share session cookie
@@ -1300,6 +1295,21 @@ module.exports = function() {
       }
     }
     return event;
+  };
+
+  /**
+   * Return a random instance ID.
+   *
+   * @author DanielWHoward
+   **/
+  XibbitHub.prototype.generateInstance = function() {
+    var length = 25;
+    var a = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789';
+    var instance = '';
+    for (var i=0; i < length; i++) {
+      instance += a[this.rand_secure(0, a.length)];
+    }
+    return instance;
   };
 
   /**

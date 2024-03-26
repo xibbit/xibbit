@@ -1050,12 +1050,7 @@ class XibbitHub {
             if ($instanceMatched) {
               $created = 'recreated';
             } else {
-              $length = 25;
-              $a = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789';
-              $instance = '';
-              for ($i=0; $i < $length; $i++) {
-                $instance .= $a[$self->rand_secure(0, strlen($a))];
-              }
+              $instance = $this->generateInstance();
               $created = 'created';
             }
             // create a new instance for every tab even though they share session cookie
@@ -1205,11 +1200,7 @@ class XibbitHub {
         }
       } else {
         // create a socket ID for the socket that is being established
-        $localSid = '';
-        $chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz01234567890';
-        for ($c=0; $c < 20; ++$c) {
-          $localSid .= substr($chars, $this->rand_secure(0, strlen($chars) - 1), 1);
-        }
+        $localSid = $this->generateSid();
         // do not store any additional values on the new socket
         $props = '{}';
         // save the new socket
@@ -1932,6 +1923,35 @@ class XibbitHub {
       }
     }
     return $event;
+  }
+
+  /**
+   * Return a random session ID.
+   *
+   * @author DanielWHoward
+   **/
+  function generateSid() {
+    $sid = '';
+    $chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz01234567890';
+    for ($c=0; $c < 20; ++$c) {
+      $sid.= substr($chars, $this->rand_secure(0, strlen($chars) - 1), 1);
+    }
+    return $sid;
+  }
+
+  /**
+   * Return a random instance ID.
+   *
+   * @author DanielWHoward
+   **/
+  function generateInstance() {
+    $length = 25;
+    $a = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789';
+    $instance = '';
+    for ($i=0; $i < $length; $i++) {
+      $instance .= $a[$this->rand_secure(0, strlen($a))];
+    }
+    return $instance;
   }
 
   /**
