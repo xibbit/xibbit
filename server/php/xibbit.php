@@ -2233,5 +2233,181 @@ class XibbitHub {
     }
     return mysql_error();
   }
+
+  /**
+   * Create XibbitHub required tables.
+   *
+   * @author DanielWHoward
+   **/
+  function createDatabaseTables($log, $users='') {
+    $now = date('Y-m-d H:i:s', time());
+    // create the sockets table
+    //  this table contains all the sockets
+    //
+    //  a socket persists until the page is reloaded
+    //  an instance/user persists across page reloads
+    $q = 'CREATE TABLE `' . $this->prefix . 'sockets` ( '
+      .'`id` bigint(20) unsigned NOT NULL auto_increment,'
+      .'`sid` text,'
+      .'`connected` datetime NOT NULL,' // 2014-12-23 06:00:00 (PST)
+      .'`touched` datetime NOT NULL,' // 2014-12-23 06:00:00 (PST)
+      .'`props` text,'
+      .'UNIQUE KEY `id` (`id`));';
+    if ($this->mysql_query($q)) {
+      $log->println($q, 0);
+    } else {
+      if ($this->mysql_errno() == 1050) {
+        $log->println('Table ' . $this->prefix . 'sockets already exists!', 1);
+      } else {
+        $log->println('Table ' . $this->prefix . 'sockets had a MySQL error (' . $this->mysql_errno() . '): ' . $this->mysql_error());
+      }
+    }
+
+    // create the sockets_events table
+    //  this table holds undelivered events/messages for sockets
+    $q = 'CREATE TABLE `' . $this->prefix . 'sockets_events` ( '
+      .'`id` bigint(20) unsigned NOT NULL auto_increment,'
+      .'`sid` text,'
+      .'`event` mediumtext,'
+      .'`touched` datetime NOT NULL,' // 2014-12-23 06:00:00 (PST)
+      .'UNIQUE KEY `id` (`id`));';
+    if ($this->mysql_query($q)) {
+      $log->println($q, 0);
+    } else {
+      if ($this->mysql_errno() == 1050) {
+        $log->println('Table ' . $this->prefix . 'sockets_events already exists!', 1);
+      } else {
+        $log->println('Table ' . $this->prefix . 'sockets_events had a MySQL error (' . $this->mysql_errno() . '): ' . $this->mysql_error());
+      }
+    }
+
+    // create the sockets_sessions table
+    //  this table does double duty
+    //  the 'global' row is a shared, persistent, global var
+    //  the other rows contain session data that replaces PHP's
+    //    session_start() function which is inflexible
+    $q = 'CREATE TABLE `' . $this->prefix . 'sockets_sessions` ( '
+      .'`id` bigint(20) unsigned NOT NULL auto_increment,'
+      .'`socksessid` varchar(25) NOT NULL,'
+      .'`connected` datetime NOT NULL,' // 2014-12-23 06:00:00 (PST)
+      .'`touched` datetime NOT NULL,' // 2014-12-23 06:00:00 (PST)
+      .'`vars` text,'
+      .'UNIQUE KEY `id` (`id`),'
+      .'UNIQUE KEY `socksessid` (`socksessid`));';
+    if ($this->mysql_query($q)) {
+      $log->println($q, 0);
+    } else {
+      if ($this->mysql_errno() == 1050) {
+        $log->println('Table ' . $this->prefix . 'sockets already exists!', 1);
+      } else {
+        $log->println('Table ' . $this->prefix . 'sockets had a MySQL error (' . $this->mysql_errno() . '): ' . $this->mysql_error());
+      }
+    }
+    // add the global row to the sockets_sessions table
+    $q = 'SELECT id FROM ' . $this->prefix . 'sockets_sessions';
+    $result = $this->mysql_query($q);
+    if ($result->num_rows === 0) {
+      $values = array();
+      $values[] = "0, 'global', '" . $now . "', '" . $now . "', '{}'";
+      $values = isset($values_sockets_sessions)? $values_sockets_sessions: $values;
+      foreach ($values as $value) {
+        $q = 'INSERT INTO ' . $this->prefix . 'sockets_sessions VALUES (' . $value . ')';
+        $qr = $this->mysql_query($q);
+        if ($qr !== false) {
+          $log->println($q, 0);
+        } else {
+          $log->println('INSERT INTO: Table ' . $this->prefix . 'sockets_sessions had a MySQL error (' . $this->mysql_errno() . '): ' . $this->mysql_errstr());
+          $log->println($q);
+        }
+      }
+    } else {
+      $log->println('Table ' . $this->prefix . 'sockets_sessions already has data!', 1);
+    }
+
+    // create the users table
+    if ($users !== '') {
+      $q = 'CREATE TABLE `' . $this->prefix . 'users` ( '
+        .'`id` bigint(20) unsigned NOT NULL auto_increment,'
+        .'`uid` bigint(20) unsigned NOT NULL,'
+        .'`username` text,'
+        .'`email` text,'
+        .'`pwd` text,'
+        .'`created` datetime NOT NULL,' // 2014-12-23 06:00:00 (PST)
+        .'`connected` datetime NOT NULL,' // 2014-12-23 06:00:00 (PST)
+        .'`touched` datetime NOT NULL,' // 2014-12-23 06:00:00 (PST)
+        . $users . ','
+        .'UNIQUE KEY `id` (`id`));';
+      if ($this->mysql_query($q)) {
+        $log->println($q, 0);
+      } else {
+        if ($this->mysql_errno()== 1050) {
+          $log->println('Table ' . $this->prefix . 'sockets already exists!');
+        } else {
+          $log->println('Table ' . $this->prefix . 'sockets had a MySQL error (' . $this->mysql_errno() . '): ' . $this->mysql_errstr());
+        }
+      }
+    }
+  }
+
+  /**
+   * Drop XibbitHub required tables.
+   *
+   * @author DanielWHoward
+   **/
+  function dropDatabaseTables($log, $users=false) {
+    // this table only has temporary data
+    try {
+      $q = 'DROP TABLE `' . $this->prefix . 'sockets`;';
+      $qr = $this->mysql_query($q);
+      if ($qr !== false) {
+        $log->println($q, 0);
+      } else {
+        $log->println($this->mysql_errstr());
+      }
+    } catch (Exception $e) {
+      $log->println($e->getMessage());
+    }
+
+    // this table only has temporary data
+    try {
+      $q = 'DROP TABLE `' . $this->prefix . 'sockets_events`;';
+      $qr = $this->mysql_query($q);
+      if ($qr !== false) {
+        $log->println($q, 0);
+      } else {
+        $log->println($this->mysql_errstr());
+      }
+    } catch (Exception $e) {
+      $log->println($e->getMessage());
+    }
+
+    // this table only has temporary data
+    try {
+      $q = 'DROP TABLE `' . $this->prefix . 'sockets_sessions`;';
+      $qr = $this->mysql_query($q);
+      if ($qr !== false) {
+        $log->println($q, 0);
+      } else {
+        $log->println($this->mysql_errstr());
+      }
+    } catch (Exception $e) {
+      $log->println($e->getMessage());
+    }
+
+    // required for XibbitHub but might have persistent data
+    if ($users) {
+      try {
+        $q = 'DROP TABLE `' . $this->prefix . 'users`;';
+        $qr = $this->mysql_query($q);
+        if ($qr !== false) {
+          $log->println($q, 0);
+        } else {
+          $log->println($this->mysql_errstr());
+        }
+      } catch (Exception $e) {
+        $log->println($e->getMessage());
+      }
+    }
+  }
 }
 ?>
