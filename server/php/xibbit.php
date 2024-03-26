@@ -543,6 +543,40 @@ class SocketSession {
 }
 
 /**
+ * An output stream.
+ *
+ * @package xibbit
+ * @author DanielWHoward
+ **/
+class XibbitHubOutputStream {
+
+  /**
+   * Constructor.
+   *
+   * @author DanielWHoward
+   **/
+  function __construct() {
+  }
+
+  /**
+   * Write data to the stream.
+   *
+   * @author DanielWHoward
+   **/
+  function write($data) {
+    print($data);
+  }
+
+  /**
+   * Flush any cached data.
+   *
+   * @author DanielWHoward
+   **/
+  function flush() {
+  }
+}
+
+/**
  * A socket handling hub object that makes it
  * easy to set up sockets, dispatch client socket
  * packets to a server-side event handler and send
@@ -561,6 +595,7 @@ class XibbitHub {
   var $useSocketIO;
   var $socketSession;
   var $packetsBuffer;
+  var $outputStream;
   var $pollingThread;
 
   /**
@@ -601,6 +636,7 @@ class XibbitHub {
       $this->packetsBuffer = file_get_contents('php://input');
       $this->pollingThread = ($this->packetsBuffer === '');
     }
+    $this->outputStream = new XibbitHubOutputStream();
     // pseudo $_SESSION
     $this->socketSession = new SocketSession(array(
       'prefix'=>$this->prefix,
@@ -1124,7 +1160,7 @@ class XibbitHub {
           if ($payload === '') {
             $payload = '1:3';
           }
-          print $payload;
+          $this->outputStream->write($payload);
         } else {
           // handle the packets
           $packet = $packetsIn[0];
@@ -1133,7 +1169,7 @@ class XibbitHub {
           $packetData = $this->readPacketData($packet);
           if ($packetTypeId === 2) {
             // ping
-            print 'ok';
+            $this->outputStream->write('ok');
           } elseif ($packetTypeId === 4) {
             if ($packetTypeId2 === 2) {
               $event = json_decode($packetData, true);
@@ -1142,12 +1178,12 @@ class XibbitHub {
                 $packetsOut[] = $this->createPacket(4, '2'.$emittedEvent);
               }
               $payload = $this->createPayload($packetsOut);
-              print 'ok'.$payload;
+              $this->outputStream->write('ok'.$payload);
             } else {
-              print '2:40';
+              $this->outputStream->write('2:40');
             }
           } else {
-            print $this->packetsBuffer;
+            $this->outputStream->write($this->packetsBuffer);
           }
         }
       } else {
@@ -1177,7 +1213,7 @@ class XibbitHub {
         // send a message packet with open packet type id
         $packetsOut[] = $this->createPacket(4, '0');
         $payload = $this->createPayload($packetsOut);
-        print $payload;
+        $this->outputStream->write($payload);
       }
     } else {
       // set up the connection
@@ -1196,6 +1232,7 @@ class XibbitHub {
       }
       $socket->outputJson(false);
     }
+    $this->outputStream->flush();
   }
 
   /**

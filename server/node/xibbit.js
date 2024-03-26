@@ -38,6 +38,38 @@ var moment = require('moment-timezone');
  **/
 module.exports = function() {
   /**
+   * An output stream.
+   *
+   * @package xibbit
+   * @author DanielWHoward
+   **/
+
+  /**
+   * Constructor.
+   *
+   * @author DanielWHoward
+   **/
+  function XibbitHubOutputStream() {
+  }
+
+  /**
+   * Write data to the stream.
+   *
+   * @author DanielWHoward
+   **/
+  XibbitHubOutputStream.prototype.write = function(data) {
+    console.log(data);
+  };
+
+  /**
+   * Flush any cached data.
+   *
+   * @author DanielWHoward
+   **/
+  XibbitHubOutputStream.prototype.flush = function() {
+  };
+
+  /**
    * Constructor.
    *
    * @author DanielWHoward
@@ -62,6 +94,7 @@ module.exports = function() {
     } else if (this.config['mysqli'] && this.config['mysqli']['SQL_PREFIX']) {
       this.prefix = this.config['mysqli']['SQL_PREFIX'];
     }
+    this.outputStream = new XibbitHubOutputStream();
   }
 
   /**
