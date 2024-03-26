@@ -48,7 +48,7 @@ type ILog interface {
 }
 
 /**
- * An output stream.
+ * A logger.
  *
  * @package xibbit
  * @author DanielWHoward
@@ -67,7 +67,7 @@ func NewLogMeImpl() *LogMeImpl {
 }
 
 /**
- * Write data to the stream.
+ * Write to the log.
  *
  * @author DanielWHoward
  **/
@@ -76,8 +76,44 @@ func (self *LogMeImpl) Println(msg string, lvl int) {
 }
 
 type XibbitHubOutputStream interface {
-	write(sock socketio.Conn, data map[string]interface{})
+	write(sock socketio.Conn, eventName string, data map[string]interface{})
 	flush()
+}
+
+/**
+ * An output stream.
+ *
+ * @package xibbit
+ * @author DanielWHoward
+ **/
+type XibbitHubOutputStreamImpl struct {
+}
+
+/**
+ * Constructor.
+ *
+ * @author DanielWHoward
+ **/
+func NewXibbitHubOutputStreamImpl() *XibbitHubOutputStreamImpl {
+	self := new(XibbitHubOutputStreamImpl)
+	return self
+}
+
+/**
+ * Write data to the stream.
+ *
+ * @author DanielWHoward
+ **/
+func (self *XibbitHubOutputStreamImpl) write(sock socketio.Conn, eventName string, data map[string]interface{}) {
+	sock.Emit(eventName, data)
+}
+
+/**
+ * Flush any cached data.
+ *
+ * @author DanielWHoward
+ **/
+func (self *XibbitHubOutputStreamImpl) flush() {
 }
 
 /**
@@ -96,6 +132,7 @@ type XibbitHub struct {
 	Handler_groups map[string]map[string]func(event map[string]interface{}, vars map[string]interface{}) map[string]interface{}
 	prefix         string
 	Sessions       []map[string]interface{}
+	OutputStream   XibbitHubOutputStream
 	mu             sync.Mutex
 	globalVars     map[string]interface{}
 }
@@ -122,6 +159,7 @@ func NewXibbitHub(config map[string]interface{}) *XibbitHub {
 		self.socketio = config["socketio"].(*socketio.Server)
 	}
 	self.Sessions = make([]map[string]interface{}, 0)
+	self.OutputStream = NewXibbitHubOutputStreamImpl()
 	self.globalVars = map[string]interface{}{}
 	mysql, ok := self.config["mysql"].(map[string]interface{})
 	if ok && self.prefix == "" {
@@ -692,7 +730,7 @@ func (self *XibbitHub) Start(method string) {
 		}
 		// emit all events
 		for i := 0; i < len(events); i++ {
-			sock.Emit(events[i].eventName, events[i].data)
+			self.OutputStream.write(sock, events[i].eventName, events[i].data)
 		}
 	})
 	// socket disconnected
@@ -717,7 +755,7 @@ func (self *XibbitHub) Start(method string) {
 							socks := _conn["sockets"].([]socketio.Conn)
 							for _, sock := range socks {
 								clone := self.CloneEvent(event, keysToSkip)
-								sock.Emit("client", clone)
+								self.OutputStream.write(sock, "client", clone)
 							}
 						}
 					}
@@ -871,7 +909,7 @@ func (self *XibbitHub) Send(event map[string]interface{}, recipient string, emit
 					socks := recipient["_conn"].(map[string]interface{})["sockets"].([]socketio.Conn)
 					for _, sock := range socks {
 						clone := self.CloneEvent(event, keysToSkip)
-						sock.Emit("client", clone)
+						self.OutputStream.write(sock, "client", clone)
 					}
 				}
 			}
