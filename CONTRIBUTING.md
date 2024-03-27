@@ -59,8 +59,8 @@ etc.
 1. Create a simple app to exercise the xibdb port to confirm that it works.
 1. Install Socket.IO for the server language/framework.
 1. Create a simple app (both client and server) to confirm that Socket.IO works.  Usually, in the process of making this work, you will also install an http server and be able to serve static files and handle REST requests locally.
-1. Copy "www/xibbit/server/go/src/xibbit/xibbit.go" and port some of it to the new server language/framework.  For xibbit itself, the Golang version is the simples to port because it does not have any of the extra Socket.IO emulation code of PHP and does not have the asynchronous callback of JavaScript and Node.js.  In some cases, it may be helpful to augment the Golang version by looking at the PHP version.
-1. Copy "www/xibbit/server/go/src/publicfigure/events" and port these files as needed.
+1. Copy "www/xibbit/server/golang/src/xibbit/xibbit.go" and port some of it to the new server language/framework.  For xibbit itself, the Golang version is the simples to port because it does not have any of the extra Socket.IO emulation code of PHP and does not have the asynchronous callback of JavaScript and Node.js.  In some cases, it may be helpful to augment the Golang version by looking at the PHP version.
+1. Copy "www/xibbit/server/golang/src/publicfigure/events" and port these files as needed.
 1. Keep porting until the entire Public Figure sample app is running in the new server language/framework.
 1. You're done!
 

@@ -1,7 +1,7 @@
 set PKG=test
-cd C:\Ampps\www\xibbit\test\server\go
-set GOBIN=C:\Ampps\www\xibbit\test\server\go\bin
-set GOPATH=C:\Ampps\www\xibbit\test\server\go;C:\Ampps\www\xibbit\server\go;%USERPROFILE%\go
+cd C:\Ampps\www\xibbit\test\server\golang
+set GOBIN=C:\Ampps\www\xibbit\test\server\golang\bin
+set GOPATH=C:\Ampps\www\xibbit\test\server\golang;C:\Ampps\www\xibbit\server\golang;%USERPROFILE%\go
 del bin\%PKG%.exe
 go fmt %PKG%
 cd src/%PKG%

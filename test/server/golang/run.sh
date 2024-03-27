@@ -1,7 +1,7 @@
 #!/bin/sh
 PKG=test
-export GOBIN=/Applications/AMPPS/www/xibbit/test/server/go/bin/
-export GOPATH=/Applications/AMPPS/www/xibbit/test/server/go:/Applications/AMPPS/www/xibbit/server/go:~/go
+export GOBIN=/Applications/AMPPS/www/xibbit/test/server/golang/bin/
+export GOPATH=/Applications/AMPPS/www/xibbit/test/server/golang:/Applications/AMPPS/www/xibbit/server/golang:~/go
 rm bin/$PKG
 go fmt $PKG
 cd src/$PKG
