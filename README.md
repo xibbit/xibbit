@@ -13,7 +13,7 @@ I wanted to start a tech startup with my teenage son but existing frameworks loc
 ## motivation for experienced developers
 You need xibbit (or something like it) so you can finally:
 
-1. **Be "done" with the language wars.** Go, Node.js, PHP and all the other languages have *if* statements and *for* loops: it's the same logic but different syntax.  Stop getting locked in.
+1. **Be "done" with the language wars.** Go, Node.js, PHP, Python and all the other languages have *if* statements and *for* loops: it's the same logic but different syntax.  Stop getting locked in.
 1. **Be "done" with REST.** REST is not bi-directional.  Stop designing APIs with paths, headers, query parameters and data formats and writing marshalling/unmarshalling code into/out of REST.  Use JSON events.
 1. **Be "done" with scaffolding.** A framework of low-level tools is not enough.  Out of the box, frameworks should demo how to sign up, sign in, read and write private user data and sign out.  Code your unique features on day 1; be done with frameworks that force you to write weeks of code before the simplest thing works.
 
@@ -21,9 +21,9 @@ xibbit is also great for freelance developers and offshore teams.
 
 ## what it is (the technobabble)
 
-xibbit is both a client-side framework (supports **React**, **Flutter**, **AngularJS**, **Inferno**, **Marko**, **Mithril**) and a server-side framework (supports **Go**, **Node**, **PHP**).  Developers can choose any client/server combination and, if they change their mind later, they can port their existing code easily to a new language.
+xibbit is both a client-side framework (supports **React**, **Flutter**, **AngularJS**, **Inferno**, **Marko**, **Mithril**) and a server-side framework (supports **Go**, **Node**, **PHP**, **Python Django**).  Developers can choose any client/server combination and, if they change their mind later, they can port their existing code easily to a new language.
 
-xibdb is an optional database access library (supports **MySQL**) for xibbit that provides an easy-to-use, powerful and portable database access.
+xibdb is an optional database access library (supports **MySQL** and SQLite in Python Django) for xibbit that provides an easy-to-use, powerful and portable database access.
 
 ## installation
 
@@ -55,7 +55,9 @@ PHP was chosen as the default server because it is the easiest to set up and the
 
 ## current status
 
-xibbit is under active development.  Version 1.5.3 is the current version.
+xibbit is under active development.  Version 2.0.0 is the current version.
+
+Version 2.0.0 adds Python Django for Python 3 and 2.7, adds file upload support, changes XibbitHub.on() (breaking change), socketio folder name (breaking change), adds Socket.IO v4 support, refactors and fixes xibbithub, xibdb.
 
 Version 1.5.3 updates all client build and Node.js server build.  It uses socket_io_client_flutter package instead of inline code.
 
