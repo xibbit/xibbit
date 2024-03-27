@@ -1,6 +1,6 @@
 /*!
  * Socket.IO v4.4.1
- * (c) 2014-2023 Guillermo Rauch
+ * (c) 2014-2024 Guillermo Rauch
  * Released under the MIT License.
  */
 (function (global, factory) {
@@ -4653,7 +4653,9 @@
 
       while (pos !== -1) {
         if (pos > 0 && pos < data.length - 1 && data[pos - 1] >= '0' && data[pos - 1] <= '9' && data[pos + 1] >= '0' && data[pos + 1] <= '9') {
-          matchPos.push(pos);
+          if (pos - 3 <= 0 || data[pos - 3] !== ':' && (pos + 3 >= data.length - 1 || data[pos + 3] !== ':')) {
+            matchPos.push(pos);
+          }
         }
 
         pos = data.indexOf(':', pos + 1);
