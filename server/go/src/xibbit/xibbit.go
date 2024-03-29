@@ -35,6 +35,7 @@ import (
 	"log"
 	"math"
 	"regexp"
+	"runtime"
 	"strconv"
 	"strings"
 	"time"
@@ -65,12 +66,17 @@ type XibbitHub struct {
  **/
 func NewXibbitHub(config map[string]interface{}) *XibbitHub {
 	self := new(XibbitHub)
+	if _, ok := config["vars"].(map[string]interface{}); !ok {
+		config["vars"] = map[string]interface{}{}
+	}
 	config["vars"].(map[string]interface{})["hub"] = self
 	self.config = config
 	self.prefix = ""
 	self.onfn = make(map[string]func(event map[string]interface{}, vars map[string]interface{}) map[string]interface{})
 	self.apifn = make(map[string]func(event map[string]interface{}, vars map[string]interface{}) map[string]interface{})
-	self.socketio = config["socketio"].(*socketio.Server)
+	if _, ok := config["socketio"].(*socketio.Server); ok {
+		self.socketio = config["socketio"].(*socketio.Server)
+	}
 	self.Sessions = make([]map[string]interface{}, 0)
 	mysql, ok := self.config["mysql"].(map[string]interface{})
 	if ok && self.prefix == "" {
@@ -84,14 +90,16 @@ func NewXibbitHub(config map[string]interface{}) *XibbitHub {
 }
 
 /**
- * Return the socket associated with a socket ID.
+ * Return the Socket.IO instance.
  *
- * @param sid string The socket ID.
- * @return A socket.
+ * This might be the Socket.IO server instance
+ * or the Socket.IO library instance.
+ *
+ * @return The Socket.IO instance.
  *
  * @author DanielWHoward
  **/
-func (self *XibbitHub) GetSocket(sid string, config map[string]interface{}) *socketio.Server {
+func (self *XibbitHub) GetSocketIO() *socketio.Server {
 	return self.socketio
 }
 
@@ -111,9 +119,9 @@ func (self *XibbitHub) GetSocket(sid string, config map[string]interface{}) *soc
  *
  * @author DanielWHoward
  **/
-func (self *XibbitHub) GetSession(sock socketio.Conn) map[string]interface{} {
+func (self *XibbitHub) GetSession(sockId string) map[string]interface{} {
 	var session map[string]interface{} = nil
-	i := self.GetSessionIndex(sock)
+	i := self.GetSessionIndex(sockId)
 	if i != -1 {
 		session = self.CloneSession(self.Sessions[i])
 	}
@@ -129,11 +137,11 @@ func (self *XibbitHub) GetSession(sock socketio.Conn) map[string]interface{} {
  *
  * @author DanielWHoward
  **/
-func (self *XibbitHub) GetSessionIndex(sock socketio.Conn) int {
+func (self *XibbitHub) GetSessionIndex(sockId string) int {
 	for i, session := range self.Sessions {
 		socks := session["_conn"].(map[string]interface{})["sockets"].([]socketio.Conn)
 		for _, skt := range socks {
-			if sock == skt {
+			if sockId == skt.ID() {
 				return i
 			}
 		}
@@ -168,7 +176,7 @@ func (self *XibbitHub) GetSessionByInstance(instance string) map[string]interfac
  * @author DanielWHoward
  **/
 func (self *XibbitHub) SetSession(sock socketio.Conn, session map[string]interface{}) {
-	i1 := self.GetSessionIndex(sock)
+	i1 := self.GetSessionIndex(sock.ID())
 	if i1 == -1 {
 		log.Println("XibbitHub.SetSession() could not find the session")
 		//		self.AddSession(sock, session)
@@ -255,12 +263,16 @@ func (self *XibbitHub) RemoveSession(sock socketio.Conn) {
 	found := false
 	// find the session index and socket index
 	for si, session := range self.Sessions {
-		sockets := session["_conn"].(map[string]interface{})["sockets"].([]socketio.Conn)
+		socks := session["_conn"].(map[string]interface{})["sockets"].([]socketio.Conn)
 		instance, _ := session["instance"].(string)
-		for ki, skt := range sockets {
+		for ki, skt := range socks {
 			if sock == skt {
 				s = si
-				if (len(sockets) > 1) || (instance != "") {
+				// instances and their session_data should hang
+				/// around even if there are no sockets because
+				//  instances can be retrieved later and assigned
+				//  to a new socket (e.g. page reload)
+				if (len(socks) > 1) || (instance != "") {
 					k = ki
 				}
 				found = true
@@ -275,9 +287,9 @@ func (self *XibbitHub) RemoveSession(sock socketio.Conn) {
 	if found && (k == -1) {
 		self.Sessions = append(self.Sessions[0:s], self.Sessions[s+1:]...)
 	} else if found {
-		sockets := self.Sessions[s]["_conn"].(map[string]interface{})["sockets"].([]socketio.Conn)
-		sockets = append(sockets[0:k], sockets[k+1:]...)
-		self.Sessions[s]["_conn"].(map[string]interface{})["sockets"] = sockets
+		socks := self.Sessions[s]["_conn"].(map[string]interface{})["sockets"].([]socketio.Conn)
+		socks = append(socks[0:k], socks[k+1:]...)
+		self.Sessions[s]["_conn"].(map[string]interface{})["sockets"] = socks
 	} else {
 		log.Println("XibbitHub.RemoveSession() could not find the session")
 	}
@@ -350,12 +362,12 @@ func (self *XibbitHub) ReorderJson(s string, first []string, last []string) stri
 		i++
 	}
 	// save the last key-value pairs
-	for _, f := range last {
-		v, ok := targets[len(first)][f]
+	for _, l := range last {
+		v, ok := targets[len(first)][l]
 		if ok {
 			targets[i] = make(map[string]interface{})
-			targets[i][f] = v
-			delete(targets[len(first)], f)
+			targets[i][l] = v
+			delete(targets[len(first)], l)
 		}
 		i++
 	}
@@ -376,20 +388,59 @@ func (self *XibbitHub) ReorderJson(s string, first []string, last []string) stri
 }
 
 /**
- * Return a JSON string with keys in a specific order.
+ * Some associative arrays have their keys stored in a
+ * specific order.
  *
- * @param s map A JSON string with keys in random order.
+ * Golang does not do this so this method is pointless.
+ *
+ * Return a hashtable with keys in a specific order.
+ *
+ * @param source map A JSON string with keys in random order.
  * @param first slice An array of key names to put in order at the start.
  * @param last slice An array of key names to put in order at the end.
  *
  * @author DanielWHoward
  **/
-func (self *XibbitHub) ReorderArray(source string, first []string, last []string) string {
-	return source
+func (self *XibbitHub) ReorderMap(source map[string]interface{}, first []string, last []string) map[string]interface{} {
+	// create JSON maps
+	target := map[string]interface{}{};
+	// save the first key-value pairs
+	for _, f := range first {
+		key := f
+		if _, ok := source[key]; ok {
+			target[key] = source[key]
+		}
+	}
+	// save the non-first and non-last key-value pairs
+	for key, value := range source {
+		fok := false
+		for _, fval := range first {
+			if fval == key {
+				fok = true
+			}
+		}
+		lok := false
+		for _, lval := range last {
+			if lval == key {
+				lok = true
+			}
+		}
+		if !fok && !lok {
+			target[key] = value
+		}
+	}
+	// save the last key-value pairs
+	for _, l := range last {
+		key := l
+		if _, ok := source[key]; ok {
+			target[key] = source[key]
+		}
+	}
+	return target;
 }
 
 /**
- * Start the Xibbit server system.
+ * Start the xibbit server system.
  *
  * @param method string An event handling strategy.
  *
@@ -398,7 +449,7 @@ func (self *XibbitHub) ReorderArray(source string, first []string, last []string
 func (self *XibbitHub) Start(method string) {
 	// socket connected
 	self.socketio.OnConnect("/", func(sock socketio.Conn) error {
-		session := self.GetSession(sock)
+		session := self.GetSession(sock.ID())
 		if session == nil {
 			self.AddSession(sock)
 		}
@@ -413,9 +464,9 @@ func (self *XibbitHub) Start(method string) {
 		}()
 		allowedKeys := []string{"_id"}
 		allowedTypes := []string{"_instance"}
-		session := self.GetSession(sock)
+		session := self.GetSession(sock.ID())
 		// process the event
-		events := []map[string]interface{}{}
+		events := []struct {eventName string; data map[string]interface{}}{}
 		handled := false
 		if !handled {
 			// verify that the event is well formed
@@ -433,7 +484,7 @@ func (self *XibbitHub) Start(method string) {
 				}
 				if malformed {
 					event["e"] = "malformed--property"
-					events = append(events, event)
+					events = append(events, struct {eventName string; data map[string]interface{}}{"client", event})
 					handled = true
 					break
 				}
@@ -442,7 +493,7 @@ func (self *XibbitHub) Start(method string) {
 				// check event type exists
 				if _, ok := event["type"]; !ok {
 					event["e"] = "malformed--type"
-					events = append(events, event)
+					events = append(events, struct {eventName string; data map[string]interface{}}{"client", event})
 					handled = true
 				}
 				// check event type is string and has valid value
@@ -458,7 +509,7 @@ func (self *XibbitHub) Start(method string) {
 					}
 					if !typeValidated {
 						event["e"] = "malformed--type:" + event["type"].(string)
-						events = append(events, event)
+						events = append(events, struct {eventName string; data map[string]interface{}}{"client", event})
 						handled = true
 					}
 				}
@@ -528,21 +579,21 @@ func (self *XibbitHub) Start(method string) {
 					if (eventReply["type"].(string) == "_instance") && ok && (ee == "unimplemented") {
 						delete(eventReply, "e")
 					}
-					events = append(events, eventReply)
+					reorderedEventReply := eventReply
+					events = append(events, struct {eventName string; data map[string]interface{}}{"client", reorderedEventReply})
 					handled = true
 				}
 			}
 		}
 		// emit all events
 		for i := 0; i < len(events); i++ {
-			sock.Emit("client", events[i])
+			sock.Emit(events[i].eventName, events[i].data)
 		}
 	})
 	// socket disconnected
 	self.socketio.OnDisconnect("/", func(sock socketio.Conn, reason string) {
-		session := self.GetSession(sock)
 		self.RemoveSession(sock)
-		self.CheckClock(session)
+		self.CheckClock()
 	})
 
 	ticker := time.NewTicker(time.Second)
@@ -550,8 +601,7 @@ func (self *XibbitHub) Start(method string) {
 		for {
 			select {
 			case <-ticker.C:
-				session := map[string]interface{}{}
-				self.CheckClock(session)
+				self.CheckClock()
 				keysToSkip := []string{"_session", "_conn"}
 				for _, session := range self.Sessions {
 					events := []map[string]interface{}{}
@@ -559,10 +609,10 @@ func (self *XibbitHub) Start(method string) {
 					events = self.Receive(events, session["session_data"].(map[string]interface{}), false)
 					for _, event := range events {
 						if _conn, ok := session["_conn"].(map[string]interface{}); ok {
-							sockets := _conn["sockets"].([]socketio.Conn)
-							for _, socket := range sockets {
+							socks := _conn["sockets"].([]socketio.Conn)
+							for _, sock := range socks {
 								clone := self.CloneEvent(event, keysToSkip)
-								socket.Emit("client", clone)
+								sock.Emit("client", clone)
 							}
 						}
 					}
@@ -580,7 +630,7 @@ func (self *XibbitHub) Start(method string) {
  *
  * @author DanielWHoward
  **/
-func (self *XibbitHub) readAndWriteUploadEvent(event []map[string]interface{}) []map[string]interface{} {
+func (self *XibbitHub) ReadAndWriteUploadEvent(event []map[string]interface{}) []map[string]interface{} {
 	return event
 }
 
@@ -660,6 +710,9 @@ func (self *XibbitHub) Trigger(event map[string]interface{}) ([]map[string]inter
 				defer func() {
 					if e := recover(); e != nil {
 						eventReply["e"] = e
+						b := make([]byte, 2048) // adjust buffer size to be larger than expected stack
+						n := runtime.Stack(b, false)
+						eventReply["e_stacktrace"] = string(b[:n])
 					}
 				}()
 				eventReply = handler(eventReply, self.config["vars"].(map[string]interface{}))
@@ -686,10 +739,14 @@ func (self *XibbitHub) Trigger(event map[string]interface{}) ([]map[string]inter
 }
 
 /**
- * Send an event to another user and, optionally,
- * provide a callback to process a response.
+ * Send an event to another user.
  *
- * @param event array The event to send.
+ * The special &quot;all&quot; recipient
+ * sends it to all logged in users.
+ *
+ * @param event map The event to send.
+ * @param recipient string The username to send to.
+ * @param emitOnly boolean Just call emit() or invoke __send event, too.
  * @return boolean True if the event was sent.
  *
  * @author DanielWHoward
@@ -713,10 +770,10 @@ func (self *XibbitHub) Send(event map[string]interface{}, recipient string, emit
 			}
 			if len(recipients) > 0 {
 				for _, recipient := range recipients {
-					sockets := recipient["_conn"].(map[string]interface{})["sockets"].([]socketio.Conn)
-					for _, socket := range sockets {
+					socks := recipient["_conn"].(map[string]interface{})["sockets"].([]socketio.Conn)
+					for _, sock := range socks {
 						clone := self.CloneEvent(event, keysToSkip)
-						socket.Emit("client", clone)
+						sock.Emit("client", clone)
 					}
 				}
 			}
@@ -780,7 +837,7 @@ func (self *XibbitHub) Receive(events []map[string]interface{}, session map[stri
  *
  * @author DanielWHoward
  **/
-func (self *XibbitHub) Connect(event map[string]interface{}, username string, connect bool) {
+func (self *XibbitHub) Connect(event map[string]interface{}, username string, connect bool) map[string]interface{} {
 	// update last connection time for user in the database
 	//	connected := 0
 	user := event["_conn"].(map[string]interface{})["user"].(map[string]interface{})
@@ -792,6 +849,7 @@ func (self *XibbitHub) Connect(event map[string]interface{}, username string, co
 		delete(user["session_data"].(map[string]interface{}), "username")
 		delete(user, "username")
 	}
+	return event
 }
 
 /**
@@ -799,8 +857,16 @@ func (self *XibbitHub) Connect(event map[string]interface{}, username string, co
  *
  * @author DanielWHoward
  **/
-func (self *XibbitHub) Touch() {
-	// nothing to do
+func (self *XibbitHub) Touch(session map[string]interface{}) {
+	if username, ok := session["username"].(string); ok {
+		// update last ping for this user in the database
+		touched := time.Now().Format("2006-01-02 15:04:05")
+		nullDateTime := "1970-01-01 00:00:00"
+		q := "UPDATE `" + self.prefix + "users` SET `touched` = '" + touched + "' WHERE "
+		q += "`username` = '" + username + "' && "
+		q += "`connected` <> '" + nullDateTime + "';"
+		self.Mysql_query(q)
+	}
 }
 
 /**
@@ -808,7 +874,7 @@ func (self *XibbitHub) Touch() {
  *
  * @author DanielWHoward
  **/
-func (self *XibbitHub) CheckClock(user map[string]interface{}) {
+func (self *XibbitHub) CheckClock() {
 	// try to lock the global variables
 	if self.LockGlobalVars() {
 		globalVars := self.ReadGlobalVars()
@@ -904,17 +970,17 @@ func (self *XibbitHub) DeleteExpired(table string, secs int, clause string) {
  *
  * This is a way to manually enforce a foreign key constraint.
  *
- * @param $table string A table to delete rows from.
- * @param $column string A column to try to match to a column in the other table.
- * @param $table2 string The other table that should have a corresponding row.
- * @param $column2 string A column of the other table to match against.
+ * @param table string A table to delete rows from.
+ * @param column string A column to try to match to a column in the other table.
+ * @param table2 string The other table that should have a corresponding row.
+ * @param column2 string A column of the other table to match against.
  *
  * @author DanielWHoward
  **/
-func (self *XibbitHub) DeleteOrphans(table string, secs int, clause string) {
-	expiration := time.Now().Add(time.Second * time.Duration(secs)).Format("2006-01-02 15:04:05")
-	q := "DELETE FROM `" + self.prefix + table + "` "
-	q += "WHERE (`touched` < '" + expiration + "'" + clause + ");"
+func (self *XibbitHub) DeleteOrphans(table string, column string, table2 string, column2 string) {
+    q := "DELETE FROM `" + self.prefix + table + "` " +
+      "WHERE NOT EXISTS (SELECT * FROM `" + self.prefix + table2 + "` " +
+      "WHERE `" + column2 + "`=`" + self.prefix + table + "`.`" + column + "`);";
 	self.Mysql_query(q)
 }
 
@@ -931,7 +997,7 @@ func (self *XibbitHub) Cmp(a map[string]interface{}, b map[string]interface{}) i
 	ret := 0
 	if a["___id"].(int) > b["___id"].(int) {
 		ret = 1
-	} else if a["___id"].(int) > b["___id"].(int) {
+	} else if a["___id"].(int) < b["___id"].(int) {
 		ret = -1
 	}
 	return ret
@@ -1144,7 +1210,7 @@ func (self *XibbitHub) WriteGlobalVars(vars map[string]interface{}) {
  * @return The mysql_query() return value.
  *
  * @author DanielWHoward
- */
+ **/
 func (self *XibbitHub) Mysql_query(query string) (*sql.Rows, error, []string) {
 	columnNames := []string{}
 	mysql, _ := self.config["mysql"].(map[string]interface{})
@@ -1166,7 +1232,7 @@ func (self *XibbitHub) Mysql_query(query string) (*sql.Rows, error, []string) {
  * @return The mysql_fetch_assoc() return value.
  *
  * @author DanielWHoward
- */
+ **/
 func (self *XibbitHub) Mysql_fetch_assoc(rows *sql.Rows) map[string]interface{} {
 	var e error = nil
 	var row map[string]interface{} = nil
@@ -1201,7 +1267,7 @@ func (self *XibbitHub) Mysql_fetch_assoc(rows *sql.Rows) map[string]interface{} 
  * @return The mysql_free_result() return value.
  *
  * @author DanielWHoward
- */
+ **/
 func (self *XibbitHub) Mysql_free_query(rows *sql.Rows) {
 	if rows != nil {
 		rows.Close()
@@ -1215,7 +1281,7 @@ func (self *XibbitHub) Mysql_free_query(rows *sql.Rows) {
  * @return The mysql_real_escape_string() return value.
  *
  * @author DanielWHoward
- */
+ **/
 func (self *XibbitHub) Mysql_real_escape_string(unescaped_string string) string {
 	escaped_string := strings.ReplaceAll(unescaped_string, "\\0", "\\x00")
 	escaped_string = strings.ReplaceAll(escaped_string, "\n", "\\n")

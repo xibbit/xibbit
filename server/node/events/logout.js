@@ -46,7 +46,7 @@ self.on('logout', (event, {hub, pf}, callback) => {
     from: username
   });
   // logout this instance
-  hub.connect(event, username, false);
+  event = hub.connect(event, username, false);
   // remove UID from the instance
   pf.readOneRow({
     table: 'instances',

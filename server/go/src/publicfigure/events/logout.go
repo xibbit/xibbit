@@ -52,7 +52,7 @@ func Logout(event map[string]interface{}, vars map[string]interface{}) map[strin
 		"from": username,
 	}, "", false)
 	// logout this instance
-	hub.Connect(event, username, false)
+	event = hub.Connect(event, username, false)
 	// remove UID from the instance
 	row, _ := pf.ReadOneRow(map[string]interface{}{
 		"table": "instances",
