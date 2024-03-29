@@ -47,7 +47,7 @@ $self->on('logout', function($event, $vars) {
     'from'=>$username
   ));
   // logout this instance
-  $hub->connect($event, $username, false);
+  $event = $hub->connect($event, $username, false);
   // remove UID from the instance
   $row = $pf->readOneRow(array(
     'table'=>'instances',

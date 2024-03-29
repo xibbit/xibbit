@@ -101,7 +101,7 @@ func Login(event map[string]interface{}, vars map[string]interface{}) map[string
 			me = mes[len(mes)-1]
 			// connect to this user
 			event["username"] = me["username"]
-			hub.Connect(event, me["username"].(string), true)
+			event = hub.Connect(event, me["username"].(string), true)
 			// add UID and user to the session variables
 			event["_session"].(map[string]interface{})["uid"] = me["id"]
 			event["_session"].(map[string]interface{})["user"] = me

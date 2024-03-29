@@ -43,6 +43,9 @@ module.exports = function() {
    * @author DanielWHoward
    **/
   function XibbitHub(config) {
+    if (!config.vars) {
+      config.vars = {};
+    }
     config.vars.hub = this;
     this.config = config;
     this.onfn = {};
@@ -57,15 +60,17 @@ module.exports = function() {
     }
   }
 
-/**
- * Return the socket associated with a socket ID.
- *
- * @param $sid string The socket ID.
- * @return A socket.
- *
- * @author DanielWHoward
- **/
-  XibbitHub.prototype.getSocket = function(sock) {
+  /**
+   * Return the Socket.IO instance.
+   *
+   * This might be the Socket.IO server instance
+   * or the Socket.IO library instance.
+   *
+   * @return The Socket.IO instance.
+   *
+   * @author DanielWHoward
+   **/
+  XibbitHub.prototype.getSocketIO = function(sock) {
     return this.socketio;
   };
 
@@ -120,16 +125,29 @@ module.exports = function() {
   };
 
   /**
- * Change the session associated with a socket.
- *
- * @param sock socketio.Conn A socket.
- * @param session Object The session values.
+   * Change the session associated with a socket.
+   *
+   * @param sock socketio.Conn A socket.
+   * @param session Object The session values.
    *
    * @author DanielWHoward
    **/
   XibbitHub.prototype.setSession = function(sock, session) {
     var self = this;
     self.sessions[session.instance] = session;
+  };
+
+  /**
+   * Change the session associated with a socket.
+   *
+   * @param sock socketio.Conn A socket.
+   * @param session Object The session values.
+   *
+   * @author DanielWHoward
+   **/
+  XibbitHub.prototype.setSessionByInstance = function(instance, session) {
+    var self = this;
+    self.sessions[instance]['session'] = session;
   };
 
   /**
@@ -220,7 +238,7 @@ module.exports = function() {
    *
    * @author DanielWHoward
    **/
-  XibbitHub.prototype.reorderArray = function(source, first, last) {
+  XibbitHub.prototype.reorderMap = function(source, first, last) {
     // create JSON maps
     var target = {};
     // save the first key-value pairs
@@ -250,7 +268,7 @@ module.exports = function() {
   };
 
   /**
-   * Start the xibbit system.
+   * Start the xibbit server system.
    *
    * @param method string An event handling strategy.
    *
@@ -284,31 +302,32 @@ module.exports = function() {
         var events = [];
         var handled = false;
         if (typeof event !== 'object') {
+          // the event is not JSON
           event = {};
           event.e = 'malformed--json';
-          events.push(event);
+          events.push(['client', event]);
           handled = true;
         }
         if (!handled && (Object.keys(event).length > 0)) {
-          // verify that the event is well formed
+          // see if the event has illegal keys
           for (var key in event) {
             // _id is a special property so sender can invoke callbacks
             if ((key.substring(0, 1) === '_') && (allowedKeys.indexOf(key) === -1)) {
               event['e'] = 'malformed--property';
-              events.push(event);
+              events.push(['client', event]);
               handled = true;
               break;
             }
           }
           if (!handled) {
-            // check event type exists
+            // see if there is no event type
             if (!event.type) {
               event.e = 'malformed--type';
-              events.push(event);
+              events.push(['client', event]);
               handled = true;
             }
-            // check event type is string and has valid value
             if (!handled) {
+              // see if event type has illegal value
               var typeStr = (typeof event.type === 'string')? event.type: '';
               var typeValidated = typeStr.match(/[a-z][a-z_]*/) !== null;
               if (!typeValidated) {
@@ -316,7 +335,7 @@ module.exports = function() {
               }
               if (!typeValidated) {
                 event.e = 'malformed--type:'+event['type'];
-                events.push(event);
+                events.push(['client', event]);
                 handled = true;
               }
             }
@@ -331,7 +350,7 @@ module.exports = function() {
             // handle _instance event
             if (!handled && (event.type === '_instance')) {
               var created = 'retrieved';
-              // event instance value takes priority
+              // instance value in event takes priority
               var instance = (typeof event.instance === 'string')? event.instance: '';
               // recreate session
               if (self.getSessionByInstance(instance) === null) {
@@ -380,21 +399,21 @@ module.exports = function() {
                 delete eventReply['e'];
               }
               // reorder the properties so they look pretty
-              var ret_reorder = self.reorderArray(eventReply,
+              var reorderedEventReply = self.reorderMap(eventReply,
                 ['type', 'from', 'to', '_id'],
                 ['i', 'e']
               );
-              events.push(ret_reorder);
+              events.push(['client', reorderedEventReply]);
               handled = true;
               // emit all events
               for (var e=0; e < events.length; ++e) {
-                socket.emit('client', events[e]);
+                socket.emit(events[e][0], events[e][1]);
               }
               });
             } else {
               // emit all events
               for (var e=0; e < events.length; ++e) {
-                socket.emit('client', events[e]);
+                socket.emit(events[e][0], events[e][1]);
               }
             }
           }
@@ -404,16 +423,16 @@ module.exports = function() {
       socket.on('disconnect', function() {
         var sess = self.getSession(socket);
         self.removeSession(socket);
-        self.checkClock();
+        self.checkClock(function() {});
         delete session._conn.socket;
       });
       });
 
       // run the garbage collector
       setInterval(function() {
-        self.checkClock();
+        self.checkClock(function() {});
         for (var session in self.sessions) {
-          self.receive([], self.sessions[session].session_data, false, function(events) {
+          self.receive([], self.sessions[session].session_data, false, function(e, events) {
             for (e=0; e < events.length; ++e) {
               if (self.sessions[session]._conn.socket) {
                 self.sessions[session]._conn.socket.emit('client', events[e]);
@@ -643,7 +662,11 @@ module.exports = function() {
       // promise an events folder
       all.push(function promise() {
         fs.lstat('events', function(e, stats) {
-          promise.resolve(stats.isDirectory()? ['events/']: []);
+          var eventsFolders = [];
+          if (!e && stats && stats.isDirectory()) {
+            eventsFolders = ['events/'];
+          }
+          promise.resolve(eventsFolders);
         });
       });
       // resolve the promise
@@ -758,10 +781,14 @@ module.exports = function() {
   };
 
   /**
-   * Send an event to another user and, optionally,
-   * provide a callback to process a response.
+   * Send an event to another user.
    *
-   * @param event array The event to send.
+   * The special &quot;all&quot; recipient
+   * sends it to all logged in users.
+   *
+   * @param event map The event to send.
+   * @param recipient string The username to send to.
+   * @param emitOnly boolean Just call emit() or invoke __send event, too.
    * @return boolean True if the event was sent.
    *
    * @author DanielWHoward
@@ -769,7 +796,6 @@ module.exports = function() {
   XibbitHub.prototype.send = function(event, recipient, emitOnly, callback) {
     var self = this;
     var sent = false;
-    var to = null;
     var user = null;
     var keysToSkip = ['_session', '_conn'];
     if (emitOnly) {
@@ -836,11 +862,18 @@ module.exports = function() {
    **/
   XibbitHub.prototype.receive = function(events, session, collectOnly, callback) {
     var self = this;
+    if (!callback) {
+      return new Promise((resolve, reject) => {
+        self.receive(events, session, collectOnly, function(e, events) {
+          (e === null)? resolve(events): reject(e);
+        });
+      });
+    }
     if (collectOnly) {
 //    if (session.username === null) {
 //      return events;
 //    }
-      callback(events);
+      callback(null, events);
     } else {
       // provide special __receive event for alternative event system
       self.trigger({
@@ -853,7 +886,7 @@ module.exports = function() {
             events = events.concat(ret.eventQueue);
           }
         }
-        callback(events);
+        callback(null, events);
       });
     }
     return;
@@ -904,6 +937,7 @@ module.exports = function() {
       user.session_data['username'] = null;
       user.username = null;
     }
+    return event;
   };
 
   /**
@@ -911,7 +945,19 @@ module.exports = function() {
    *
    * @author DanielWHoward
    **/
-  XibbitHub.prototype.touch = function() {
+  XibbitHub.prototype.touch = function(session, callback) {
+    callback = callback || function() {};
+    var self = this;
+    if (typeof(session.username) !== 'undefined') {
+      var username = session.username;
+      // update last ping for this user in the database
+      var touched = moment(new Date(new Date().getTime())).tz(self.config.time_zone).format('YYYY-MM-DD HH:mm:ss');
+      var nullDateTime = '1970-01-01 00:00:00';
+      var q = 'UPDATE `' + self.prefix + 'users` SET `touched` = \'' + touched + '\' WHERE '
+        +'`username` = \'' + username + '\' && '
+        + '`connected` <> \'' + nullDateTime + '\';';
+      self.mysql_query(q, callback);
+    }
   };
 
   /**
@@ -921,7 +967,13 @@ module.exports = function() {
    **/
   XibbitHub.prototype.checkClock = function(callback) {
     var self = this;
-    callback = callback || function() {};
+    if (!callback) {
+      return new Promise((resolve, reject) => {
+        self.checkClock(function(e, locked) {
+          (e === null)? resolve(locked): reject(e);
+        });
+      });
+    }
     var config = self.config;
     var disconnect_seconds = 2 * 60;
     // try to lock the global variables
@@ -953,13 +1005,13 @@ module.exports = function() {
             globalVars._lastTick = tick.toISOString().substring(0, 19).split('T').join(' ');
             self.writeGlobalVars(globalVars, function() {
               self.unlockGlobalVars(function() {
-                callback();
+                callback(e);
               });
             });
           });
         });
       } else {
-        callback();
+        callback(e, !!locked);
       }
     });
   };
@@ -1006,19 +1058,20 @@ module.exports = function() {
   /**
    * Update rows that have not been touched recently.
    *
-   * @param $secs int A number of seconds.
+   * @param secs int A number of seconds.
    *
    * @author DanielWHoward
    **/
   XibbitHub.prototype.updateExpired = function(table, secs, clause, callback) {
     var self = this;
+    callback = callback || function() {};
     var nullDateTime = '1970-01-01 00:00:00';
     var expiration = moment(new Date(new Date().getTime() - (secs * 1000))).tz(self.config.time_zone).format('YYYY-MM-DD HH:mm:ss');
     var q = 'UPDATE `'+self.prefix+table+'` SET '
       +'connected=\''+nullDateTime+'\', '
       +'touched=\''+nullDateTime+'\' '
       +'WHERE (`touched` < \''+expiration+'\''+clause+');';
-    self.mysql_query(q, callback? callback: function() {});
+    self.mysql_query(q, callback);
   }
 
   /**
@@ -1030,10 +1083,11 @@ module.exports = function() {
    **/
   XibbitHub.prototype.deleteExpired = function(table, secs, clause, callback) {
     var self = this;
+    callback = callback || function() {};
     var expiration = moment(new Date(new Date().getTime() - (secs * 1000))).tz(self.config.time_zone).format('YYYY-MM-DD HH:mm:ss');
     var q = 'DELETE FROM `'+self.prefix+table+'` '
       +'WHERE (`touched` < \''+expiration+'\''+clause+');';
-    self.mysql_query(q, callback? callback: function() {});
+    self.mysql_query(q, callback);
   };
 
   /**
@@ -1048,12 +1102,13 @@ module.exports = function() {
    *
    * @author DanielWHoward
    **/
-  XibbitHub.prototype.deleteOrphans = function(table, column, table2, column2) {
+  XibbitHub.prototype.deleteOrphans = function(table, column, table2, column2, callback) {
     var self = this;
+    callback = callback || function() {};
     var q = 'DELETE FROM `'+self.prefix+table+'` '
       +'WHERE NOT EXISTS (SELECT * FROM `'+self.prefix+table2+'` '
       +'WHERE `'+column2+'`=`'+self.prefix+table+'`.`'+column+'`);';
-    self.mysql_query(q, callback? callback: function() {});
+    self.mysql_query(q, callback);
   };
 
   /**
@@ -1146,7 +1201,30 @@ module.exports = function() {
    **/
   XibbitHub.prototype.lockGlobalVars = function(callback) {
     var self = this;
-    callback = callback || function() {};
+    if (!callback) {
+      return new Promise((resolve, reject) => {
+        self.lockGlobalVars(function(e, oneAndOnly) {
+          (e === null)? resolve(oneAndOnly): reject(e);
+        });
+      });
+    }
+    return self.lockGlobalVarsUsingSql(callback);
+  };
+
+  /**
+   * Lock global variable in database for access.
+   *
+   * @author DanielWHoward
+   **/
+  XibbitHub.prototype.lockGlobalVarsUsingSql = function(callback) {
+    var self = this;
+    if (!callback) {
+      return new Promise((resolve, reject) => {
+        self.lockGlobalVarsUsingSql(function(e, oneAndOnly) {
+          (e === null)? resolve(oneAndOnly): reject(e);
+        });
+      });
+    }
     var now = moment(new Date()).tz(self.config.time_zone).format('YYYY-MM-DD HH:mm:ss');
     // generate a unique lock identifier
     var length = 25;
@@ -1164,22 +1242,26 @@ module.exports = function() {
       +"'"+self.mysql_real_escape_string(now)+"', "
       +"'"+self.mysql_real_escape_string(now)+"', "
       +"'"+self.mysql_real_escape_string(vars)+"');";
-    var qr = self.mysql_query(q, function(e, qr) {
+    self.mysql_query(q, function(e, qr) {
       var oneAndOnly = !e;
       var unlock = oneAndOnly;
       if (oneAndOnly) {
         // retrieve lock ID and confirm that it's the same
         q = 'SELECT vars FROM '+self.prefix+'sockets_sessions WHERE `socksessid` = \'lock\'';
         self.mysql_query(q, function(e, rows) {
-          var row;
-          if (rows.length && (row = self.mysql_fetch_assoc(rows)[0])) {
-            oneAndOnly = (row['vars'] === vars)? true: false;
+          if (e) {
+            callback(e, rows);
           } else {
-            oneAndOnly = false;
-          }
-          self.mysql_free_query(rows);
-          if (callback) {
-            callback(null, oneAndOnly);
+            var row;
+            if (rows.length && (row = self.mysql_fetch_assoc(rows))) {
+              oneAndOnly = (row['vars'] === vars)? true: false;
+            } else {
+              oneAndOnly = false;
+            }
+            self.mysql_free_query(rows);
+            if (callback) {
+              callback(null, oneAndOnly);
+            }
           }
         });
       }
@@ -1199,10 +1281,35 @@ module.exports = function() {
    **/
   XibbitHub.prototype.unlockGlobalVars = function(callback) {
     var self = this;
-    callback = callback || function() {};
+    if (!callback) {
+      return new Promise((resolve, reject) => {
+        self.unlockGlobalVars(function(e, unlocked) {
+          (e === null)? resolve(unlocked): reject(e);
+        });
+      });
+    }
+    return self.unlockGlobalVarsUsingSql(callback);
+  };
+
+  /**
+   * Unlock global variable in database.
+   *
+   * @author DanielWHoward
+   **/
+  XibbitHub.prototype.unlockGlobalVarsUsingSql = function(callback) {
+    var self = this;
+    if (!callback) {
+      return new Promise((resolve, reject) => {
+        self.unlockGlobalVarsUsingSql(function(e, unlocked) {
+          (e === null)? resolve(unlocked): reject(e);
+        });
+      });
+    }
     // release the lock
     var q = 'DELETE FROM '+self.prefix+'sockets_sessions WHERE socksessid = \'lock\';';
-    self.mysql_query(q, callback);
+    self.mysql_query(q, function(e) {
+      callback(null, !e);
+    });
   };
 
   /**
@@ -1212,12 +1319,34 @@ module.exports = function() {
    **/
   XibbitHub.prototype.readGlobalVars = function(callback) {
     var self = this;
-    callback = callback || function() {};
+    if (!callback) {
+      return new Promise((resolve, reject) => {
+        self.readGlobalVars(function(e, vars) {
+          (e === null)? resolve(vars): reject(e);
+        });
+      });
+    }
+    return self.readGlobalVarsUsingSql(callback);
+  };
+
+  /**
+   * Read global variables from database.
+   *
+   * @author DanielWHoward
+   **/
+  XibbitHub.prototype.readGlobalVarsUsingSql = function(callback) {
+    var self = this;
+    if (!callback) {
+      return new Promise((resolve, reject) => {
+        self.readGlobalVarsUsingSql(function(e, vars) {
+          (e === null)? resolve(vars): reject(e);
+        });
+      });
+    }
     var q = 'SELECT vars FROM `'+self.prefix+'sockets_sessions` WHERE socksessid = \'global\';';
     self.mysql_query(q, function(e, qr) {
       var vars = {};
       if (s = self.mysql_fetch_assoc(qr)) {
-        s = s[0];
         vars = JSON.parse(s.vars);
       }
       self.mysql_free_query(qr);
@@ -1232,7 +1361,30 @@ module.exports = function() {
    **/
   XibbitHub.prototype.writeGlobalVars = function(vars, callback) {
     var self = this;
-    callback = callback || function() {};
+    if (!callback) {
+      return new Promise((resolve, reject) => {
+        self.writeGlobalVars(vars, function(e, written) {
+          (e === null)? resolve(written): reject(e);
+        });
+      });
+    }
+    return self.writeGlobalVarsUsingSql(vars, callback);
+  };
+
+  /**
+   * Write global variables to database.
+   *
+   * @author DanielWHoward
+   **/
+  XibbitHub.prototype.writeGlobalVarsUsingSql = function(vars, callback) {
+    var self = this;
+    if (!callback) {
+      return new Promise((resolve, reject) => {
+        self.writeGlobalVarsUsingSql(vars, function(e, written) {
+          (e === null)? resolve(written): reject(e);
+        });
+      });
+    }
     var now = moment(new Date()).tz(self.config.time_zone).format('YYYY-MM-DD HH:mm:ss');
     var s = JSON.stringify(vars);
     var q = 'UPDATE `'+self.prefix+'sockets_sessions` SET '
@@ -1252,6 +1404,13 @@ module.exports = function() {
    */
   XibbitHub.prototype.mysql_query = function(query, callback) {
     var self = this;
+    if (!callback) {
+      return new Promise((resolve, reject) => {
+        self.mysql_query(query, function(e, qr) {
+          (e === null)? resolve(qr): reject(e);
+        });
+      });
+    }
     return self.config.mysql.link.query(query, callback);
   };
 
@@ -1264,13 +1423,16 @@ module.exports = function() {
    * @author DanielWHoward
    */
   XibbitHub.prototype.mysql_fetch_assoc = function(result) {
-    return result;
+    if (!result._idx) {
+      result._idx = 0;
+    }
+    return result[result._idx++];
   };
 
   /**
    * Flexible mysql_free_result() function.
    *
-   * @param $result String The result to free.
+   * @param result String The result to free.
    * @return The mysql_free_result() return value.
    *
    * @author DanielWHoward

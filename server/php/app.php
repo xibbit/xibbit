@@ -168,19 +168,19 @@ class Hub extends XibbitHub {
    *
    * @author DanielWHoward
    **/
-  function touch() {
+  function touch($session) {
     global $pf;
 
     $vars = &$this->config['vars'];
     $useInstances = isset($vars['useInstances']) && $vars['useInstances'];
 
-    parent::touch();
+    parent::touch($session);
 
     if ($useInstances) {
       $row = $pf->readOneRow(array(
         'table'=>'instances',
         'where'=>array(
-          'instance'=>$this->session['instance']
+          'instance'=>$session['instance']
       )));
       if ($row !== null) {
         // update the instance with current time (last ping)
@@ -191,7 +191,7 @@ class Hub extends XibbitHub {
           'table'=>'instances',
           'values'=>$values,
           'where'=>array(
-            'instance'=>$this->session['instance']
+            'instance'=>$session['instance']
         )));
       }
     }

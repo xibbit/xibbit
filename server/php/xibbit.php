@@ -86,7 +86,7 @@ class SocketIOWrapper {
         $socket = new SocketWrapper($sid, $config);
       }
     } else {
-      $username = isset($this->session['username'])? $this->session['username']: '';
+      $username = isset($config['impl']->session['username'])? $config['impl']->session['username']: '';
       if (($sid === '') || ($sid === $username)) {
         return $this->socket;
       } else {
@@ -557,7 +557,7 @@ class XibbitHub {
   var $apifn;
   var $prefix;
   var $session;
-  var $socket;
+  var $socketio;
   var $useSocketIO;
   var $socketSession;
   var $packetsBuffer;
@@ -571,7 +571,7 @@ class XibbitHub {
   function __construct($config) {
     $config['vars']['hub'] = $this;
     $this->config = $config;
-    $this->socketio = isset(config['socketio'])? config['socketio']: new SocketIOWrapper();
+    $this->socketio = isset($this->config['socketio'])? $this->config['socketio']: new SocketIOWrapper();
     $this->onfn = array();
     $this->apifn = array();
     $this->session = array();
@@ -581,7 +581,6 @@ class XibbitHub {
     } elseif (isset($this->config['mysqli']) && isset($this->config['mysqli']['SQL_PREFIX'])) {
       $this->prefix = $this->config['mysqli']['SQL_PREFIX'];
     }
-    $this->socket = null;
     $this->useSocketIO = isset($_REQUEST['EIO'])
         && isset($_REQUEST['transport'])
         && ($_REQUEST['transport'] === 'polling');
@@ -610,7 +609,21 @@ class XibbitHub {
     if (!isset($this->config['poll'])) {
       $this->config['poll'] = array();
     }
-    $this->touch();
+    $this->touch($this->session);
+  }
+
+  /**
+   * Return the Socket.IO instance.
+   *
+   * This might be the Socket.IO server instance
+   * or the Socket.IO library instance.
+   *
+   * @return The Socket.IO instance.
+   *
+   * @author DanielWHoward
+   **/
+  function getSocketIO() {
+    return $this->socketio;
   }
 
   /**
@@ -625,7 +638,8 @@ class XibbitHub {
    * have a non-instance session or may be combined with
    * other sockets for an instanced session.
    *
-   * @param $sock array A socket.
+   * @param $sock Object A socket.
+   * @returns map The session.
    *
    * @author DanielWHoward
    **/
@@ -637,7 +651,7 @@ class XibbitHub {
    * This is an implementation helper.  It assumes that
    * the session store is an array.
    *
-   * @param sock socketio.Conn A socket.
+   * @param $sock Object A socket.
    * @returns int The index into a session array.
    *
    * @author DanielWHoward
@@ -649,11 +663,12 @@ class XibbitHub {
   /**
    * Get the session associated with an instance.
    *
-   * @param instance string An instance string.
+   * @param $instance string An instance string.
+   * @returns map The session.
    *
    * @author DanielWHoward
    **/
-  function getSessionByInstance($instance) {
+  function &getSessionByInstance($instance) {
     if (is_string($instance) && ($instance !== '') && isset($_SESSION['instance_'.$instance])) {
       return $_SESSION['instance_'.$instance];
     }
@@ -661,9 +676,10 @@ class XibbitHub {
   }
 
   /**
-   * Get the session associated with an instance.
+   * Change the session associated with a socket.
    *
-   * @param instance string An instance string.
+   * @param $sock Object A socket.
+   * @param $session Object The session values.
    *
    * @author DanielWHoward
    **/
@@ -672,9 +688,21 @@ class XibbitHub {
   }
 
   /**
+   * Change the session associated with a socket.
+   *
+   * @param $instance string An instance string.
+   * @param $session map The session values.
+   *
+   * @author DanielWHoward
+   **/
+  function setSessionByInstance($instance, $session) {
+      //TODO unimplemented setSession()
+  }
+
+  /**
    * Add a new, empty session only for this socket.
    *
-   * @param instance string An instance string.
+   * @param $sock Object A socket.
    *
    * @author DanielWHoward
    **/
@@ -686,7 +714,7 @@ class XibbitHub {
    * Remove the socket from the session or the whole session
    * if it is the only socket.
    *
-   * @param instance string An instance string.
+   * @param $sock Object A socket.
    *
    * @author DanielWHoward
    **/
@@ -698,7 +726,7 @@ class XibbitHub {
    * Return a duplicate of the session, though the _conn is shared.  A
    * clone prevents code from relying on shared pointers.
    *
-   * @param instance string An instance string.
+   * @param $session map The session values.
    *
    * @author DanielWHoward
    **/
@@ -718,20 +746,23 @@ class XibbitHub {
   function reorderJson($s, $first, $last) {
     // create JSON maps
     $source = json_decode($s, true);
-    $target = &reorderArray($source, $first, $last);
+    $target = &reorderMap($source, $first, $last);
     return json_encode($target);
   }
 
   /**
-   * Return a JSON string with keys in a specific order.
+   * Some associative arrays have their keys stored in a
+   * specific order.
    *
-   * @param s string A JSON string with keys in random order.
-   * @param first array An array of key names to put in order at the start.
-   * @param last array An array of key names to put in order at the end.
+   * Return a hashtable with keys in a specific order.
+   *
+   * @param $source map A JSON string with keys in random order.
+   * @param $first array An array of key names to put in order at the start.
+   * @param $last array An array of key names to put in order at the end.
    *
    * @author DanielWHoward
    **/
-  function &reorderArray(&$source, $first, $last) {
+  function &reorderMap(&$source, $first, $last) {
     // create JSON maps
     $target = array();
     // save the first key-value pairs
@@ -772,7 +803,7 @@ class XibbitHub {
       $socket = &$this->socketio->wrapSocket('', array('impl'=>$this));
 
       // socket connected
-      $socket->on('connect', function($event) use ($socket) {
+      $socket->on('connect', function($event) use ($self, $socket) {
         $session = &$self->getSession($socket);
         if ($session === null) {
           $self->addSession($socket);
@@ -787,32 +818,33 @@ class XibbitHub {
         $events = array();
         $handled = false;
         if (!is_array($event)) { // is_map
+          // the event is not JSON
           $event = array();
           $event['e'] = 'malformed--json';
-          $events[] = $event;
+          $events[] = array('client', $event);
           $handled = true;
         }
         if (!$handled && (count($event) > 0)) {
-          // verify that the event is well formed
+          // see if the event has illegal keys
           foreach ($event as $key=>$value) {
             // _id is a special property so sender can invoke callbacks
             $malformed = (substr($key, 0, 1) === '_') && !in_array($key, $allowedKeys);
             if ($malformed) {
               $event['e'] = 'malformed--property';
-              $events[] = $event;
+              $events[] = array('client', $event);
               $handled = true;
               break;
             }
           }
           if (!$handled) {
-            // check event type exists
+              // see if there is no event type
             if (!isset($event['type'])) {
               $event['e'] = 'malformed--type';
-              $events[] = $event;
+              $events[] = array('client', $event);
               $handled = true;
             }
-            // check event type is string and has valid value
             if (!$handled) {
+              // see if event type has illegal value
               $typeStr = is_string($event['type'])? $event['type']: '';
               $typeValidated = preg_match('/[a-z][a-z_]*/', $typeStr) === 1;
               if (!$typeValidated) {
@@ -820,7 +852,7 @@ class XibbitHub {
               }
               if (!$typeValidated) {
                 $event['e'] = 'malformed--type:'.$event['type'];
-                $events[] = $event;
+                $events[] = array('client', $event);
                 $handled = true;
               }
             }
@@ -834,7 +866,7 @@ class XibbitHub {
             // handle _instance event
             if (!$handled && ($event['type'] === '_instance')) {
               $created = 'retrieved';
-              // event instance value takes priority over $_REQUEST instance
+              // instance value in event takes priority over $_REQUEST instance
               $instance = isset($_REQUEST['instance'])? $_REQUEST['instance']: '';
               $instance = isset($event['instance'])? $event['instance']: $instance;
               // recreate session
@@ -865,8 +897,6 @@ class XibbitHub {
               $self->session = $this->getSessionByInstance($instance);
               $self->setSession($socket, $self->session);
               $event['_session'] = $self->session;
-//              $event['_session']['instance'] = $instance;
-//              $event['_conn'] = $self->session['_conn'];
               $event['i'] = 'instance '.$created;
               if ($this->useSocketIO) {
                 $syncEvent = array('instance'=>$instance);
@@ -894,7 +924,7 @@ class XibbitHub {
                   unset($eventsReply[$e]['e']);
                 }
                 // reorder the properties so they look pretty
-                $ret_reorder = &$self->reorderArray($eventsReply[$e],
+                $ret_reorder = &$self->reorderMap($eventsReply[$e],
                   array('type', 'from', 'to', '_id'),
                   array('i', 'e')
                 );
@@ -910,13 +940,15 @@ class XibbitHub {
         }
       });
       // socket disconnected
-      $socket->on('disconnect', function($event) use ($socket) {
+      $socket->on('disconnect', function($event) use ($self, $socket) {
         $session = &$self->getSession($socket);
         $self->removeSession($socket);
         $this->checkClock();
       });
 
+      $socket->handle('connect', array());
       $this->readAndWriteSocket($socket);
+      $socket->handle('disconnect', array());
     }
   }
 
@@ -1054,7 +1086,9 @@ class XibbitHub {
    *
    * @param array $fileEvents
    * @return NULL[]
-   */
+   *
+   * @author DanielWHoward
+   **/
   function readAndWriteUploadEvent($fileEvents) {
     $fileKeys = array_keys($_FILES);
     $fileEventKeys = array_keys($fileEvents);
@@ -1336,7 +1370,12 @@ class XibbitHub {
   /**
    * Send an event to another user.
    *
+   * The special &quot;all&quot; recipient
+   * sends it to all logged in users.
+   *
    * @param $event array The event to send.
+   * @param $recipient string The username to send to.
+   * @param $emitOnly boolean Just call emit() or invoke __send event, too.
    * @return boolean True if the event was sent.
    *
    * @author DanielWHoward
@@ -1486,14 +1525,15 @@ class XibbitHub {
    *
    * @author DanielWHoward
    **/
-  function touch() {
-    if (isset($this->session['username'])) {
-      $username = $this->session['username'];
+  function touch($session) {
+    if (isset($session['username'])) {
+      $username = $session['username'];
       // update last ping for this user in the database
       $touched = date('Y-m-d H:i:s', time());
-      $q = 'UPDATE `'.$this->prefix.'users` SET '.'`touched` = \''.$touched.'\' WHERE '
-        .'`username` = \''.$username.'\' && '
-        .'`connected` <> \'1970-01-01 00:00:00\';';
+      $nullDateTime = '1970-01-01 00:00:00';
+      $q = 'UPDATE `' . $this->prefix . 'users` SET `touched` = \'' . $touched . '\' WHERE '
+        .'`username` = \'' . $username . '\' && '
+        .'`connected` <> \'' . $nullDateTime . '\';';
       $qr = &$this->mysql_query($q);
     }
   }
@@ -1940,7 +1980,7 @@ class XibbitHub {
    * @return The mysql_query() return value.
    *
    * @author DanielWHoward
-   */
+   **/
   function &mysql_query(&$query) {
     $result = null;
     if (isset($this->config['mysqli'])) {
@@ -1975,7 +2015,7 @@ class XibbitHub {
    * @return The mysql_fetch_assoc() return value.
    *
    * @author DanielWHoward
-   */
+   **/
   function &mysql_fetch_assoc(&$result) {
     $assoc = null;
     if ($result === false) {
@@ -1995,7 +2035,7 @@ class XibbitHub {
    * @return The mysql_free_result() return value.
    *
    * @author DanielWHoward
-   */
+   **/
   function mysql_free_query(&$result) {
     if (isset($this->config['mysqli'])) {
       $result->free_result();
@@ -2013,7 +2053,7 @@ class XibbitHub {
    * @return The mysql_real_escape_string() return value.
    *
    * @author DanielWHoward
-   */
+   **/
   function mysql_real_escape_string($unescaped_string) {
     if (isset($this->config['mysqli'])) {
       return $this->config['mysqli']['link']->real_escape_string($unescaped_string);

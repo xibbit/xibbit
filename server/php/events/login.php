@@ -89,7 +89,7 @@ $self->api('login', function($event, $vars) {
       $me = $me[count($me)-1];
       // connect to this user
       $event['username'] = $me['username'];
-      $hub->connect($event, $me['username'], true);
+      $event = $hub->connect($event, $me['username'], true);
       // add UID and user to the session variables
       $event['_session']['uid'] = $me['id'];
       $event['_session']['user'] = $me;
