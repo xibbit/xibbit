@@ -45,6 +45,42 @@ type Logger interface {
 }
 
 /**
+ * Iterate through nested values and convert
+ * float64 to int when appropriate.
+ *
+ * @author DanielWHoward
+ */
+func convertFloatToInt(o interface{}) interface{} {
+	value64, ok64 := o.(float64)
+	if oArr, ok := o.([]interface{}); ok {
+		allInts := true
+		for _, value := range oArr {
+			if value64, ok := value.(float64); ok {
+				valueInt := int(value64)
+				if fmt.Sprintf("%v", value64) != fmt.Sprintf("%v", valueInt) {
+					allInts = false
+				}
+			}
+		}
+		if allInts {
+			for key, value := range oArr {
+				oArr[key] = convertFloatToInt(value)
+			}
+		}
+	} else if oMap, ok := o.(map[string]interface{}); ok {
+		for key, value := range oMap {
+			oMap[key] = convertFloatToInt(value)
+		}
+	} else if ok64 {
+		valueInt := int(value64)
+		if fmt.Sprintf("%v", value64) == fmt.Sprintf("%v", valueInt) {
+			o = valueInt
+		}
+	}
+	return o
+}
+
+/**
  * Reads, inserts, deletes, updates and moves rows in
  * MySQL database using the JSON (JavaScript Object
  * Notation) format.
@@ -323,6 +359,7 @@ func (that XibDb) ReadRowsNative(querySpec interface{}, whereSpec interface{}, c
 			jsonStr, _ := row[json_field].(string)
 			e = json.Unmarshal([]byte(jsonStr), &jsonMap)
 			if e == nil {
+				jsonMap = convertFloatToInt(jsonMap).(map[string]interface{})
 				for key, value := range jsonMap {
 					obj[key] = value
 				}
