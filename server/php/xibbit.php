@@ -963,95 +963,94 @@ class XibbitHub {
               break;
             }
           }
-          if (!$handled) {
-              // see if there is no event type
-            if (!isset($event['type'])) {
-              $event['e'] = 'malformed--type';
-              $events[] = array('client', $event);
-              $handled = true;
-            }
-            if (!$handled) {
-              // see if event type has illegal value
-              $typeStr = is_string($event['type'])? $event['type']: '';
-              $typeValidated = preg_match('/[a-z][a-z_]*/', $typeStr) === 1;
-              if (!$typeValidated) {
-                $typeValidated = in_array($typeStr, $allowedTypes);
-              }
-              if (!$typeValidated) {
-                $event['e'] = 'malformed--type:'.$event['type'];
-                $events[] = array('client', $event);
-                $handled = true;
-              }
-            }
-            // handle _instance event
-            if (!$handled && ($event['type'] === '_instance')) {
-              $created = 'retrieved';
-              // instance value in event takes priority over $_REQUEST instance
-              $instance = isset($_REQUEST['instance'])? $_REQUEST['instance']: '';
-              $instance = isset($event['instance'])? $event['instance']: $instance;
-              // recreate session
-              if ($this->getSessionByInstance($instance) === null) {
-                $instanceMatched = preg_match('/^[a-zA-Z0-9]{25}$/', $instance) === 1;
-                if ($instanceMatched) {
-                  $created = 'recreated';
-                } else {
-                  $length = 25;
-                  $a = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789';
-                  $instance = '';
-                  for ($i=0; $i < $length; $i++) {
-                    $instance .= $a[$self->rand_secure(0, strlen($a))];
-                  }
-                  $created = 'created';
-                }
-                // create a new instance for every tab even though they share session cookie
-                $event['instance'] = $instance;
-                // save new instance_id in session
-                $session['session_data']['instance_id'] = $instance;
-                $self->setSessionData($socket, $session['session_data']);
-                $self->socketSession->save();
-              } else {
-                $this->combineSessions($instance, $socket);
-              }
-              // update request with instance for convenience
-              $session = $this->getSessionByInstance($instance);
-              $event['i'] = 'instance '.$created;
-              $_REQUEST['instance'] = $instance;
-              if ($this->useSocketIO) {
-                $syncEvent = array('instance'=>$instance);
-                $self->send($syncEvent, $socket->sid.'_sync', true);
-              }
-            }
-            // handle the event
-            if (!$handled) {
-              $event['_session'] = $session['session_data'];
-              $event['_conn'] = array(
-                'socket'=>$socket
-              );
-              $eventReply = $self->trigger($event);
-              // save session changes
-              $self->setSessionData($socket, $eventReply['_session']);
-              // remove the session property
-              if (isset($eventReply['_session'])) {
-                unset($eventReply['_session']);
-              }
-              // remove the connection property
-              if (isset($eventReply['_conn'])) {
-                unset($eventReply['_conn']);
-              }
-              // _instance event does not require an implementation; it's optional
-              if (($eventReply['type'] === '_instance') && isset($eventReply['e'])
-                  && ($eventReply['e'] === 'unimplemented')) {
-                unset($eventReply['e']);
-              }
-              // reorder the properties so they look pretty
-              $reorderedEventReply = &$self->reorderMap($eventReply,
-                array('type', 'from', 'to', '_id'),
-                array('i', 'e')
-              );
-              $events[] = array('client', $reorderedEventReply);
-              $handled = true;
-            }
+        }
+        if (!$handled) {
+          // see if there is no event type
+          if (!isset($event['type'])) {
+            $event['e'] = 'malformed--type';
+            $events[] = array('client', $event);
+            $handled = true;
           }
+        }
+        if (!$handled) {
+          // see if event type has illegal value
+          $typeStr = is_string($event['type'])? $event['type']: '';
+          $typeValidated = preg_match('/[a-z][a-z_]*/', $typeStr) === 1;
+          if (!$typeValidated) {
+            $typeValidated = in_array($typeStr, $allowedTypes);
+          }
+          if (!$typeValidated) {
+            $event['e'] = 'malformed--type:'.$event['type'];
+            $events[] = array('client', $event);
+            $handled = true;
+          }
+        }
+        // handle _instance event
+        if (!$handled && ($event['type'] === '_instance')) {
+          $created = 'retrieved';
+          // instance value in event takes priority over $_REQUEST instance
+          $instance = isset($_REQUEST['instance'])? $_REQUEST['instance']: '';
+          $instance = isset($event['instance'])? $event['instance']: $instance;
+          // recreate session
+          if ($this->getSessionByInstance($instance) === null) {
+            $instanceMatched = preg_match('/^[a-zA-Z0-9]{25}$/', $instance) === 1;
+            if ($instanceMatched) {
+              $created = 'recreated';
+            } else {
+              $length = 25;
+              $a = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789';
+              $instance = '';
+              for ($i=0; $i < $length; $i++) {
+                $instance .= $a[$self->rand_secure(0, strlen($a))];
+              }
+              $created = 'created';
+            }
+            // create a new instance for every tab even though they share session cookie
+            $event['instance'] = $instance;
+            // save new instance_id in session
+            $session['session_data']['instance_id'] = $instance;
+            $self->setSessionData($socket, $session['session_data']);
+            $self->socketSession->save();
+          } else {
+            $this->combineSessions($instance, $socket);
+          }
+          $session = $this->getSessionByInstance($instance);
+          $event['i'] = 'instance '.$created;
+          $_REQUEST['instance'] = $instance;
+          if ($this->useSocketIO) {
+            $syncEvent = array('instance'=>$instance);
+            $self->send($syncEvent, $socket->sid.'_sync', true);
+          }
+        }
+        // handle the event
+        if (!$handled) {
+          $event['_session'] = $session['session_data'];
+          $event['_conn'] = array(
+            'socket'=>$socket
+          );
+          $eventReply = $self->trigger($event);
+          // save session changes
+          $self->setSessionData($socket, $eventReply['_session']);
+          // remove the session property
+          if (isset($eventReply['_session'])) {
+            unset($eventReply['_session']);
+          }
+          // remove the connection property
+          if (isset($eventReply['_conn'])) {
+            unset($eventReply['_conn']);
+          }
+          // _instance event does not require an implementation; it's optional
+          if (($eventReply['type'] === '_instance') && isset($eventReply['e'])
+              && ($eventReply['e'] === 'unimplemented')) {
+            unset($eventReply['e']);
+          }
+          // reorder the properties so they look pretty
+          $reorderedEventReply = &$self->reorderMap($eventReply,
+            array('type', 'from', 'to', '_id'),
+            array('i', 'e')
+          );
+          $events[] = array('client', $reorderedEventReply);
+          $handled = true;
         }
         // emit all events
         for ($e=0; $e < count($events); ++$e) {

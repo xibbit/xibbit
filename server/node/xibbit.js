@@ -440,96 +440,96 @@ module.exports = function() {
               break;
             }
           }
-          if (!handled) {
-            // see if there is no event type
-            if (!event.type) {
-              event.e = 'malformed--type';
-              events.push(['client', event]);
-              handled = true;
-            }
-            if (!handled) {
-              // see if event type has illegal value
-              var typeStr = (typeof event.type === 'string')? event.type: '';
-              var typeValidated = typeStr.match(/[a-z][a-z_]*/) !== null;
-              if (!typeValidated) {
-                typeValidated = (typesAllowed.indexOf(typeStr) !== -1);
-              }
-              if (!typeValidated) {
-                event.e = 'malformed--type:'+event['type'];
-                events.push(['client', event]);
-                handled = true;
-              }
-            }
-            // handle _instance event
-            if (!handled && (event.type === '_instance')) {
-              var created = 'retrieved';
-              // instance value in event takes priority
-              var instance = (typeof event.instance === 'string')? event.instance: '';
-              // recreate session
-              if (self.getSessionByInstance(instance) === null) {
-                var instanceMatched = instance.match(/^[a-zA-Z0-9]{25}$/) !== null;
-                if (instanceMatched) {
-                  created = 'recreated';
-                } else {
-                  var length = 25;
-                  var a = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789';
-                  instance = '';
-                  for (var i=0; i < length; i++) {
-                    instance += a[self.rand_secure(0, a.length)];
-                  }
-                  created = 'created';
-                }
-                // create a new instance for every tab even though they share session cookie
-                event.instance = instance;
-                // save new instance_id in session
-                session.session_data.instance_id = instance;
-                self.setSessionData(socket, session.session_data);
-              } else {
-                self.combineSessions(instance, socket);
-              }
-              session = self.getSessionByInstance(instance);
-              event.i = 'instance '+created;
-            }
-            // handle the event
-            if (!handled) {
-              event._session = session.session_data;
-              event._conn = {
-                socket: socket
-              };
-              self.trigger(event, function(e, eventReply) {
-              // save session changes
-              self.setSessionData(socket, eventReply._session);
-              // remove the session property
-              if (eventReply._session) {
-                delete eventReply._session;
-              }
-              // remove the connection property
-              if (eventReply._conn) {
-                delete eventReply._conn;
-              }
-              // _instance event does not require an implementation; it's optional
-              if ((eventReply['type'] === '_instance') && eventReply['e']
-                  && (eventReply['e'] === 'unimplemented')) {
-                delete eventReply['e'];
-              }
-              // reorder the properties so they look pretty
-              var reorderedEventReply = self.reorderMap(eventReply,
-                ['type', 'from', 'to', '_id'],
-                ['i', 'e']
-              );
-              events.push(['client', reorderedEventReply]);
-              handled = true;
-              // emit all events
-              for (var e=0; e < events.length; ++e) {
-                socket.emit(events[e][0], events[e][1]);
-              }
-              });
+        }
+        if (!handled) {
+          // see if there is no event type
+          if (!event.type) {
+            event.e = 'malformed--type';
+            events.push(['client', event]);
+            handled = true;
+          }
+        }
+        if (!handled) {
+          // see if event type has illegal value
+          var typeStr = (typeof event.type === 'string')? event.type: '';
+          var typeValidated = typeStr.match(/[a-z][a-z_]*/) !== null;
+          if (!typeValidated) {
+            typeValidated = (typesAllowed.indexOf(typeStr) !== -1);
+          }
+          if (!typeValidated) {
+            event.e = 'malformed--type:'+event['type'];
+            events.push(['client', event]);
+            handled = true;
+          }
+        }
+        // handle _instance event
+        if (!handled && (event.type === '_instance')) {
+          var created = 'retrieved';
+          // instance value in event takes priority
+          var instance = (typeof event.instance === 'string')? event.instance: '';
+          // recreate session
+          if (self.getSessionByInstance(instance) === null) {
+            var instanceMatched = instance.match(/^[a-zA-Z0-9]{25}$/) !== null;
+            if (instanceMatched) {
+              created = 'recreated';
             } else {
-              // emit all events
-              for (var e=0; e < events.length; ++e) {
-                socket.emit(events[e][0], events[e][1]);
+              var length = 25;
+              var a = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789';
+              instance = '';
+              for (var i=0; i < length; i++) {
+                instance += a[self.rand_secure(0, a.length)];
               }
+              created = 'created';
             }
+            // create a new instance for every tab even though they share session cookie
+            event.instance = instance;
+            // save new instance_id in session
+            session.session_data.instance_id = instance;
+            self.setSessionData(socket, session.session_data);
+          } else {
+            self.combineSessions(instance, socket);
+          }
+          session = self.getSessionByInstance(instance);
+          event.i = 'instance '+created;
+        }
+        // handle the event
+        if (!handled) {
+          event._session = session.session_data;
+          event._conn = {
+            socket: socket
+          };
+          self.trigger(event, function(e, eventReply) {
+          // save session changes
+          self.setSessionData(socket, eventReply._session);
+          // remove the session property
+          if (eventReply._session) {
+            delete eventReply._session;
+          }
+          // remove the connection property
+          if (eventReply._conn) {
+            delete eventReply._conn;
+          }
+          // _instance event does not require an implementation; it's optional
+          if ((eventReply['type'] === '_instance') && eventReply['e']
+              && (eventReply['e'] === 'unimplemented')) {
+            delete eventReply['e'];
+          }
+          // reorder the properties so they look pretty
+          var reorderedEventReply = self.reorderMap(eventReply,
+            ['type', 'from', 'to', '_id'],
+            ['i', 'e']
+          );
+          events.push(['client', reorderedEventReply]);
+          handled = true;
+          // emit all events
+          for (var e=0; e < events.length; ++e) {
+            socket.emit(events[e][0], events[e][1]);
+          }
+          });
+        } else {
+          // emit all events
+          for (var e=0; e < events.length; ++e) {
+            socket.emit(events[e][0], events[e][1]);
           }
         }
       });
