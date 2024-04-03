@@ -604,92 +604,91 @@ func (self *XibbitHub) Start(method string) {
 					break
 				}
 			}
-			if !handled {
-				// see if there is no event type
-				if _, ok := event["type"]; !ok {
-					event["e"] = "malformed--type"
-					events = append(events, struct {eventName string; data map[string]interface{}}{"client", event})
-					handled = true
-				}
-				// see if event type has illegal value
-				if !handled {
-					typeStr, _ := event["type"].(string)
-					typeValidated, _ := regexp.MatchString(`^[a-z][a-z_]*$`, typeStr)
-					if !typeValidated {
-						for _, v := range allowedTypes {
-							if typeStr == v {
-								typeValidated = true
-							}
-						}
+		}
+		if !handled {
+			// see if there is no event type
+			if _, ok := event["type"]; !ok {
+				event["e"] = "malformed--type"
+				events = append(events, struct {eventName string; data map[string]interface{}}{"client", event})
+				handled = true
+			}
+		}
+		if !handled {
+			// see if event type has illegal value
+			typeStr, _ := event["type"].(string)
+			typeValidated, _ := regexp.MatchString(`^[a-z][a-z_]*$`, typeStr)
+			if !typeValidated {
+				for _, v := range allowedTypes {
+					if typeStr == v {
+						typeValidated = true
 					}
-					if !typeValidated {
-						event["e"] = "malformed--type:" + event["type"].(string)
-						events = append(events, struct {eventName string; data map[string]interface{}}{"client", event})
-						handled = true
-					}
-				}
-				// handle _instance event
-				if !handled && (event["type"] == "_instance") {
-					created := "retrieved"
-					// instance value in event takes priority
-					instance := ""
-					if value, ok := event["instance"].(string); ok {
-						instance = value
-					}
-					// recreate session
-					sess := self.GetSessionByInstance(instance)
-					if sess == nil {
-						instanceMatched, _ := regexp.MatchString(`^[a-zA-Z0-9]{25}$`, instance)
-						if instanceMatched {
-							created = "recreated"
-						} else {
-							var length = 25
-							var a = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789"
-							instance = ""
-							for i := 0; i < length; i++ {
-								instance += string(a[self.RandSecure(0, len(a))])
-							}
-							created = "created"
-						}
-						// create a new instance for every tab even though they share session cookie
-						event["instance"] = instance
-						// save new instance_id in session
-						session["session_data"].(map[string]interface{})["instance_id"] = instance
-						self.SetSessionData(sock, session["session_data"].(map[string]interface{}))
-					} else {
-						self.CombineSessions(instance, sock)
-					}
-					session = self.GetSessionByInstance(instance)
-					event["i"] = "instance " + created
-				}
-				// handle the event
-				if !handled {
-					event["_session"] = session["session_data"]
-					event["_conn"] = map[string]interface{}{
-						"socket": sock,
-					}
-					eventReply, _ := self.Trigger(event)
-					// save session changes
-					self.SetSessionData(sock, eventReply["_session"].(map[string]interface{}))
-					// remove the session property
-					if _, ok := eventReply["_session"]; ok {
-						delete(eventReply, "_session")
-					}
-					// remove the connection property
-					if _, ok := eventReply["_conn"]; ok {
-						delete(eventReply, "_conn")
-					}
-					// _instance event does not require an implementation; it's optional
-					ee, ok := eventReply["e"].(string)
-					if (eventReply["type"].(string) == "_instance") && ok && (ee == "unimplemented") {
-						delete(eventReply, "e")
-					}
-					// reorder the properties so they look pretty
-					reorderedEventReply := eventReply
-					events = append(events, struct {eventName string; data map[string]interface{}}{"client", reorderedEventReply})
-					handled = true
 				}
 			}
+			if !typeValidated {
+				event["e"] = "malformed--type:" + event["type"].(string)
+				events = append(events, struct {eventName string; data map[string]interface{}}{"client", event})
+				handled = true
+			}
+		}
+		// handle _instance event
+		if !handled && (event["type"] == "_instance") {
+			created := "retrieved"
+			// instance value in event takes priority
+			instance := ""
+			if value, ok := event["instance"].(string); ok {
+				instance = value
+			}
+			// recreate session
+			if sess := self.GetSessionByInstance(instance); sess == nil {
+				instanceMatched, _ := regexp.MatchString(`^[a-zA-Z0-9]{25}$`, instance)
+				if instanceMatched {
+					created = "recreated"
+				} else {
+					var length = 25
+					var a = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789"
+					instance = ""
+					for i := 0; i < length; i++ {
+						instance += string(a[self.RandSecure(0, len(a))])
+					}
+					created = "created"
+				}
+				// create a new instance for every tab even though they share session cookie
+				event["instance"] = instance
+				// save new instance_id in session
+				session["session_data"].(map[string]interface{})["instance_id"] = instance
+				self.SetSessionData(sock, session["session_data"].(map[string]interface{}))
+			} else {
+				self.CombineSessions(instance, sock)
+			}
+			session = self.GetSessionByInstance(instance)
+			event["i"] = "instance " + created
+		}
+		// handle the event
+		if !handled {
+			event["_session"] = session["session_data"]
+			event["_conn"] = map[string]interface{}{
+				"socket": sock,
+			}
+			eventReply, _ := self.Trigger(event)
+			// save session changes
+			self.SetSessionData(sock, eventReply["_session"].(map[string]interface{}))
+			// remove the session property
+			if _, ok := eventReply["_session"]; ok {
+				delete(eventReply, "_session")
+			}
+			// remove the connection property
+			if _, ok := eventReply["_conn"]; ok {
+				delete(eventReply, "_conn")
+			}
+			// _instance event does not require an implementation; it's optional
+			ee, ok := eventReply["e"].(string)
+			if (eventReply["type"].(string) == "_instance") && ok && (ee == "unimplemented") {
+				delete(eventReply, "e")
+			}
+			// reorder the properties so they look pretty
+			reorderedEventReply := eventReply
+			events = append(events, struct {eventName string; data map[string]interface{}}{"client", reorderedEventReply})
+			handled = true
 		}
 		// emit all events
 		for i := 0; i < len(events); i++ {
