@@ -39,6 +39,7 @@ import (
 	"runtime"
 	"strconv"
 	"strings"
+	"sync"
 	"time"
 )
 
@@ -95,6 +96,8 @@ type XibbitHub struct {
 	Handler_groups map[string]map[string]func(event map[string]interface{}, vars map[string]interface{}) map[string]interface{}
 	prefix         string
 	Sessions       []map[string]interface{}
+	mu             sync.Mutex
+	globalVars     map[string]interface{}
 }
 
 /**
@@ -119,6 +122,7 @@ func NewXibbitHub(config map[string]interface{}) *XibbitHub {
 		self.socketio = config["socketio"].(*socketio.Server)
 	}
 	self.Sessions = make([]map[string]interface{}, 0)
+	self.globalVars = map[string]interface{}{}
 	mysql, ok := self.config["mysql"].(map[string]interface{})
 	if ok && self.prefix == "" {
 		self.prefix, _ = mysql["SQL_PREFIX"].(string)
@@ -1170,6 +1174,16 @@ func (self *XibbitHub) RandSecure(min int, max int) int {
  * @author DanielWHoward
  **/
 func (self *XibbitHub) LockGlobalVars() bool {
+	self.mu.Lock()
+	return true
+}
+
+/**
+ * Lock global variable in database for access.
+ *
+ * @author DanielWHoward
+ **/
+func (self *XibbitHub) LockGlobalVarsUsingSql() bool {
 	now := time.Now().Format("2006-01-02 15:04:05")
 	// generate a unique lock identifier
 	var length = 25
@@ -1218,6 +1232,16 @@ func (self *XibbitHub) LockGlobalVars() bool {
  * @author DanielWHoward
  **/
 func (self *XibbitHub) UnlockGlobalVars() error {
+	self.mu.Unlock()
+	return nil
+}
+
+/**
+ * Unlock global variable in database.
+ *
+ * @author DanielWHoward
+ **/
+func (self *XibbitHub) UnlockGlobalVarsUsingSql() error {
 	// release the lock
 	q := "DELETE FROM " + self.prefix + "sockets_sessions WHERE socksessid = 'lock';"
 	qr, e, _ := self.Mysql_query(q)
@@ -1231,6 +1255,15 @@ func (self *XibbitHub) UnlockGlobalVars() error {
  * @author DanielWHoward
  **/
 func (self *XibbitHub) ReadGlobalVars() map[string]interface{} {
+	return self.globalVars
+}
+
+/**
+ * Read global variables from database.
+ *
+ * @author DanielWHoward
+ **/
+func (self *XibbitHub) ReadGlobalVarsUsingSql() map[string]interface{} {
 	q := "SELECT vars FROM `" + self.prefix + "sockets_sessions` WHERE socksessid = 'global';"
 	qr, _, _ := self.Mysql_query(q)
 	vars := map[string]interface{}{}
@@ -1253,6 +1286,17 @@ func (self *XibbitHub) ReadGlobalVars() map[string]interface{} {
  * @author DanielWHoward
  **/
 func (self *XibbitHub) WriteGlobalVars(vars map[string]interface{}) {
+	self.globalVars = vars
+}
+
+/**
+ * Write global variables to database.
+ *
+ * @param vars map The JSON-friendly vars to save.
+ *
+ * @author DanielWHoward
+ **/
+func (self *XibbitHub) WriteGlobalVarsUsingSql(vars map[string]interface{}) {
 	now := time.Now().Format("2006-01-02 15:04:05")
 	b, _ := json.Marshal(vars)
 	s := string(b)
