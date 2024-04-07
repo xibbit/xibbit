@@ -73,7 +73,7 @@
    *
    * @author DanielWHoward
    */
-  XibDb.prototype.readRowsNative = function(querySpec, whereSpec, columnsSpec, onSpec, callback) {
+  XibDb.prototype.readRowsNativeCb = function(querySpec, whereSpec, columnsSpec, onSpec, callback) {
     var that = this;
     var callbackIndex = findCallback(arguments, 1, 5);
     if (callbackIndex >= 0) {
@@ -325,6 +325,22 @@
     });
   };
 
+  XibDb.prototype.readRowsNative = function(querySpec, callback) {
+    if (callback) {
+      this.readRowsNativeCb(querySpec, function(e, rows) {
+        callback(e, rows);
+      });
+    } else {
+      return new Promise((resolve, reject) => this.readRowsNativeCb(querySpec, (e, rows) => {
+        if (e) {
+          reject(e);
+        } else {
+          resolve(rows);
+        }
+      }));
+    }
+  };
+
   XibDb.prototype.readRows = function(querySpec, whereSpec, columnsSpec, onSpec, callback) {
     var that = this;
     var callbackIndex = findCallback(arguments, 1, 5);
@@ -361,7 +377,7 @@
    *
    * @author DanielWHoward
    */
-  XibDb.prototype.readDescNative = function(querySpec, callback) {
+  XibDb.prototype.readDescNativeCb = function(querySpec, callback) {
     var that = this;
     if (Object.prototype.toString.call(querySpec) === '[object Object]') {
       var args = arrayMerge({
@@ -466,6 +482,22 @@
     }
   };
 
+  XibDb.prototype.readDescNative = function(querySpec, callback) {
+    if (callback) {
+      this.readDescNativeCb(querySpec, function(e, rows) {
+        callback(e, rows);
+      });
+    } else {
+      return new Promise((resolve, reject) => this.readDescNativeCb(querySpec, (e, rows) => {
+        if (e) {
+          reject(e);
+        } else {
+          resolve(rows);
+        }
+      }));
+    }
+  };
+
   XibDb.prototype.readDesc = function(querySpec, callback) {
     var that = this;
     callback = callback || function() {};
@@ -494,7 +526,7 @@
    *
    * @author DanielWHoward
    */
-  XibDb.prototype.insertRowNative = function(querySpec, whereSpec, valuesSpec, nSpec, callback) {
+  XibDb.prototype.insertRowNativeCb = function(querySpec, whereSpec, valuesSpec, nSpec, callback) {
     var that = this;
     var funcIndex = findCallback(arguments, 1, 5);
     if (funcIndex >= 0) {
@@ -760,6 +792,22 @@
     });
   };
 
+  XibDb.prototype.insertRowNative = function(querySpec, callback) {
+    if (callback) {
+      this.insertRowNativeCb(querySpec, '', function(e, valuesMap) {
+        callback(e, valuesMap);
+      });
+    } else {
+      return new Promise((resolve, reject) => this.insertRowNativeCb(querySpec, (e, valuesMap) => {
+        if (e) {
+          reject(e);
+        } else {
+          resolve(valuesMap);
+        }
+      }));
+    }
+  };
+
   XibDb.prototype.insertRow = function(querySpec, whereSpec, valuesSpec, nSpec, callback) {
     var that = this;
     var funcIndex = findCallback(arguments, 1, 5);
@@ -795,7 +843,7 @@
    *
    * @author DanielWHoward
    */
-  XibDb.prototype.deleteRowNative = function(querySpec, whereSpec, nSpec, callback) {
+  XibDb.prototype.deleteRowNativeCb = function(querySpec, whereSpec, nSpec, callback) {
     var that = this;
     var callbackIndex = findCallback(arguments, 1, 5);
     if (callbackIndex >= 0) {
@@ -1048,6 +1096,22 @@
     });
   };
 
+  XibDb.prototype.deleteRowNative = function(querySpec, callback) {
+    if (callback) {
+      this.deleteRowNativeCb(querySpec, '', function(e, deleted) {
+        callback(e, deleted);
+      });
+    } else {
+      return new Promise((resolve, reject) => this.deleteRowNativeCb(querySpec, (e, deleted) => {
+        if (e) {
+          reject(e);
+        } else {
+          resolve(deleted);
+        }
+      }));
+    }
+  };
+
   XibDb.prototype.deleteRow = function(querySpec, whereSpec, nSpec, callback) {
     var that = this;
     var funcIndex = findCallback(arguments, 1, 5);
@@ -1084,7 +1148,7 @@
    *
    * @author DanielWHoward
    */
-  XibDb.prototype.updateRowNative = function(querySpec, valuesSpec, nSpec, whereSpec, limitSpec, callback) {
+  XibDb.prototype.updateRowNativeCb = function(querySpec, valuesSpec, nSpec, whereSpec, limitSpec, callback) {
     var that = this;
     var callbackIndex = findCallback(arguments, 1, 5);
     if (callbackIndex >= 0) {
@@ -1380,6 +1444,22 @@
     });
   };
 
+  XibDb.prototype.updateRowNative = function(querySpec, callback) {
+    if (callback) {
+      this.updateRowNativeCb(querySpec, '', function(e, valuesMap) {
+        callback(e, valuesMap);
+      });
+    } else {
+      return new Promise((resolve, reject) => this.updateRowNativeCb(querySpec, (e, valuesMap) => {
+        if (e) {
+          reject(e);
+        } else {
+          resolve(valuesMap);
+        }
+      }));
+    }
+  };
+
   XibDb.prototype.updateRow = function(querySpec, whereSpec, nSpec, valuesSpec, limitSpec, callback) {
     var that = this;
     var funcIndex = findCallback(arguments, 1, 5);
@@ -1417,7 +1497,7 @@
    *
    * @author DanielWHoward
    */
-  XibDb.prototype.moveRowNative = function(querySpec, whereSpec, mSpec, nSpec, callback) {
+  XibDb.prototype.moveRowNativeCb = function(querySpec, whereSpec, mSpec, nSpec, callback) {
     var that = this;
     var callbackIndex = findCallback(arguments, 1, 5);
     if (callbackIndex >= 0) {
@@ -1602,6 +1682,22 @@
     });
   };
 
+  XibDb.prototype.moveRowNative = function(querySpec, callback) {
+    if (callback) {
+      this.moveRowNativeCb(querySpec, '', function(e, moved) {
+        callback(e, moved);
+      });
+    } else {
+      return new Promise((resolve, reject) => this.moveRowNativeCb(querySpec, (e, moved) => {
+        if (e) {
+          reject(e);
+        } else {
+          resolve(moved);
+        }
+      }));
+    }
+  };
+
   XibDb.prototype.moveRow = function(querySpec, whereSpec, mSpec, nSpec, callback) {
     var that = this;
     var funcIndex = findCallback(arguments, 1, 5);
@@ -1634,7 +1730,7 @@
    *
    * @author DanielWHoward
    */
-  XibDb.prototype.mysql_query = function(query, callback) {
+  XibDb.prototype.mysql_queryCb = function(query, callback) {
     var that = this;
     if (that.dumpSql || that.dryRun) {
       that.log.println(query);
@@ -1650,6 +1746,22 @@
       });
     }
     return that.config['link_identifier'].query(query, callback);
+  };
+
+  XibDb.prototype.mysql_query = function(query, a, callback) {
+    if (callback) {
+      this.mysql_queryCb(query, a, function(e, rows) {
+        callback(e, rows);
+      });
+    } else {
+      return new Promise((resolve, reject) => this.mysql_queryCb(query, a, (e, rows) => {
+        if (e) {
+          reject(e);
+        } else {
+          resolve(rows);
+        }
+      }));
+    }
   };
 
   /**
