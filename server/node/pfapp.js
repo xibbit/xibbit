@@ -136,11 +136,11 @@ const {
   pfapp.prototype.readRows = function(table, callback) {
     table = this.addTableSpecifiers(table);
     if (callback) {
-      this.xibdb.readRowsNative(table, '', function(e, rows) {
+      this.xibdb.readRowsNativeCb(table, '', function(e, rows) {
         callback(e, rows);
       });
     } else {
-      return new Promise((resolve, reject) => this.xibdb.readRowsNative(table, '', (e, rows) => {
+      return new Promise((resolve, reject) => this.xibdb.readRowsNativeCb(table, '', (e, rows) => {
         if (e) {
           reject(e);
         } else {
@@ -215,11 +215,11 @@ const {
   pfapp.prototype.insertRow = function(table, callback) {
     table = this.addTableSpecifiers(table);
     if (callback) {
-      this.xibdb.insertRowNative(table, function(e, rows) {
+      this.xibdb.insertRowNativeCb(table, function(e, rows) {
         callback(e, rows);
       });
     } else {
-      return new Promise((resolve, reject) => this.xibdb.insertRowNative(table, '', -1, {}, (e, rows) => {
+      return new Promise((resolve, reject) => this.xibdb.insertRowNativeCb(table, '', -1, {}, (e, rows) => {
         if (e) {
           reject(e);
         } else {
@@ -243,11 +243,11 @@ const {
   pfapp.prototype.deleteRow = function(table, callback) {
     table = this.addTableSpecifiers(table);
     if (callback) {
-      this.xibdb.deleteRowNative(table, function(e, rows) {
+      this.xibdb.deleteRowNativeCb(table, function(e, rows) {
         callback(e, rows);
       });
     } else {
-      return new Promise((resolve, reject) => this.xibdb.deleteRowNative(table, (e, rows) => {
+      return new Promise((resolve, reject) => this.xibdb.deleteRowNativeCb(table, (e, rows) => {
         if (e) {
           reject(e);
         } else {
@@ -272,11 +272,11 @@ const {
   pfapp.prototype.updateRow = function(table, callback) {
     table = this.addTableSpecifiers(table);
     if (callback) {
-      this.xibdb.updateRowNative(table, function(e, rows) {
+      this.xibdb.updateRowNativeCb(table, function(e, rows) {
         callback(e, rows);
       });
     } else {
-      return new Promise((resolve, reject) => this.xibdb.updateRowNative(table, (e, rows) => {
+      return new Promise((resolve, reject) => this.xibdb.updateRowNativeCb(table, (e, rows) => {
         if (e) {
           reject(e);
         } else {
@@ -301,11 +301,11 @@ const {
   pfapp.prototype.moveRow = function(table, callback) {
     table = this.addTableSpecifiers(table);
     if (callback) {
-      this.xibdb.moveRowNative(table, function(e, rows) {
+      this.xibdb.moveRowNativeCb(table, function(e, rows) {
         callback(e, rows);
       });
     } else {
-      return new Promise((resolve, reject) => this.xibdb.moveRowNative(table, (e, rows) => {
+      return new Promise((resolve, reject) => this.xibdb.moveRowNativeCb(table, (e, rows) => {
         if (e) {
           reject(e);
         } else {
@@ -324,7 +324,7 @@ const {
    * @author DanielWHoward
    */
   pfapp.prototype.mysql_query = function(query) {
-    return this.xibdb.mysql_query(query);
+    return this.xibdb.mysql_queryCb(query);
   };
 
   /**
