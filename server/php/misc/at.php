@@ -77,6 +77,86 @@ function doNothing() {
 }
 
 /**
+ * Return a string created from a template
+ * and properties.
+ *
+ * A limited version of ES6 template strings.
+ *
+ * @author DanielWHoward
+ */
+function applyTemplate($template, $props) {
+  foreach ($props as $key=>$value) {
+    $template = str_replace('${'.$key.'}', $value, $template);
+  }
+  return $template;
+}
+
+/**
+ * Return a string that is safe for an
+ * email subject.
+ *
+ * @author DanielWHoward
+ */
+function encodeHtmlToEmailSubject($s) {
+  $s = str_replace('&ndash;', '-', $s);
+  $s = str_replace('&mdash;', '-', $s);
+  $s = str_replace('&rsquo;', '\'', $s);
+  return $s;
+}
+
+/**
+ * Send a daily email.
+ *
+ * @author DanielWHoward
+ */
+function emailBackupReport($testEmail='') {
+  global $link;
+  global $sql_prefix;
+
+  // get the template
+  $template = file_get_contents('../templates/backup_report_email.php');
+  // read the backup logs from the database
+  $q = 'SELECT * FROM '.$sql_prefix."backups WHERE freq='daily'";
+  $result = mysqli_query($link, $q);
+  $affected = 0;
+  while ($result && ($row = mysqli_fetch_assoc($result))) {
+    if (($testEmail === '') || ($email === $testEmail)) {
+    $to = ($testEmail === '') ? $row['email']: $row['email'];
+
+    // mail headers
+    $to = $to;
+    $from = $to;
+    $subject = '[Public Figure] '.encodeHtmlToEmailSubject('backup report');
+    $headers  = 'MIME-Version: 1.0'."\r\n";
+    $headers .= 'Content-type: text/html; charset=UTF-8'."\r\n";
+    $headers .= 'From: '.$from."\r\n";
+
+    // create email from template
+    $props = array(
+      'to'=>$to,
+      'from'=>$from,
+      'subject'=>$subject,
+      'headers'=>$headers,
+      'num'=>'0',
+      'but'=>''
+    );
+    $content = applyTemplate($template, $props);
+
+    // remove first and last lines which hide template on PHP
+    $content = substr($content, strpos($content, "\n") + 1);
+    $content = substr($content, 0, strrpos($content, "\n"));
+    // remove unneeded whitespace from content
+    $content = preg_replace('/ {2,}/', ' ', $content);
+    // send the email
+    $mailed = email($to, $subject, $content, $headers, ' -f '.$from);
+    if ($mailed) {
+      $affected++;
+    }
+    }
+  }
+}
+
+/**
  * Return a random number in a range.
  *
  * @param $min int The minimum value.
@@ -255,6 +335,13 @@ if ($row) {
 if ($unlock) {
   $q = 'DELETE FROM '.$sql_prefix.'locks WHERE name=\'at\'';
   $result = mysqli_query($link, $q);
+}
+
+$testFunction = isset($_REQUEST['superSecretTrigger'])? $_REQUEST['superSecretTrigger']: '';
+if ($testFunction !== '') {
+  if ($testFunction === 'emailBackupReport') {
+    emailBackupReport();
+  }
 }
 
 // disconnect from the MySQL database
