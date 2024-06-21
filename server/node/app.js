@@ -72,7 +72,7 @@ var pf = new pfapp(xdb, config.sql_prefix);
 pf = Promise.promisifyAll(pf);
 
 // _events eventing system
-var XibbitHub = require('./xibbit')();
+var XibbitHub = require('./xibbithub')();
 
 // create and configure the XibbitHub object
 var hub = new XibbitHub({

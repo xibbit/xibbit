@@ -24,7 +24,7 @@
 // @copyright xibbit 1.5.3 Copyright (c) © 2021 Daniel W. Howard and Sanjana A. Joshi Partnership
 // @license http://opensource.org/licenses/MIT
 var timeZone = 'America/Los_Angeles';
-var XibbitHub = require('../../../server/node/xibbit')();
+var XibbitHub = require('../../../server/node/xibbithub')();
 
 var mysql = require('mysql');
 const util = require('util');
