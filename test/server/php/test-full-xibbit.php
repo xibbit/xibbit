@@ -38,7 +38,7 @@ function debugger() {
   $showStackTrace = true;
   throw new Exception();
 }
-require_once('../../../server/php/xibbit.php');
+require_once('../../../server/php/xibbithub.php');
 
 $sql_prefix= 'test_';
 $now = '2023-12-16 02:30:45';

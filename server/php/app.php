@@ -72,7 +72,7 @@ $xdb->dryRun = false;
 $pf = new pfapp($xdb, $sql_prefix);
 
 // XibbitHub eventing system
-require_once('xibbit.php');
+require_once('xibbithub.php');
 
 /**
  * A class with XibbitHub broadcast method overrides.
