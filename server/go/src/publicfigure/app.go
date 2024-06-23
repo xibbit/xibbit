@@ -142,7 +142,7 @@ func main() {
 				"image": map[string]interface{}{
 					"tmp_name": file,
 				},
-				"_session": session,
+				"_session": session["session_data"],
 			})
 			delete(eventReply, "_session")
 			eventsReplyBytes, _ := json.Marshal([]map[string]interface{}{eventReply})

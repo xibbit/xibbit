@@ -44,10 +44,10 @@ self.on('api', '__receive', (event, {pf, useInstances}, callback) => {
   event.e = 'unimplemented';
 
   if (useInstances) {
-    if (!event._session || !event._session.instance) {
+    if (!event._session || !event._session.instance_id) {
       console.error('__receive did not get _session.instance');
     }
-    var instance = event._session.instance;
+    var instance = event._session.instance_id;
     event.eventQueue = [];
     // get the events from the events table
     pf.readRows({

@@ -103,7 +103,7 @@ self.on('api', 'login', (event, {hub, pf}, callback) => {
       pf.readOneRow({
         table: 'instances',
         'where': {
-          instance: event._session.instance
+          instance: event._session.instance_id
       }}, function(e, row) {
         if (row !== null) {
           const values = {
@@ -113,8 +113,7 @@ self.on('api', 'login', (event, {hub, pf}, callback) => {
             table: 'instances',
             values,
             where: {
-              uid: event._session.uid,
-              instance: event._session.instance
+              instance: event._session.instance_id
           }}, function() {
             hub.send({
               type: 'notify_login',

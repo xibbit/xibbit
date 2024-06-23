@@ -54,6 +54,7 @@ import (
 type XibbitHub struct {
 	socketio *socketio.Server
 	config         map[string]interface{}
+	suppressCloneSession bool
 	Handler_groups map[string]map[string]func(event map[string]interface{}, vars map[string]interface{}) map[string]interface{}
 	prefix         string
 	Sessions       []map[string]interface{}
@@ -71,6 +72,7 @@ func NewXibbitHub(config map[string]interface{}) *XibbitHub {
 	}
 	config["vars"].(map[string]interface{})["hub"] = self
 	self.config = config
+	self.suppressCloneSession = false
 	self.prefix = ""
 	self.Handler_groups = make(map[string]map[string]func(event map[string]interface{}, vars map[string]interface{}) map[string]interface{})
 	self.Handler_groups["api"] = map[string]func(event map[string]interface{}, vars map[string]interface{}) map[string]interface{}{}
@@ -107,17 +109,22 @@ func (self *XibbitHub) GetSocketIO() *socketio.Server {
 
 /**
  * Get the session associated with a socket which always
- * has a data key and a _conn key.  The _conn key has a
- * map that contains a sockets key with an array of
+ * has a session_data key and a _conn key.  The _conn key
+ * has a map that contains a sockets key with an array of
  * sockets.  A socket is globally unique in the sessions
- * object.  The session may also have a username key and
- * an instance key.
+ * object.
  *
- * An instance is also globally unique.  A socket may
- * have a non-instance session or may be combined with
- * other sockets for an instanced session.
+ * There is an instance_id key in the session_data map
+ * which is globally unique or the empty string.
  *
- * @param sock socketio.Conn A socket.
+ * Multiple sockets can be associated with the same
+ * session (browser reloads).
+ *
+ * A socket will not have an instance_id until it receives
+ * an _instance event.
+ *
+ * @param sock string A socket ID.
+ * @return map The session object with session_data and _conn keys.
  *
  * @author DanielWHoward
  **/
@@ -134,17 +141,16 @@ func (self *XibbitHub) GetSession(sockId string) map[string]interface{} {
  * This is an implementation helper.  It assumes that
  * the session store is an array.
  *
- * @param sock socketio.Conn A socket.
+ * @param sock string A socket ID.
  * @returns int The index into a session array.
  *
  * @author DanielWHoward
  **/
 func (self *XibbitHub) GetSessionIndex(sockId string) int {
-	for i, session := range self.Sessions {
-		socks := session["_conn"].(map[string]interface{})["sockets"].([]socketio.Conn)
-		for _, skt := range socks {
-			if sockId == skt.ID() {
-				return i
+	for s, _ := range self.Sessions {
+		for ss, _ := range self.Sessions[s]["_conn"].(map[string]interface{})["sockets"].([]socketio.Conn) {
+			if self.Sessions[s]["_conn"].(map[string]interface{})["sockets"].([]socketio.Conn)[ss].ID() == sockId {
+				return s
 			}
 		}
 	}
@@ -154,19 +160,43 @@ func (self *XibbitHub) GetSessionIndex(sockId string) int {
 /**
  * Get the session associated with an instance.
  *
- * @param instance string An instance string.
+ * @param instance_id string An instance string.
  *
  * @author DanielWHoward
  **/
-func (self *XibbitHub) GetSessionByInstance(instance string) map[string]interface{} {
-	if instance != "" {
+func (self *XibbitHub) GetSessionByInstance(instance_id string) map[string]interface{} {
+	if instance_id != "" {
 		for _, session := range self.Sessions {
-			if instance == session["instance"] {
+			if session["session_data"].(map[string]interface{})["instance_id"].(string) == instance_id {
 				return self.CloneSession(session)
 			}
 		}
 	}
 	return nil
+}
+
+/**
+ * Get the session associated with a user (an
+ * addressable recepient of a send message).
+ *
+ * The special &quot;all&quot; username refers
+ * to all sessions.
+ *
+ * @param username string The username.
+ *
+ * @author DanielWHoward
+ **/
+func (self *XibbitHub) GetSessionsByUsername(username string) (sessions []map[string]interface{}) {
+	if username == "all" {
+		sessions = self.Sessions
+	} else {
+		for _, session := range self.Sessions {
+			if _username, _ := session["session_data"].(map[string]interface{})["_username"].(string); _username == username {
+				sessions = append(sessions, session)
+			}
+		}
+	}
+	return sessions
 }
 
 /**
@@ -177,37 +207,31 @@ func (self *XibbitHub) GetSessionByInstance(instance string) map[string]interfac
  *
  * @author DanielWHoward
  **/
-func (self *XibbitHub) SetSession(sock socketio.Conn, session map[string]interface{}) {
+func (self *XibbitHub) SetSessionData(sock socketio.Conn, sessionData map[string]interface{}) {
 	i1 := self.GetSessionIndex(sock.ID())
 	if i1 == -1 {
-		log.Println("XibbitHub.SetSession() could not find the session")
+		log.Println("XibbitHub.SetSessionData() could not find the session")
 		//		self.AddSession(sock, session)
 	} else {
-		instance1, ok1 := self.Sessions[i1]["instance"].(string)
-		instance2, ok2 := session["instance"].(string)
+		instance1, ok1 := self.Sessions[i1]["session_data"].(map[string]interface{})["instance_id"].(string)
+		instance2, ok2 := sessionData["instance_id"].(string)
 		if (!ok1 && !ok2) || (ok1 && ok2 && (instance1 == instance2)) {
-			clone := self.CloneSession(session)
-			conn := self.Sessions[i1]["_conn"]
-			self.Sessions[i1] = clone
-			self.Sessions[i1]["_conn"] = conn
+			clone := self.CloneSession(sessionData)
+			self.Sessions[i1]["session_data"] = clone
 		} else if ok1 && !ok2 {
-			clone := self.CloneSession(session)
-			conn := self.Sessions[i1]["_conn"]
-			self.Sessions[i1] = clone
-			self.Sessions[i1]["instance"] = instance1
-			self.Sessions[i1]["_conn"] = conn
+			clone := self.CloneSession(sessionData)
+			self.Sessions[i1]["session_data"] = clone
+			self.Sessions[i1]["session_data"].(map[string]interface{})["instance_id"] = instance1
 		} else {
 			i2 := -1
 			for i2i, sess := range self.Sessions {
-				if instance2 == sess["instance"] {
+				if instance2 == sess["session_data"].(map[string]interface{})["instance_id"] {
 					i2 = i2i
 				}
 			}
 			if i2 == -1 {
-				clone := self.CloneSession(session)
-				conn := self.Sessions[i1]["_conn"]
-				self.Sessions[i1] = clone
-				self.Sessions[i1]["_conn"] = conn
+				clone := self.CloneSession(sessionData)
+				self.Sessions[i1]["session_data"] = clone
 			} else {
 				socks := self.Sessions[i1]["_conn"].(map[string]interface{})["sockets"].([]socketio.Conn)
 				if len(socks) == 1 {
@@ -220,10 +244,8 @@ func (self *XibbitHub) SetSession(sock socketio.Conn, session map[string]interfa
 						i2--
 					}
 				}
-				clone := self.CloneSession(session)
-				conn := self.Sessions[i2]["_conn"]
-				self.Sessions[i2] = clone
-				self.Sessions[i2]["_conn"] = conn
+				clone := self.CloneSession(sessionData)
+				self.Sessions[i2]["session_data"] = clone
 				socks = self.Sessions[i2]["_conn"].(map[string]interface{})["sockets"].([]socketio.Conn)
 				socks = append(socks, sock)
 				self.Sessions[i2]["_conn"].(map[string]interface{})["sockets"] = socks
@@ -241,7 +263,9 @@ func (self *XibbitHub) SetSession(sock socketio.Conn, session map[string]interfa
  **/
 func (self *XibbitHub) AddSession(sock socketio.Conn) {
 	session := map[string]interface{}{
-		"session_data": map[string]interface{}{},
+		"session_data": map[string]interface{}{
+			"instance_id": "",
+		},
 		"_conn": map[string]interface{}{
 			"sockets": []socketio.Conn{
 				sock,
@@ -259,15 +283,15 @@ func (self *XibbitHub) AddSession(sock socketio.Conn) {
  *
  * @author DanielWHoward
  **/
-func (self *XibbitHub) RemoveSession(sock socketio.Conn) {
+func (self *XibbitHub) RemoveSocketFromSession(sock socketio.Conn) {
 	s := -1
-	k := -1
+	ss := -1
 	found := false
 	// find the session index and socket index
 	for si, session := range self.Sessions {
 		socks := session["_conn"].(map[string]interface{})["sockets"].([]socketio.Conn)
-		instance, _ := session["instance"].(string)
-		for ki, skt := range socks {
+		instance, _ := session["session_data"].(map[string]interface{})["instance_id"].(string)
+		for ssi, skt := range socks {
 			if sock == skt {
 				s = si
 				// instances and their session_data should hang
@@ -275,7 +299,7 @@ func (self *XibbitHub) RemoveSession(sock socketio.Conn) {
 				//  instances can be retrieved later and assigned
 				//  to a new socket (e.g. page reload)
 				if (len(socks) > 1) || (instance != "") {
-					k = ki
+					ss = ssi
 				}
 				found = true
 				break
@@ -286,28 +310,74 @@ func (self *XibbitHub) RemoveSession(sock socketio.Conn) {
 		}
 	}
 	// remove the whole session or just the socket
-	if found && (k == -1) {
+	if found && (ss == -1) {
 		self.Sessions = append(self.Sessions[0:s], self.Sessions[s+1:]...)
 	} else if found {
 		socks := self.Sessions[s]["_conn"].(map[string]interface{})["sockets"].([]socketio.Conn)
-		socks = append(socks[0:k], socks[k+1:]...)
+		socks = append(socks[0:ss], socks[ss+1:]...)
 		self.Sessions[s]["_conn"].(map[string]interface{})["sockets"] = socks
 	} else {
-		log.Println("XibbitHub.RemoveSession() could not find the session")
+		log.Println("XibbitHub.RemoveSocketFromSession() could not find the session")
 	}
 }
 
 /**
- * Return a duplicate of the session, though the _conn is shared.  A
- * clone prevents code from relying on shared pointers.
+ * Delete the session that contains a socket and
+ * add the socket to the session which represents
+ * an instance.
  *
- * @param session map The session values.
+ * When a socket connects, it is assigned to a new
+ * empty session but, when the _instance event
+ * arrives, that socket might need to be assigned
+ * to an existing session and the new session
+ * destroyed.
+ *
+ * @param instance_id string The instance to add the socket to.
+ * @param sock socketio.Conn The socket to be moved.
+ *
+ * @author DanielWHoward
+ **/
+func (self *XibbitHub) CombineSessions(instance_id string, sock socketio.Conn) {
+	i := self.GetSessionIndex(sock.ID())
+	self.Sessions = append(self.Sessions[0:i], self.Sessions[i+1:]...)
+	for s, _ := range self.Sessions {
+		if self.Sessions[s]["session_data"].(map[string]interface{})["instance_id"].(string) == instance_id {
+			socks := self.Sessions[s]["_conn"].(map[string]interface{})["sockets"].([]socketio.Conn)
+			socks = append(socks, sock)
+			self.Sessions[s]["_conn"].(map[string]interface{})["sockets"] = socks
+			break
+		}
+	}
+}
+
+/**
+ * Return a duplicate of the session with no shared
+ * pointers except for the special _conn key, if it
+ * exists.  This method works for the entire session
+ * or just the session_data in a session.
+ *
+ * A clone prevents a common coding error where the
+ * code relies on shared pointers rather than using
+ * the SetSessionData() method.
+ *
+ * The usual implementation is to convert to JSON and
+ * then back again.  For some types, a workaround must
+ * be implemented.
+ *
+ * @param session map The session or session_data.
+ * @return map The clone.
  *
  * @author DanielWHoward
  **/
 func (self *XibbitHub) CloneSession(session map[string]interface{}) map[string]interface{} {
-	var _conn interface{} = session["_conn"]
-	delete(session, "_conn")
+	if self.suppressCloneSession {
+		return session
+	}
+	var conn interface{} = nil
+	if connValue, ok := session["_conn"]; ok {
+		conn = connValue
+		delete(session, "_conn")
+	}
 	b, _ := json.Marshal(session)
 	s := string(b)
 	clone := make(map[string]interface{})
@@ -331,8 +401,10 @@ func (self *XibbitHub) CloneSession(session map[string]interface{}) map[string]i
 		return p
 	}
 	clone = convertFloat64ToInt(clone)
-	session["_conn"] = _conn
-	clone["_conn"] = _conn
+	if conn != nil {
+		session["_conn"] = conn
+		clone["_conn"] = conn
+	}
 	return clone
 }
 
@@ -471,7 +543,7 @@ func (self *XibbitHub) Start(method string) {
 		events := []struct {eventName string; data map[string]interface{}}{}
 		handled := false
 		if !handled {
-			// verify that the event is well formed
+			// see if the event has illegal keys
 			for key, _ := range event {
 				malformed := true
 				// _id is a special property so sender can invoke callbacks
@@ -492,13 +564,13 @@ func (self *XibbitHub) Start(method string) {
 				}
 			}
 			if !handled {
-				// check event type exists
+				// see if there is no event type
 				if _, ok := event["type"]; !ok {
 					event["e"] = "malformed--type"
 					events = append(events, struct {eventName string; data map[string]interface{}}{"client", event})
 					handled = true
 				}
-				// check event type is string and has valid value
+				// see if event type has illegal value
 				if !handled {
 					typeStr, _ := event["type"].(string)
 					typeValidated, _ := regexp.MatchString(`^[a-z][a-z_]*$`, typeStr)
@@ -515,18 +587,10 @@ func (self *XibbitHub) Start(method string) {
 						handled = true
 					}
 				}
-				if !handled {
-					// add _session and _conn properties for convenience
-					event["_session"] = session["session_data"]
-					event["_conn"] = map[string]interface{}{
-						"sockets": sock,
-						"user":    session,
-					}
-				}
 				// handle _instance event
 				if !handled && (event["type"] == "_instance") {
 					created := "retrieved"
-					// event instance value takes priority
+					// instance value in event takes priority
 					instance := ""
 					if value, ok := event["instance"].(string); ok {
 						instance = value
@@ -548,31 +612,30 @@ func (self *XibbitHub) Start(method string) {
 						}
 						// create a new instance for every tab even though they share session cookie
 						event["instance"] = instance
-						// update request with instance for convenience
-						session["instance"] = instance
-						self.SetSession(sock, session)
+						// save new instance_id in session
+						session["session_data"].(map[string]interface{})["instance_id"] = instance
+						self.SetSessionData(sock, session["session_data"].(map[string]interface{}))
+					} else {
+						self.CombineSessions(instance, sock)
 					}
-					// get session (again)
 					session = self.GetSessionByInstance(instance)
-					event["_session"] = session["session_data"]
-					event["_session"].(map[string]interface{})["instance"] = instance
-					event["_conn"] = session["_conn"]
 					event["i"] = "instance " + created
 				}
 				// handle the event
 				if !handled {
-					eventReply, _ := self.Trigger(event)
-					session["session_data"] = eventReply["_session"]
-					if _, ok := session["session_data"].(map[string]interface{})["instance"]; ok {
-						delete(session["session_data"].(map[string]interface{}), "instance")
+					event["_session"] = session["session_data"]
+					event["_conn"] = map[string]interface{}{
+						"socket": sock,
 					}
-					self.SetSession(sock, session)
+					eventReply, _ := self.Trigger(event)
+					// save session changes
+					self.SetSessionData(sock, eventReply["_session"].(map[string]interface{}))
 					// remove the session property
-					if eventReply["_session"] != nil {
+					if _, ok := eventReply["_session"]; ok {
 						delete(eventReply, "_session")
 					}
 					// remove the connection property
-					if eventReply["_conn"] != nil {
+					if _, ok := eventReply["_conn"]; ok {
 						delete(eventReply, "_conn")
 					}
 					// _instance event does not require an implementation; it's optional
@@ -580,6 +643,7 @@ func (self *XibbitHub) Start(method string) {
 					if (eventReply["type"].(string) == "_instance") && ok && (ee == "unimplemented") {
 						delete(eventReply, "e")
 					}
+					// reorder the properties so they look pretty
 					reorderedEventReply := eventReply
 					events = append(events, struct {eventName string; data map[string]interface{}}{"client", reorderedEventReply})
 					handled = true
@@ -593,7 +657,7 @@ func (self *XibbitHub) Start(method string) {
 	})
 	// socket disconnected
 	self.socketio.OnDisconnect("/", func(sock socketio.Conn, reason string) {
-		self.RemoveSession(sock)
+		self.RemoveSocketFromSession(sock)
 		self.CheckClock()
 	})
 
@@ -606,7 +670,7 @@ func (self *XibbitHub) Start(method string) {
 				keysToSkip := []string{"_session", "_conn"}
 				for _, session := range self.Sessions {
 					events := []map[string]interface{}{}
-					session["session_data"].(map[string]interface{})["instance"] = session["instance"]
+					session["session_data"].(map[string]interface{})["instance_id"] = session["instance_id"]
 					events = self.Receive(events, session["session_data"].(map[string]interface{}), false)
 					for _, event := range events {
 						if _conn, ok := session["_conn"].(map[string]interface{}); ok {
@@ -688,7 +752,7 @@ func (self *XibbitHub) Trigger(event map[string]interface{}) (map[string]interfa
 	// determine authentication
 	authenticated := false
 	if session, ok := event["_session"].(map[string]interface{}); ok {
-		if username, ok := session["username"]; ok && (username != "") {
+		if username, ok := session["_username"]; ok && (username != "") {
 			authenticated = true
 		}
 	}
@@ -761,12 +825,7 @@ func (self *XibbitHub) Send(event map[string]interface{}, recipient string, emit
 			address = recipient
 		}
 		if address != "" {
-			recipients := []map[string]interface{}{}
-			if address == "all" {
-				recipients = self.GetUsers()
-			} else {
-				recipients = self.GetUser(address)
-			}
+			recipients := self.GetSessionsByUsername(address)
 			if len(recipients) > 0 {
 				for _, recipient := range recipients {
 					socks := recipient["_conn"].(map[string]interface{})["sockets"].([]socketio.Conn)
@@ -836,14 +895,12 @@ func (self *XibbitHub) Receive(events []map[string]interface{}, session map[stri
 func (self *XibbitHub) Connect(event map[string]interface{}, username string, connect bool) map[string]interface{} {
 	// update last connection time for user in the database
 	//	connected := 0
-	user := event["_conn"].(map[string]interface{})["user"].(map[string]interface{})
+	session := event["_session"].(map[string]interface{})
 	// update username variables
 	if connect {
-		user["username"] = username
-		user["session_data"].(map[string]interface{})["username"] = username
+		session["_username"] = username
 	} else {
-		delete(user["session_data"].(map[string]interface{}), "username")
-		delete(user, "username")
+		delete(session, "_username")
 	}
 	return event
 }
@@ -853,8 +910,8 @@ func (self *XibbitHub) Connect(event map[string]interface{}, username string, co
  *
  * @author DanielWHoward
  **/
-func (self *XibbitHub) Touch(session map[string]interface{}) {
-	if username, ok := session["username"].(string); ok {
+func (self *XibbitHub) Touch(sessionData map[string]interface{}) {
+	if username, ok := sessionData["_username"].(string); ok {
 		// update last ping for this user in the database
 		touched := time.Now().Format("2006-01-02 15:04:05")
 		nullDateTime := "1970-01-01 00:00:00"
@@ -899,35 +956,6 @@ func (self *XibbitHub) CheckClock() {
 		self.WriteGlobalVars(globalVars)
 		self.UnlockGlobalVars()
 	}
-}
-
-/**
- * Return user status, permissions, etc.
- *
- * @param username string The user name of the user to retrieve.
- * @return array The user.
- *
- * @author DanielWHoward
- **/
-func (self *XibbitHub) GetUser(username string) []map[string]interface{} {
-	users := make([]map[string]interface{}, 0)
-	for _, session := range self.Sessions {
-		if username == session["username"] {
-			users = append(users, session)
-		}
-	}
-	return users
-}
-
-/**
- * Return all users' status, permissions, etc.
- *
- * @return array An array of users.
- *
- * @author DanielWHoward
- **/
-func (self *XibbitHub) GetUsers() []map[string]interface{} {
-	return self.Sessions
 }
 
 /**

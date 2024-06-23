@@ -115,7 +115,7 @@ function uploadFiles(req, res) {
     image: {
       tmp_name: req.file
     },
-    _session: session
+    _session: session.session_data
   }, function(e, eventReply) {
     delete eventReply._session;
     res.set('Content-Type', 'text/plain');
