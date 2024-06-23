@@ -560,8 +560,7 @@ func (self *XibbitHub) Start(method string) {
 				}
 				// handle the event
 				if !handled {
-					eventsReply, _ := self.Trigger(event)
-					eventReply := eventsReply[0]
+					eventReply, _ := self.Trigger(event)
 					session["session_data"] = eventReply["_session"]
 					if _, ok := session["session_data"].(map[string]interface{})["instance"]; ok {
 						delete(session["session_data"].(map[string]interface{}), "instance")
@@ -654,7 +653,7 @@ func (self *XibbitHub) On(group string, typ string, fn func(event map[string]int
  *
  * @author DanielWHoward
  **/
-func (self *XibbitHub) Trigger(event map[string]interface{}) ([]map[string]interface{}, error) {
+func (self *XibbitHub) Trigger(event map[string]interface{}) (map[string]interface{}, error) {
 	keysToSkip := []string{"_conn", "_session", "image"}
 	var eventType = event["type"].(string)
 	//	var pluginsFolder = nil;
@@ -674,7 +673,7 @@ func (self *XibbitHub) Trigger(event map[string]interface{}) ([]map[string]inter
 	}
 	// load event handler dynamically
 	if invoked {
-		return []map[string]interface{}{event}, nil
+		return event, nil
 	} else if handler != nil {
 		// clone the event
 
@@ -717,14 +716,14 @@ func (self *XibbitHub) Trigger(event map[string]interface{}) ([]map[string]inter
 					eventReply["_session"] = event["_session"]
 				}
 				eventReply["e"] = e
-				return []map[string]interface{}{eventReply}, nil
+				return eventReply, nil
 			}
 		}
 		event = eventReply
 	} else {
 		// get the plugins folder
 	}
-	return []map[string]interface{}{event}, nil
+	return event, nil
 }
 
 /**
@@ -780,10 +779,8 @@ func (self *XibbitHub) Send(event map[string]interface{}, recipient string, emit
 			"type":  "__send",
 			"event": clone,
 		})
-		if len(ret) > 0 {
-			if err, ok := ret[0]["e"]; ok && (err == "unimplemented") {
-				self.Send(clone, recipient, true)
-			}
+		if err, ok := ret["e"]; ok && (err == "unimplemented") {
+			self.Send(clone, recipient, true)
 		}
 		// restore properties
 		event = self.UpdateEvent(event, clone, keysToSkip)
@@ -803,11 +800,10 @@ func (self *XibbitHub) Receive(events []map[string]interface{}, session map[stri
 		//TODO collect database events that can be shared across implementations
 	} else {
 		// provide special __receive event for alternative event system
-		rets, _ := self.Trigger(map[string]interface{}{
+		ret, _ := self.Trigger(map[string]interface{}{
 			"type":     "__receive",
 			"_session": session,
 		})
-		ret := rets[0]
 		if (ret["type"].(string) != "__receive") || (ret["e"] == nil) || (ret["e"] != "unimplemented") {
 			if eventQueue, ok := ret["eventQueue"].([]map[string]interface{}); ok {
 				events = append(events, eventQueue...)
@@ -880,14 +876,14 @@ func (self *XibbitHub) CheckClock() {
 			delete(globalVars, "_lastTick")
 		}
 		// provide special __clock event for housekeeping
-		event, _ := self.Trigger(map[string]interface{}{
+		eventReply, _ := self.Trigger(map[string]interface{}{
 			"type":       "__clock",
 			"tick":       tick,
 			"lastTick":   lastTick,
 			"globalVars": globalVars,
 		})
 		// write and unlock global variables
-		globalVars = event[0]["globalVars"].(map[string]interface{})
+		globalVars = eventReply["globalVars"].(map[string]interface{})
 		globalVars["_lastTick"] = tick.Format("2006-01-02 15:04:05")
 		self.WriteGlobalVars(globalVars)
 		self.UnlockGlobalVars()

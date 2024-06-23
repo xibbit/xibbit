@@ -385,9 +385,8 @@ module.exports = function() {
             }
             // handle the event
             if (!handled) {
-              self.trigger(event, function(e, eventsReply) {
-              var eventReply = eventsReply[0];
-//              self.setSession(socket, session);
+              self.trigger(event, function(e, eventReply) {
+              self.setSession(socket, session);
               // remove the session property
               if (eventReply['_session']) {
                 delete eventReply['_session'];
@@ -488,7 +487,7 @@ module.exports = function() {
     var invoked = !!event.e;
     // load event handler dynamically
     if (invoked) {
-      callback(null, [event]);
+      callback(null, event);
     } else if (self.handler_groups["on"][eventType] || self.handler_groups["api"][eventType]) {
       // clone the event
       var eventReply = self.cloneEvent(event, keysToSkip);
@@ -510,7 +509,7 @@ module.exports = function() {
           handler = self.handler_groups["api"][eventType];
         } else {
           eventReply.e = 'unauthenticated';
-          callback(null, [eventReply]);
+          callback(null, eventReply);
           invoked = true;
         }
       }
@@ -533,7 +532,7 @@ module.exports = function() {
               }
               eventReply.e = e;
             }
-            callback(null, [eventReply]);
+            callback(null, eventReply);
           });
           if (deferredFn) {
             new Promise(deferredFn).then(eventReply => {
@@ -554,12 +553,12 @@ module.exports = function() {
                 eventReply.e_stacktrace = e.stack;
                 console.error(e);
               }
-              callback(null, [eventReply]);
+              callback(null, eventReply);
             }).catch(e => {
               eventReply.e = e.message;
               eventReply.e_stacktrace = e.stack;
               console.error(e);
-              callback(null, [eventReply]);
+              callback(null, eventReply);
             });
           }
         } catch (e) {
@@ -577,7 +576,7 @@ module.exports = function() {
             }
           }
           console.error(e);
-          callback(null, [eventReply]);
+          callback(null, eventReply);
         }
       }
     } else {
@@ -703,12 +702,12 @@ module.exports = function() {
                 && (onfn === Object.keys(self.handler_groups["on"]).length)) {
               // found the file but didn't get an event handler
               event.e = 'unhandled:'+handlerFile;
-              callback(null, [event]);
+              callback(null, event);
             } else if (!self.handler_groups["on"][eventType]
                 && !self.handler_groups["api"][eventType]) {
               // found the file but got an event handler with a different name
               event.e = 'mismatch:'+handlerFile;
-              callback(null, [event]);
+              callback(null, event);
             } else {
               self.trigger(event, callback);
             }
@@ -763,7 +762,7 @@ module.exports = function() {
                 // found a file with a similar but incorrect name
                 event['e'] = 'misnamed:'+misnamed;
               }
-              callback(null, [event]);
+              callback(null, event);
             });
           }
         });
@@ -830,8 +829,8 @@ module.exports = function() {
       self.trigger({
         'type': '__send',
         'event': clone
-      }, function(e, ret) {
-        if ((ret.length > 0) && ret[0]['e'] && ret[0]['e'] === 'unimplemented') {
+      }, function(e, eventReply) {
+        if (eventReply.e && eventReply.e === 'unimplemented') {
           self.send(clone, recipient, true);
         }
         sent = true;
@@ -870,11 +869,10 @@ module.exports = function() {
       self.trigger({
         'type': '__receive',
         '_session': session
-      }, function(e, rets) {
-        var ret = rets[0];
-        if ((ret['type'] !== '__receive') || !ret['e'] || (ret['e'] !== 'unimplemented')) {
-          if (ret.eventQueue) {
-            events = events.concat(ret.eventQueue);
+      }, function(e, eventReply) {
+        if ((eventReply['type'] !== '__receive') || !eventReply['e'] || (eventReply['e'] !== 'unimplemented')) {
+          if (eventReply.eventQueue) {
+            events = events.concat(eventReply.eventQueue);
           }
         }
         callback(null, events);
@@ -989,8 +987,7 @@ module.exports = function() {
             tick: tick,
             lastTick: lastTick,
             globalVars: globalVars
-          }, function(e, events) {
-            var event = events[0];
+          }, function(e, event) {
             // write and unlock global variables
             globalVars = event.globalVars;
             globalVars._lastTick = tick.toISOString().substring(0, 19).split('T').join(' ');

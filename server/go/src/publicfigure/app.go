@@ -137,15 +137,15 @@ func main() {
 			instance := context.PostForm("instance")
 			session := hub.GetSessionByInstance(instance)
 			//filename := header.Filename
-			eventsReply, _ := hub.Trigger(map[string]interface{}{
+			eventReply, _ := hub.Trigger(map[string]interface{}{
 				"type": "user_profile_upload_photo",
 				"image": map[string]interface{}{
 					"tmp_name": file,
 				},
 				"_session": session,
 			})
-			delete(eventsReply[0], "_session")
-			eventsReplyBytes, _ := json.Marshal(eventsReply)
+			delete(eventReply, "_session")
+			eventsReplyBytes, _ := json.Marshal([]map[string]interface{}{eventReply})
 			context.String(http.StatusOK, string(eventsReplyBytes))
 		} else if strings.HasPrefix(filepath, "/socket.io/") {
 			socketioHandler(context)

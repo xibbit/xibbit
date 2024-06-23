@@ -907,32 +907,28 @@ class XibbitHub {
             }
             // handle the event
             if (!$handled) {
-              $eventsReply = $self->trigger($event);
-              $eventReply = $eventsReply[0];
+              $eventReply = $self->trigger($event);
               $self->setSession($socket, $self->session);
-              // add the response events
-              for ($e=0; $e < count($eventsReply); ++$e) {
-                // remove the session property
-                if (isset($eventsReply[$e]['_session'])) {
-                  unset($eventsReply[$e]['_session']);
-                }
-                // remove the connection property
-                if (isset($eventsReply[$e]['_conn'])) {
-                  unset($eventsReply[$e]['_conn']);
-                }
-                // _instance event does not require an implementation; it's optional
-                if (($eventsReply[$e]['type'] === '_instance') && isset($eventsReply[$e]['e'])
-                    && ($eventsReply[$e]['e'] === 'unimplemented')) {
-                  unset($eventsReply[$e]['e']);
-                }
-                // reorder the properties so they look pretty
-                $ret_reorder = &$self->reorderMap($eventsReply[$e],
-                  array('type', 'from', 'to', '_id'),
-                  array('i', 'e')
-                );
-                $events[] = array('client', $ret_reorder);
-                $handled = true;
+              // remove the session property
+              if (isset($eventReply['_session'])) {
+                unset($eventReply['_session']);
               }
+              // remove the connection property
+              if (isset($eventReply['_conn'])) {
+                unset($eventReply['_conn']);
+              }
+              // _instance event does not require an implementation; it's optional
+              if (($eventReply['type'] === '_instance') && isset($eventReply['e'])
+                  && ($eventReply['e'] === 'unimplemented')) {
+                unset($eventReply['e']);
+              }
+              // reorder the properties so they look pretty
+              $reorderedEventReply = &$self->reorderMap($eventReply,
+                array('type', 'from', 'to', '_id'),
+                array('i', 'e')
+              );
+              $events[] = array('client', $reorderedEventReply);
+              $handled = true;
             }
           }
         }
@@ -1125,13 +1121,11 @@ class XibbitHub {
         $event = array_merge($event, $files);
         $event = array_merge($event, $_REQUEST);
         unset($event['instance']);
-        $event = $this->trigger($event);
-        for ($i=0; $i < count($event); ++$i) {
-          if (isset($event[$i]['_session'])) {
-            unset($event[$i]['_session']);
-          }
+        $eventReply = $this->trigger($event);
+        if (isset($eventReply['_session'])) {
+          unset($eventReply['_session']);
         }
-        $events = array_concat($events, $event);
+        $events = array_concat($events, $eventReply);
       }
     }
     return $events;
@@ -1158,15 +1152,6 @@ class XibbitHub {
    * @author DanielWHoward
    **/
   function trigger($event, $useInternalHandlers=true) {
-    // handle an array of events by triggering individual events
-    if (is_array($event) // is_numeric_array
-        && (count(array_filter(array_keys($event), 'is_string')) === 0)) {
-      $events = array();
-      for ($e=0; $e < count($event); ++$e) {
-        $events = array_merge($events, $this->trigger($event[$e]));
-      }
-      return $events;
-    }
     $eventType = $event['type'];
     $handlerFile = null;
     // load event handler dynamically
@@ -1280,28 +1265,28 @@ class XibbitHub {
       }
     }
     $invoked = isset($event['e']);
-    $ret = $event;
+    $eventReply = $event;
     // invoke an authenticated event handler
     if (!$invoked && isset($this->handler_groups['on'][$eventType])) {
       if (!isset($this->session['username'])) {
         if (!isset($this->handler_groups['api'][$eventType])) {
           $event['e'] = 'unauthenticated';
-          $ret = $event;
+          $eventReply = $event;
           $invoked = true;
         }
       } else {
         try {
           if (is_string($this->handler_groups['on'][$eventType])) {
-            $ret = call_user_func($this->handler_groups['on'][$eventType], $event, $this->config['vars']);
+            $eventReply = call_user_func($this->handler_groups['on'][$eventType], $event, $this->config['vars']);
           } else {
-            $ret = $this->handler_groups['on'][$eventType]($event, $this->config['vars']);
+            $eventReply = $this->handler_groups['on'][$eventType]($event, $this->config['vars']);
           }
         } catch (Exception $e) {
           if ($e->getMessage() === '') {
             throw $e;
           }
-          $ret['e'] = $e->getMessage();
-          $ret['e_stacktrace'] = $e->getTraceAsString();
+          $eventReply['e'] = $e->getMessage();
+          $eventReply['e_stacktrace'] = $e->getTraceAsString();
         }
         $invoked = true;
       }
@@ -1310,24 +1295,24 @@ class XibbitHub {
     if (!$invoked && $eventType && isset($this->handler_groups['api'][$eventType])) {
       try {
         if (is_string($this->handler_groups['api'][$eventType])) {
-          $ret = call_user_func($this->handler_groups['api'][$eventType], $event, $this->config['vars']);
+          $eventReply = call_user_func($this->handler_groups['api'][$eventType], $event, $this->config['vars']);
         } else {
-          $ret = $this->handler_groups['api'][$eventType]($event, $this->config['vars']);
+          $eventReply = $this->handler_groups['api'][$eventType]($event, $this->config['vars']);
         }
       } catch (Exception $e) {
         if ($e->getMessage() === '') {
           throw $e;
         }
-        $ret['e'] = $e->getMessage();
-        $ret['e_stacktrace'] = $e->getTraceAsString();
+        $eventReply['e'] = $e->getMessage();
+        $eventReply['e_stacktrace'] = $e->getTraceAsString();
       }
       $invoked = true;
     }
     // preserve the special "username" property
     $username = isset($this->session['username'])? $this->session['username']: null;
     // update the session since the user can change it
-    if (isset($ret['_session'])) {
-      $this->session = $ret['_session'];
+    if (isset($eventReply['_session'])) {
+      $this->session = $eventReply['_session'];
       // restore the special "username" property, overwrite user changes
       if ($username !== null) {
         $this->session['username'] = $username;
@@ -1349,13 +1334,7 @@ class XibbitHub {
         $this->socketSession->save();
       }
     }
-    // always return an array of events
-    $events = array($ret);
-    if (is_array($ret) // is_numeric_array
-        && count(array_filter(array_keys($ret), 'is_string')) === 0) {
-      $events = $ret;
-    }
-    return $events;
+    return $eventReply;
   }
 
   /**
@@ -1401,11 +1380,11 @@ class XibbitHub {
         $clone['__id'] = $event['_id'];
       }
       // provide special __send event for caller to implement aliases, groups, all addresses
-      $ret = $this->trigger(array(
+      $eventReply = $this->trigger(array(
         'type'=>'__send',
         'event'=>$clone
       ));
-      if ((count($ret) > 0) && isset($ret[0]['e']) && ($ret[0]['e'] === 'unimplemented')) {
+      if (isset($eventReply['e']) && ($eventReply['e'] === 'unimplemented')) {
         $this->send($clone, $recipient, true);
       }
       $sent = true;
@@ -1461,15 +1440,13 @@ class XibbitHub {
       return array_merge($events, $newEvents);
     } else {
       // provide special __receive event for alternative event system
-      $ret = $this->trigger(array(
+      $eventReply = $this->trigger(array(
         'type'=>'__receive',
         '_session'=>$session
       ));
-      for ($r=0; $r < count($ret); ++$r) {
-        if (($ret[$r]['type'] === '__receive') && isset($ret[$r]['eventQueue']) && (!isset($ret[$r]['e']) || ($ret[$r]['e'] !== 'unimplemented'))) {
-          for ($q=0; $q < count($ret[$r]['eventQueue']); ++$q) {
-            $events[] = array('client', $ret[$r]['eventQueue'][$q]);
-          }
+      if (($eventReply['type'] === '__receive') && isset($eventReply['eventQueue']) && (!isset($eventReply['e']) || ($eventReply['e'] !== 'unimplemented'))) {
+        for ($q=0; $q < count($eventReply['eventQueue']); ++$q) {
+          $events[] = array('client', $eventReply['eventQueue'][$q]);
         }
       }
       return $this->receive($events, $session, true);
@@ -1552,7 +1529,7 @@ class XibbitHub {
         unset($globalVars['_lastTick']);
       }
       // provide special __clock event for housekeeping
-      $event = $this->trigger(array(
+      $eventReply = $this->trigger(array(
         'type'=>'__clock',
         'tick'=>$tick,
         'lastTick'=>$lastTick,
@@ -1564,7 +1541,7 @@ class XibbitHub {
       $this->deleteExpired('sockets_events', $disconnect_seconds);
       $this->deleteExpired('sockets_sessions', $disconnect_seconds, ' AND `socksessid` NOT IN (\'global\', \'lock\')');
       // write and unlock global variables
-      $globalVars = $event[0]['globalVars'];
+      $globalVars = $eventReply['globalVars'];
       $globalVars['_lastTick'] = date('Y-m-d H:i:s', $tick);
       $this->writeGlobalVars($globalVars);
       $this->unlockGlobalVars();

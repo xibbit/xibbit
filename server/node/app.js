@@ -116,10 +116,10 @@ function uploadFiles(req, res) {
       tmp_name: req.file
     },
     _session: session
-  }, function(e, eventsReply) {
-    delete eventsReply[0]._session;
+  }, function(e, eventReply) {
+    delete eventReply._session;
     res.set('Content-Type', 'text/plain');
-    res.send(JSON.stringify(eventsReply));
+    res.send(JSON.stringify([eventReply]));
   });
 }
 
