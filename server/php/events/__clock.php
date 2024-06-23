@@ -32,7 +32,7 @@ require_once('./asserte.php');
  * @author DanielWHoward
  **/
 $self = $this;
-$self->api('__clock', function($event, $vars) {
+$self->on('api', '__clock', function($event, $vars) {
   $hub = &$vars['hub'];
 
   // use seconds since epoch instead of datetime string to demo how this is done

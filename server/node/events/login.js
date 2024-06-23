@@ -34,7 +34,7 @@ const {api} = require('../xibbit_helpers');
  * @author DanielWHoward
  **/
 module.exports = self => {
-self.api('login', (event, {hub, pf}, callback) => {
+self.on('api', 'login', (event, {hub, pf}, callback) => {
 
   asserte(event.to, 'missing:to');
   asserte(typeof event.to === 'string', 'typeof:to');

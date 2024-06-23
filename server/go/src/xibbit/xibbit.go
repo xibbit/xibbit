@@ -52,11 +52,10 @@ import (
  **/
 type XibbitHub struct {
 	socketio *socketio.Server
-	config   map[string]interface{}
-	onfn     map[string]func(event map[string]interface{}, vars map[string]interface{}) map[string]interface{}
-	apifn    map[string]func(event map[string]interface{}, vars map[string]interface{}) map[string]interface{}
-	prefix   string
-	Sessions []map[string]interface{}
+	config         map[string]interface{}
+	Handler_groups map[string]map[string]func(event map[string]interface{}, vars map[string]interface{}) map[string]interface{}
+	prefix         string
+	Sessions       []map[string]interface{}
 }
 
 /**
@@ -72,8 +71,10 @@ func NewXibbitHub(config map[string]interface{}) *XibbitHub {
 	config["vars"].(map[string]interface{})["hub"] = self
 	self.config = config
 	self.prefix = ""
-	self.onfn = make(map[string]func(event map[string]interface{}, vars map[string]interface{}) map[string]interface{})
-	self.apifn = make(map[string]func(event map[string]interface{}, vars map[string]interface{}) map[string]interface{})
+	self.Handler_groups = make(map[string]map[string]func(event map[string]interface{}, vars map[string]interface{}) map[string]interface{})
+	self.Handler_groups["api"] = map[string]func(event map[string]interface{}, vars map[string]interface{}) map[string]interface{}{}
+	self.Handler_groups["on"] = map[string]func(event map[string]interface{}, vars map[string]interface{}) map[string]interface{}{}
+	self.Handler_groups["int"] = map[string]func(event map[string]interface{}, vars map[string]interface{}) map[string]interface{}{}
 	if _, ok := config["socketio"].(*socketio.Server); ok {
 		self.socketio = config["socketio"].(*socketio.Server)
 	}
@@ -642,20 +643,8 @@ func (self *XibbitHub) ReadAndWriteUploadEvent(event []map[string]interface{}) [
  *
  * @author DanielWHoward
  **/
-func (self *XibbitHub) On(typ string, fn func(event map[string]interface{}, vars map[string]interface{}) map[string]interface{}) {
-	self.onfn[typ] = fn
-}
-
-/**
- * Provide an unauthenticated callback for an event.
- *
- * @param typ string The event to handle.
- * @param fn mixed A function that will handle the event.
- *
- * @author DanielWHoward
- **/
-func (self *XibbitHub) Api(typ string, fn func(event map[string]interface{}, vars map[string]interface{}) map[string]interface{}) {
-	self.apifn[typ] = fn
+func (self *XibbitHub) On(group string, typ string, fn func(event map[string]interface{}, vars map[string]interface{}) map[string]interface{}) {
+	self.Handler_groups[group][typ] = fn
 }
 
 /**
@@ -676,8 +665,8 @@ func (self *XibbitHub) Trigger(event map[string]interface{}) ([]map[string]inter
 	var onHandler func(event map[string]interface{}, vars map[string]interface{}) map[string]interface{} = nil
 	var apiHandler func(event map[string]interface{}, vars map[string]interface{}) map[string]interface{} = nil
 	// find the event handler to invoke
-	onHandler, _ = self.onfn[eventType]
-	apiHandler, _ = self.apifn[eventType]
+	onHandler, _ = self.Handler_groups["on"][eventType]
+	apiHandler, _ = self.Handler_groups["api"][eventType]
 	if onHandler != nil {
 		handler = onHandler
 	} else if apiHandler != nil {
@@ -696,9 +685,9 @@ func (self *XibbitHub) Trigger(event map[string]interface{}) ([]map[string]inter
 			}
 		}
 		// authenticate
-		if self.onfn[eventType] != nil && event["from"] == nil && event["_session"] == nil {
-			if _, ok := self.apifn[eventType]; ok {
-				handler = self.apifn[eventType]
+		if self.Handler_groups["on"][eventType] != nil && event["from"] == nil && event["_session"] == nil {
+			if _, ok := self.Handler_groups["api"][eventType]; ok {
+				handler = self.Handler_groups["api"][eventType]
 			} else {
 				eventReply["e"] = "unauthenticated"
 				invoked = true

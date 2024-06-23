@@ -553,8 +553,7 @@ class SocketSession {
  **/
 class XibbitHub {
   var $config;
-  var $onfn;
-  var $apifn;
+  var $handler_groups;
   var $prefix;
   var $session;
   var $socketio;
@@ -572,8 +571,11 @@ class XibbitHub {
     $config['vars']['hub'] = $this;
     $this->config = $config;
     $this->socketio = isset($this->config['socketio'])? $this->config['socketio']: new SocketIOWrapper();
-    $this->onfn = array();
-    $this->apifn = array();
+    $this->handler_groups = array(
+      'api'=>array(),
+      'on'=>array(),
+      'int'=>array()
+    );
     $this->session = array();
     $this->prefix = '';
     if (isset($this->config['mysql']) && isset($this->config['mysql']['SQL_PREFIX'])) {
@@ -1143,30 +1145,19 @@ class XibbitHub {
    *
    * @author DanielWHoward
    **/
-  function on($typ, $fn) {
-    $this->onfn[$typ] = $fn;
-  }
-
-  /**
-   * Provide an unauthenticated callback for an event.
-   *
-   * @param $typ string The event to handle.
-   * @param $fn mixed A function that will handle the event.
-   *
-   * @author DanielWHoward
-   **/
-  function api($typ, $fn) {
-    $this->apifn[$typ] = $fn;
+  function on($group, $typ, $fn) {
+    $this->handler_groups[$group][$typ] = $fn;
   }
 
   /**
    * Invoke callbacks for an event.
    *
    * @param $event array The event to handle.
+   * @param $useInternalHandlers boolean Look for and invoke internal handlers, too.
    *
    * @author DanielWHoward
    **/
-  function trigger($event) {
+  function trigger($event, $useInternalHandlers=true) {
     // handle an array of events by triggering individual events
     if (is_array($event) // is_numeric_array
         && (count(array_filter(array_keys($event), 'is_string')) === 0)) {
@@ -1179,8 +1170,8 @@ class XibbitHub {
     $eventType = $event['type'];
     $handlerFile = null;
     // load event handler dynamically
-    if (!isset($this->onfn[$eventType])
-        && !isset($this->apifn[$eventType])) {
+    if (!isset($this->handler_groups['on'][$eventType])
+        && !isset($this->handler_groups['api'][$eventType])) {
       // get the plugins folder
       $pluginsFolder = null;
       if (isset($this->config['plugins'])
@@ -1216,16 +1207,16 @@ class XibbitHub {
       }
       // try to load the event handler
       if ($handlerFile !== null) {
-        $apifn = $this->apifn;
-        $onfn = $this->onfn;
+        $apifn = $this->handler_groups['api'];
+        $onfn = $this->handler_groups['on'];
 //         $handlerCode = file_get_contents($handlerFile);
 //         $handlerCode = str_replace('..', '.', $handlerCode);
         include $handlerFile;
-        if (($apifn === $this->apifn) && ($onfn === $this->onfn)) {
+        if (($apifn === $this->handler_groups['api']) && ($onfn === $this->handler_groups['on'])) {
           // found the file but didn't get an event handler
           $event['e'] = 'unhandled:'.$handlerFile;
-        } elseif (!isset($this->onfn[$eventType])
-            && !isset($this->apifn[$eventType])) {
+        } elseif (!isset($this->handler_groups['on'][$eventType])
+            && !isset($this->handler_groups['api'][$eventType])) {
           // found the file but got an event handler with a different name
           $event['e'] = 'mismatch:'.$handlerFile;
         }
@@ -1291,19 +1282,19 @@ class XibbitHub {
     $invoked = isset($event['e']);
     $ret = $event;
     // invoke an authenticated event handler
-    if (!$invoked && isset($this->onfn[$eventType])) {
+    if (!$invoked && isset($this->handler_groups['on'][$eventType])) {
       if (!isset($this->session['username'])) {
-        if (!isset($this->apifn[$eventType])) {
+        if (!isset($this->handler_groups['api'][$eventType])) {
           $event['e'] = 'unauthenticated';
           $ret = $event;
           $invoked = true;
         }
       } else {
         try {
-          if (is_string($this->onfn[$eventType])) {
-            $ret = call_user_func($this->onfn[$eventType], $event, $this->config['vars']);
+          if (is_string($this->handler_groups['on'][$eventType])) {
+            $ret = call_user_func($this->handler_groups['on'][$eventType], $event, $this->config['vars']);
           } else {
-            $ret = $this->onfn[$eventType]($event, $this->config['vars']);
+            $ret = $this->handler_groups['on'][$eventType]($event, $this->config['vars']);
           }
         } catch (Exception $e) {
           if ($e->getMessage() === '') {
@@ -1316,12 +1307,12 @@ class XibbitHub {
       }
     }
     // invoke an unauthenticated event handler
-    if (!$invoked && $eventType && isset($this->apifn[$eventType])) {
+    if (!$invoked && $eventType && isset($this->handler_groups['api'][$eventType])) {
       try {
-        if (is_string($this->apifn[$eventType])) {
-          $ret = call_user_func($this->apifn[$eventType], $event, $this->config['vars']);
+        if (is_string($this->handler_groups['api'][$eventType])) {
+          $ret = call_user_func($this->handler_groups['api'][$eventType], $event, $this->config['vars']);
         } else {
-          $ret = $this->apifn[$eventType]($event, $this->config['vars']);
+          $ret = $this->handler_groups['api'][$eventType]($event, $this->config['vars']);
         }
       } catch (Exception $e) {
         if ($e->getMessage() === '') {

@@ -33,7 +33,7 @@ const {on} = require('../xibbit_helpers');
  * @author DanielWHoward
  **/
 module.exports = self => {
-self.on('logout', (event, {hub, pf}, callback) => {
+self.on('on', 'logout', (event, {hub, pf}, callback) => {
 
   noAsserte(event);
 

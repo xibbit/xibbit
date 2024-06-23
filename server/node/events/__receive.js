@@ -39,7 +39,7 @@ var config = require('../config');
  * @author DanielWHoward
  **/
 module.exports = self => {
-self.api('__receive', (event, {pf, useInstances}, callback) => {
+self.on('api', '__receive', (event, {pf, useInstances}, callback) => {
   // assume that this event does not need special handling
   event.e = 'unimplemented';
 

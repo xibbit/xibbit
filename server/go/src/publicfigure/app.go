@@ -91,17 +91,17 @@ func main() {
 		},
 	})
 
-	hub.Api("__clock", events.E__clock)
-	hub.Api("__receive", events.E__receive)
-	hub.Api("__send", events.E__send)
-	hub.Api("_instance", events.E_instance)
-	hub.Api("init", events.Init)
-	hub.Api("login", events.Login)
-	hub.On("logout", events.Logout)
-	hub.Api("user_create", events.User_create)
-	hub.On("user_profile_mail_update", events.User_profile_mail_update)
-	hub.On("user_profile_upload_photo", events.User_profile_upload_photo)
-	hub.On("user_profile", events.User_profile)
+	hub.On("api", "__clock", events.E__clock)
+	hub.On("api", "__receive", events.E__receive)
+	hub.On("api", "__send", events.E__send)
+	hub.On("api", "_instance", events.E_instance)
+	hub.On("api", "init", events.Init)
+	hub.On("api", "login", events.Login)
+	hub.On("on", "logout", events.Logout)
+	hub.On("api", "user_create", events.User_create)
+	hub.On("on", "user_profile_mail_update", events.User_profile_mail_update)
+	hub.On("on", "user_profile_upload_photo", events.User_profile_upload_photo)
+	hub.On("on", "user_profile", events.User_profile)
 
 	// start the _events system
 	hub.Start("")

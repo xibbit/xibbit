@@ -33,7 +33,7 @@ require_once('./array.php');
  * @author DanielWHoward
  **/
 $self = $this;
-$self->on('user_profile_mail_update', function($event, $vars) {
+$self->on('on', 'user_profile_mail_update', function($event, $vars) {
   $pf = $vars['pf'];
 
   asserte(isset($event['user']), 'missing:user');

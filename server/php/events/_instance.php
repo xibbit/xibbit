@@ -31,7 +31,7 @@
  * @author DanielWHoward
  **/
 $self = $this;
-$self->api('_instance', function($event, $vars) {
+$self->on('api', '_instance', function($event, $vars) {
   $hub = $vars['hub'];
   $pf = $vars['pf'];
   $useInstances = isset($vars['useInstances']) && $vars['useInstances'];

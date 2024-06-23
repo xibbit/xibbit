@@ -32,7 +32,7 @@ require_once('./asserte.php');
  * @author DanielWHoward
  **/
 $self = $this;
-$self->on('user_profile', function($event, $vars) {
+$self->on('on', 'user_profile', function($event, $vars) {
   $pf = $vars['pf'];
 
   noAsserte($event);

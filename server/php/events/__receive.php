@@ -32,7 +32,7 @@ require_once('./asserte.php');
  * @author DanielWHoward
  **/
 $self = $this;
-$self->api('__receive', function($event, $vars) {
+$self->on('api', '__receive', function($event, $vars) {
   $pf = $vars['pf'];
   $useInstances = isset($vars['useInstances']) && $vars['useInstances'];
 

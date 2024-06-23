@@ -33,7 +33,7 @@ require_once('./config.php');
  * @author DanielWHoward
  **/
 $self = $this;
-$self->api('init', function($event, $vars) {
+$self->on('api', 'init', function($event, $vars) {
   $pf = $vars['pf'];
 
   noAsserte($event);

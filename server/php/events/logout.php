@@ -31,7 +31,7 @@ require_once('./asserte.php');
  * @author DanielWHoward
  **/
 $self = $this;
-$self->on('logout', function($event, $vars) {
+$self->on('on', 'logout', function($event, $vars) {
   $hub = $vars['hub'];
   $pf = $vars['pf'];
 

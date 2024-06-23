@@ -32,7 +32,7 @@ require_once('./pwd.php');
  * @author DanielWHoward
  **/
 $self = $this;
-$self->api('login', function($event, $vars) {
+$self->on('api', 'login', function($event, $vars) {
   $hub = $vars['hub'];
   $pf = $vars['pf'];
 

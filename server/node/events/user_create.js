@@ -36,7 +36,7 @@ var moment = require('moment-timezone');
  * @author DanielWHoward
  **/
 module.exports = self => {
-self.api('user_create', (event, {pf}, callback) => {
+self.on('api', 'user_create', (event, {pf}, callback) => {
 
   asserte(event.username, 'missing:username');
   asserte(typeof event.username === 'string', 'typeof:username');

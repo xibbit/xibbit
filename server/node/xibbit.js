@@ -48,8 +48,11 @@ module.exports = function() {
     }
     config.vars.hub = this;
     this.config = config;
-    this.onfn = {};
-    this.apifn = {};
+    this.handler_groups = {
+      'api': {},
+      'on': {},
+      'int': {}
+    };
     this.sessions = {};
     this.prefix = '';
     this.socketio = config.socketio;
@@ -453,7 +456,7 @@ module.exports = function() {
    * @author DanielWHoward
    **/
   XibbitHub.prototype.readAndWriteUploadEvent = function(typ, fn) {
-    this.onfn[typ] = fn;
+    this.handler_groups['on'][typ] = fn;
   };
 
   /**
@@ -464,20 +467,8 @@ module.exports = function() {
    *
    * @author DanielWHoward
    **/
-  XibbitHub.prototype.on = function(typ, fn) {
-    this.onfn[typ] = fn;
-  };
-
-  /**
-   * Provide an unauthenticated callback for an event.
-   *
-   * @param typ string The event to handle.
-   * @param fn mixed A function that will handle the event.
-   *
-   * @author DanielWHoward
-   **/
-  XibbitHub.prototype.api = function(typ, fn) {
-    this.apifn[typ] = fn;
+  XibbitHub.prototype.on = function(group, typ, fn) {
+    this.handler_groups[group][typ] = fn;
   };
 
   /**
@@ -498,7 +489,7 @@ module.exports = function() {
     // load event handler dynamically
     if (invoked) {
       callback(null, [event]);
-    } else if (self.onfn[eventType] || self.apifn[eventType]) {
+    } else if (self.handler_groups["on"][eventType] || self.handler_groups["api"][eventType]) {
       // clone the event
       var eventReply = self.cloneEvent(event, keysToSkip);
       if (typeof event._conn !== 'undefined') {
@@ -511,12 +502,12 @@ module.exports = function() {
         eventReply._id = event._id;
       }
       // find the event handler to invoke
-      handler = ((handler === null) && self.onfn[eventType])? self.onfn[eventType]: handler;
-      handler = ((handler === null) && self.apifn[eventType])? self.apifn[eventType]: handler;
+      handler = ((handler === null) && self.handler_groups["on"][eventType])? self.handler_groups["on"][eventType]: handler;
+      handler = ((handler === null) && self.handler_groups["api"][eventType])? self.handler_groups["api"][eventType]: handler;
       // authenticate
-      if (self.onfn[eventType] && !event['from'] && !event._session && !event._session.username) {
-        if (self.apifn[eventType]) {
-          handler = self.apifn[eventType];
+      if (self.handler_groups["on"][eventType] && !event['from'] && !event._session && !event._session.username) {
+        if (self.handler_groups["api"][eventType]) {
+          handler = self.handler_groups["api"][eventType];
         } else {
           eventReply.e = 'unauthenticated';
           callback(null, [eventReply]);
@@ -702,19 +693,19 @@ module.exports = function() {
           });
           if (handlers.length > 0) {
             var handlerFile = handlers[0];
-            var apifn = Object.keys(self.apifn).length;
-            var onfn = Object.keys(self.onfn).length;
+            var apifn = Object.keys(self.handler_groups["api"]).length;
+            var onfn = Object.keys(self.handler_groups["on"]).length;
             var fn = require('./'+handlerFile);
             if (typeof fn === 'function') {
               fn(self);
             }
-            if ((apifn === Object.keys(self.apifn).length)
-                && (onfn === Object.keys(self.onfn).length)) {
+            if ((apifn === Object.keys(self.handler_groups["api"]).length)
+                && (onfn === Object.keys(self.handler_groups["on"]).length)) {
               // found the file but didn't get an event handler
               event.e = 'unhandled:'+handlerFile;
               callback(null, [event]);
-            } else if (!self.onfn[eventType]
-                && !self.apifn[eventType]) {
+            } else if (!self.handler_groups["on"][eventType]
+                && !self.handler_groups["api"][eventType]) {
               // found the file but got an event handler with a different name
               event.e = 'mismatch:'+handlerFile;
               callback(null, [event]);

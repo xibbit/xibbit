@@ -32,7 +32,7 @@
  *
  * @author DanielWHoward
  **/
-const api = (eventType, eventHandler) => self => self.api(eventType, eventHandler);
+const api = (eventType, eventHandler) => self => self.on('api', eventType, eventHandler);
 /**
  * A helper function for defining an authenticated event
  * handler.
@@ -43,6 +43,6 @@ const api = (eventType, eventHandler) => self => self.api(eventType, eventHandle
  *
  * @author DanielWHoward
  **/
-const on = (eventType, eventHandler) => self => self.on(eventType, eventHandler);
+const on = (eventType, eventHandler) => self => self.on('on', eventType, eventHandler);
 
 module.exports = { api, on };
