@@ -40,10 +40,10 @@ $self->on('api', '__receive', function($event, $vars) {
   $event['e'] = 'unimplemented';
 
   if ($useInstances) {
-    if (!isset($event['_session']) || !isset($event['_session']['instance'])) {
-      print '__receive did not get _session.instance';
+    if (!isset($event['_session']) || !isset($event['_session']['instance_id'])) {
+      print '__receive did not get _session.instance_id';
     }
-    $instance = $event['_session']['instance'];
+    $instance = $event['_session']['instance_id'];
     $event['eventQueue'] = array();
     // get the events from the events table
     $events = $pf->readRows(array(

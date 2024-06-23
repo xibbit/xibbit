@@ -35,7 +35,19 @@ $self = $this;
 $self->on('on', 'user_profile_upload_photo', function($event, $vars) {
   $pf = $vars['pf'];
 
-  $username = $event['_session']['username'];
+  $uid = $event['_session']['uid'];
+
+  // find user in the database
+  $username = '';
+  $mes = $pf->readRows(array(
+    'table'=>'users',
+    'where'=>array(
+      'uid'=>$uid
+  )));
+  if (count($mes) === 1) {
+    $username = $mes[0]['username'];
+  }
+
   $perm_fn = dirname(__DIR__).'/public/images/'.$username.'.png';
   $success = move_uploaded_file($event['image']['tmp_name'], $perm_fn);
   if ($success) {

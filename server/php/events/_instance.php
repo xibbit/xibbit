@@ -58,7 +58,7 @@ $self->on('api', '_instance', function($event, $vars) {
         'connected'=>$now,
         'touched'=>$now
       );
-      $event['_session']['instance'] = $instance;
+      $event['_session']['instance_id'] = $instance;
       $pf->insertRow(array(
         'table'=>'instances',
         'values'=>$values
@@ -82,7 +82,7 @@ $self->on('api', '_instance', function($event, $vars) {
         'table'=>'instances',
         'values'=>$values,
         'where'=>array(
-          'instance'=>$event['_session']['instance']
+          'instance'=>$event['_session']['instance_id']
       )));
     }
   }

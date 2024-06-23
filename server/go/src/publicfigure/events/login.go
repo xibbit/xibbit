@@ -104,7 +104,6 @@ func Login(event map[string]interface{}, vars map[string]interface{}) map[string
 			event = hub.Connect(event, me["username"].(string), true)
 			// add UID and user to the session variables
 			event["_session"].(map[string]interface{})["uid"] = me["id"]
-			event["_session"].(map[string]interface{})["user"] = me
 			// return user info
 			event["me"] = map[string]interface{}{
 				"username": me["username"],
@@ -115,7 +114,7 @@ func Login(event map[string]interface{}, vars map[string]interface{}) map[string
 			row, _ := pf.ReadOneRow(map[string]interface{}{
 				"table": "instances",
 				"where": map[string]interface{}{
-					"instance": event["_session"].(map[string]interface{})["instance"],
+					"instance": event["_session"].(map[string]interface{})["instance_id"],
 				},
 			})
 			if row != nil {
@@ -126,7 +125,7 @@ func Login(event map[string]interface{}, vars map[string]interface{}) map[string
 					"table":  "instances",
 					"values": values,
 					"where": map[string]interface{}{
-						"instance": event["_session"].(map[string]interface{})["instance"],
+						"instance": event["_session"].(map[string]interface{})["instance_id"],
 					},
 				})
 			}

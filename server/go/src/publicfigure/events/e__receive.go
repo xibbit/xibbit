@@ -45,7 +45,7 @@ func E__receive(event map[string]interface{}, vars map[string]interface{}) map[s
 
 	if ok && useInstances {
 		sessionMap, _ := event["_session"].(map[string]interface{})
-		instance, ok := sessionMap["instance"].(string)
+		instance, ok := sessionMap["instance_id"].(string)
 		if !ok {
 			// "zombie" sockets without instances can be created
 			// in long polling scenarios and where the user reloads

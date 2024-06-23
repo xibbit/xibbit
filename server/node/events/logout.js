@@ -37,7 +37,18 @@ self.on('on', 'logout', (event, {hub, pf}, callback) => {
 
   noAsserte(event);
 
-  const {username, instance} = event._session;
+  const {uid, instance=event._session.instance_id} = event._session;
+
+  // find user in the database
+  let username = '';
+  pf.readRows({
+    table: 'users',
+    where: {
+      uid
+  }}, function(e, mes) {
+  if (mes.length === 1) {
+    username = mes[0].username;
+  }
 
   // broadcast this instance logged out
   hub.send({
@@ -66,16 +77,21 @@ self.on('on', 'logout', (event, {hub, pf}, callback) => {
       // remove UID and user info from the session
       delete event._session.uid;
       delete event._session.user;
-      event.i = 'logged out';
+      if (!event.hasOwnProperty('e')) {
+        event.i = 'logged out';
+      }
       callback(null, event);
     });
   } else {
     // remove UID and user info from the session
     delete event._session.uid;
     delete event._session.user;
-    event.i = 'logged out';
+    if (!event.hasOwnProperty('e')) {
+      event.i = 'logged out';
+    }
     callback(null, event);
   }
+  });
   });
 });
 };

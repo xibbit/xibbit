@@ -103,7 +103,7 @@ $self->on('api', 'login', function($event, $vars) {
       $row = $pf->readOneRow(array(
         'table'=>'instances',
         'where'=>array(
-          'instance'=>$event['_session']['instance']
+          'instance'=>$event['_session']['instance_id']
       )));
       if ($row !== null) {
         $values = array(
@@ -116,7 +116,7 @@ $self->on('api', 'login', function($event, $vars) {
           'table'=>'instances',
           'values'=>$values,
           'where'=>array(
-            'instance'=>$event['_session']['instance']
+            'instance'=>$event['_session']['instance_id']
         )));
       }
       $hub->send(array(

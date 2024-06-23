@@ -65,7 +65,7 @@ func E_instance(event map[string]interface{}, vars map[string]interface{}) map[s
 				"connected": now,
 				"touched":   now,
 			}
-			event["_session"].(map[string]interface{})["instance"] = instance
+			event["_session"].(map[string]interface{})["instance_id"] = instance
 			pf.InsertRow(map[string]interface{}{
 				"table":  "instances",
 				"values": values,
@@ -87,7 +87,7 @@ func E_instance(event map[string]interface{}, vars map[string]interface{}) map[s
 				"table":  "instances",
 				"values": values,
 				"where": map[string]interface{}{
-					"instance": event["_session"].(map[string]interface{})["instance"],
+					"instance": event["_session"].(map[string]interface{})["instance_id"],
 				},
 			})
 		}

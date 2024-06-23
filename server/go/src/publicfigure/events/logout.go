@@ -42,8 +42,20 @@ func Logout(event map[string]interface{}, vars map[string]interface{}) map[strin
 
 	asserte.NoAsserte(event)
 
-	username := event["_session"].(map[string]interface{})["username"].(string)
-	instance := event["_session"].(map[string]interface{})["instance"].(string)
+	uid := event["_session"].(map[string]interface{})["uid"].(int)
+	instance := event["_session"].(map[string]interface{})["instance_id"].(string)
+
+	// find user in the database
+	username := ""
+	mes, _ := pf.ReadRows(map[string]interface{}{
+		"table": "users",
+		"where": map[string]interface{}{
+			"uid": uid,
+		},
+	})
+	if (len(mes) == 1) {
+		username = mes[0]["username"].(string)
+	}
 
 	// broadcast this instance logged out
 	hub.Send(map[string]interface{}{
@@ -74,8 +86,9 @@ func Logout(event map[string]interface{}, vars map[string]interface{}) map[strin
 	}
 	// remove UID and user info from the session
 	delete(event["_session"].(map[string]interface{}), "uid")
-	delete(event["_session"].(map[string]interface{}), "user")
-	event["i"] = "logged out"
+	if _, ok := event["e"]; !ok {
+		event["i"] = "logged out"
+	}
 
 	return event
 }

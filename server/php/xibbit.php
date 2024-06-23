@@ -86,7 +86,7 @@ class SocketIOWrapper {
         $socket = new SocketWrapper($sid, $config);
       }
     } else {
-      $username = isset($config['impl']->session['username'])? $config['impl']->session['username']: '';
+      $username = isset($config['impl']->sessions[0]['session_data']['_username'])? $config['impl']->sessions[0]['session_data']['_username']: '';
       if (($sid === '') || ($sid === $username)) {
         return $this->socket;
       } else {
@@ -140,7 +140,7 @@ class SocketBroadcast {
       }
       $impl->mysql_free_query($qr);
     } else if ($ownerClassName === 'ShortPollSocket') {
-      $username = isset($impl->session['username'])? $impl->session['username']: null;
+      $username = isset($impl->sessions[0]['session_data']['_username'])? $impl->sessions[0]['session_data']['_username']: null;
       // read users from database
       $q = 'SELECT username FROM `'.$impl->prefix.'users` WHERE '
         .'`connected` <> \'1970-01-01 00:00:00\';';
@@ -553,9 +553,10 @@ class SocketSession {
  **/
 class XibbitHub {
   var $config;
+  var $suppressCloneSession;
   var $handler_groups;
   var $prefix;
-  var $session;
+  var $sessions;
   var $socketio;
   var $useSocketIO;
   var $socketSession;
@@ -570,13 +571,23 @@ class XibbitHub {
   function __construct($config) {
     $config['vars']['hub'] = $this;
     $this->config = $config;
+    $this->suppressCloneSession = false;
     $this->socketio = isset($this->config['socketio'])? $this->config['socketio']: new SocketIOWrapper();
     $this->handler_groups = array(
       'api'=>array(),
       'on'=>array(),
       'int'=>array()
     );
-    $this->session = array();
+    $this->sessions = array(
+      array(
+        'session_data'=>array(
+          'instance_id'=>''
+        ),
+        '_conn'=>array(
+          'sockets'=>array()
+        )
+      )
+    );
     $this->prefix = '';
     if (isset($this->config['mysql']) && isset($this->config['mysql']['SQL_PREFIX'])) {
       $this->prefix = $this->config['mysql']['SQL_PREFIX'];
@@ -606,12 +617,16 @@ class XibbitHub {
         // save pseudo $_SESSION
         $this->socketSession->save();
       }
-      $this->session = $this->getSessionByInstance($instance);
+      if (is_string($instance) && ($instance !== '') && isset($_SESSION['instance_'.$instance])) {
+        $this->sessions[0]['session_data'] = $_SESSION['instance_'.$instance];
+        $this->sessions[0]['session_data']['instance_id'] = $this->sessions[0]['session_data']['instance'];
+        unset($this->sessions[0]['session_data']['instance']);
+      }
     }
     if (!isset($this->config['poll'])) {
       $this->config['poll'] = array();
     }
-    $this->touch($this->session);
+    $this->touch($this->sessions[0]['session_data']);
   }
 
   /**
@@ -630,23 +645,32 @@ class XibbitHub {
 
   /**
    * Get the session associated with a socket which always
-   * has a data key and a _conn key.  The _conn key has a
-   * map that contains a sockets key with an array of
+   * has a session_data key and a _conn key.  The _conn key
+   * has a map that contains a sockets key with an array of
    * sockets.  A socket is globally unique in the sessions
-   * object.  The session may also have a username key and
-   * an instance key.
+   * object.
    *
-   * An instance is also globally unique.  A socket may
-   * have a non-instance session or may be combined with
-   * other sockets for an instanced session.
+   * There is an instance_id key in the session_data map
+   * which is globally unique or the empty string.
    *
-   * @param $sock Object A socket.
-   * @returns map The session.
+   * Multiple sockets can be associated with the same
+   * session (browser reloads).
+   *
+   * A socket will not have an instance_id until it receives
+   * an _instance event.
+   *
+   * @param sock Object A socket.
+   * @return map The session object with session_data and _conn keys.
    *
    * @author DanielWHoward
    **/
   function &getSession(&$sock) {
-    return $this->session;
+    $session = null;
+    $i = $this->getSessionIndex($sock);
+    if ($i !== -1) {
+      $session = $this->cloneSession($this->sessions[$i]);
+    }
+    return $session;
   }
 
   /**
@@ -658,23 +682,60 @@ class XibbitHub {
    *
    * @author DanielWHoward
    **/
-  function getSessionIndex($sock) {
+  function getSessionIndex(&$sock) {
+    for ($s=0; $s < count($this->sessions); ++$s) {
+      for ($ss=0; $ss < count($this->sessions[$s]["_conn"]["sockets"]); ++$ss) {
+        if ($this->sessions[$s]["_conn"]["sockets"][$ss] === $sock) {
+          return $s;
+        }
+      }
+    }
     return -1;
   }
 
   /**
    * Get the session associated with an instance.
    *
-   * @param $instance string An instance string.
+   * @param $instance_id string An instance string.
    * @returns map The session.
    *
    * @author DanielWHoward
    **/
-  function &getSessionByInstance($instance) {
-    if (is_string($instance) && ($instance !== '') && isset($_SESSION['instance_'.$instance])) {
-      return $_SESSION['instance_'.$instance];
+  function &getSessionByInstance($instance_id) {
+    if (is_string($instance_id) && ($instance_id !== '')) {
+      for ($s=0; $s < count($this->sessions); ++$s) {
+        $session = $this->sessions[$s];
+        if ($session['session_data']['instance_id'] === $instance_id) {
+          return $this->cloneSession($session);
+        }
+      }
     }
     return null;
+  }
+
+  /**
+   * Get the session associated with a user (an
+   * addressable recepient of a send message).
+   *
+   * The special &quot;all&quot; username refers
+   * to all sessions.
+   *
+   * @param username string The username.
+   *
+   * @author DanielWHoward
+   **/
+  function getSessionsByUsername($instance_id) {
+    $sessions = array();
+    if ($username === 'all') {
+      $sessions = $this->sessions;
+    } else {
+      for ($s=0; $s < count($this->sessions); ++$s) {
+        if ($this->sessions[$s]['session_data']['_username'] === username) {
+          $sessions[] = $this->sessions[$s];
+        }
+      }
+    }
+    return $sessions;
   }
 
   /**
@@ -685,20 +746,22 @@ class XibbitHub {
    *
    * @author DanielWHoward
    **/
-  function setSession($sock, $session) {
-    //TODO unimplemented setSession()
-  }
-
-  /**
-   * Change the session associated with a socket.
-   *
-   * @param $instance string An instance string.
-   * @param $session map The session values.
-   *
-   * @author DanielWHoward
-   **/
-  function setSessionByInstance($instance, $session) {
-      //TODO unimplemented setSession()
+  function setSessionData($sock, $sessionData) {
+    $i1 = $this->getSessionIndex($sock);
+    if ($i1 === -1) {
+    } else {
+      $clone = $this->cloneSession($sessionData);
+      $this->sessions[$i1]["session_data"] = $clone;
+      $this->sessions[$i1]["_conn"]["sockets"][] = $sock;
+      $instance = $sessionData['instance_id'];
+      if ($instance !== '') {
+        $_SESSION['instance_'.$instance] = $sessionData;
+        unset($_SESSION['instance_'.$instance]['instance_id']);
+        $_SESSION['instance_'.$instance]['instance'] = $instance;
+        // save pseudo $_SESSION
+        /*$this->socketSession->save();*/
+      }
+    }
   }
 
   /**
@@ -709,7 +772,17 @@ class XibbitHub {
    * @author DanielWHoward
    **/
   function addSession($sock) {
-    //TODO unimplemented addSession()
+    $session = array(
+      'session_data'=>array(
+        'instance_id'=>''
+      ),
+      '_conn'=>array(
+        'sockets'=>array(
+          $sock
+        )
+      )
+    );
+    $this->sessions[] = $session;
   }
 
   /**
@@ -720,20 +793,71 @@ class XibbitHub {
    *
    * @author DanielWHoward
    **/
-  function removeSession($sock) {
-    //TODO unimplemented removeSession()
+  function removeSocketFromSession($sock) {
+    //TODO unimplemented removeSocketFromSession()
   }
 
   /**
-   * Return a duplicate of the session, though the _conn is shared.  A
-   * clone prevents code from relying on shared pointers.
+   * Delete the session that contains a socket and
+   * add the socket to the session which represents
+   * an instance.
    *
-   * @param $session map The session values.
+   * When a socket connects, it is assigned to a new
+   * empty session but, when the _instance event
+   * arrives, that socket might need to be assigned
+   * to an existing session and the new session
+   * destroyed.
+   *
+   * @param $instance_id string The instance to add the socket to.
+   * @param $sock Object The socket to be moved.
+   *
+   * @author DanielWHoward
+   **/
+  function combineSessions($instance_id, $sock) {
+/*    $i = $this->getSessionIndex($sock);
+    array_splice($this->sessions, $i, 1);
+    for ($s=0; $s < count($this->sessions); ++$s) {
+      if ($this->sessions[$s]['session_data']['instance_id'] === $instance_id) {
+        $this->sessions[$s]['_conn']['sockets'][] = $sock;
+        break;
+      }
+    }*/
+  }
+
+  /**
+   * Return a duplicate of the session with no shared
+   * pointers except for the special _conn key, if it
+   * exists.  This method works for the entire session
+   * or just the session_data in a session.
+   *
+   * A clone prevents a common coding error where the
+   * code relies on shared pointers rather than using
+   * the setSessionData() method.
+   *
+   * The usual implementation is to convert to JSON and
+   * then back again.  For some types, a workaround must
+   * be implemented.
+   *
+   * @param $session map The session or session_data.
+   * @return map The clone.
    *
    * @author DanielWHoward
    **/
   function cloneSession($session) {
-    return $session;
+    if ($this->suppressCloneSession) {
+      return $session;
+    }
+    $_conn = null;
+    if (isset($session['_conn'])) {
+      $_conn = $session['_conn'];
+      unset($session['_conn']);
+    }
+    $clone = json_decode(json_encode($session), true);
+    if ($_conn !== null) {
+      $clone['_conn'] = $_conn;
+      $session['_conn'] = $_conn;
+    }
+    return $clone;
   }
 
   /**
@@ -803,6 +927,7 @@ class XibbitHub {
         || isset($_REQUEST['XIO'])) {
       // the connection values
       $socket = &$this->socketio->wrapSocket('', array('impl'=>$this));
+      $self->sessions[0]['_conn']['sockets'][] = $socket;
 
       // socket connected
       $socket->on('connect', function($event) use ($self, $socket) {
@@ -858,13 +983,6 @@ class XibbitHub {
                 $handled = true;
               }
             }
-            if (!$handled) {
-              // add _session and _conn properties for convenience
-              $event['_session'] = $self->session;
-              $event['_conn'] = array(
-                'socket'=>$socket
-              );
-            }
             // handle _instance event
             if (!$handled && ($event['type'] === '_instance')) {
               $created = 'retrieved';
@@ -887,19 +1005,17 @@ class XibbitHub {
                 }
                 // create a new instance for every tab even though they share session cookie
                 $event['instance'] = $instance;
-                $event['sid'] = $socket->sid;
-                $_SESSION['instance_'.$instance] = array(
-                  'instance'=>$instance
-                );
-                // save pseudo $_SESSION
+                // save new instance_id in session
+                $session['session_data']['instance_id'] = $instance;
+                $self->setSessionData($socket, $session['session_data']);
                 $self->socketSession->save();
+              } else {
+                $this->combineSessions($instance, $socket);
               }
               // update request with instance for convenience
-              $_REQUEST['instance'] = $instance;
-              $self->session = $this->getSessionByInstance($instance);
-              $self->setSession($socket, $self->session);
-              $event['_session'] = $self->session;
+              $session = $this->getSessionByInstance($instance);
               $event['i'] = 'instance '.$created;
+              $_REQUEST['instance'] = $instance;
               if ($this->useSocketIO) {
                 $syncEvent = array('instance'=>$instance);
                 $self->send($syncEvent, $socket->sid.'_sync', true);
@@ -907,8 +1023,13 @@ class XibbitHub {
             }
             // handle the event
             if (!$handled) {
+              $event['_session'] = $session['session_data'];
+              $event['_conn'] = array(
+                'socket'=>$socket
+              );
               $eventReply = $self->trigger($event);
-              $self->setSession($socket, $self->session);
+              // save session changes
+              $self->setSessionData($socket, $eventReply['_session']);
               // remove the session property
               if (isset($eventReply['_session'])) {
                 unset($eventReply['_session']);
@@ -939,8 +1060,7 @@ class XibbitHub {
       });
       // socket disconnected
       $socket->on('disconnect', function($event) use ($self, $socket) {
-        $session = &$self->getSession($socket);
-        $self->removeSession($socket);
+        $self->removeSocketFromSession($socket);
         $this->checkClock();
       });
 
@@ -973,7 +1093,7 @@ class XibbitHub {
           for ($w=0; ($w < 80) && (count($packetsOut) === 0); ++$w) {
             if (!isset($_REQUEST['instance'])) {
               $instance = null;
-              $events = $this->receive($events, $this->session, true, $localSid.'_sync');
+              $events = $this->receive($events, $this->sessions[0]['session_data'], true, $localSid.'_sync');
               if (count($events) > 0) {
                 if (isset($events[0][1]['instance'])) {
                   $instance = $events[0][1]['instance'];
@@ -982,7 +1102,7 @@ class XibbitHub {
               }
               if ($instance !== null) {
                 $_REQUEST['instance'] = $instance;
-                $this->session['instance'] = $instance;
+                $this->sessions[0]['session_data']['instance_id'] = $instance;
               }
             }
             if (isset($_REQUEST['instance'])) {
@@ -992,7 +1112,7 @@ class XibbitHub {
                 $packetsOut[] = $this->createPacket(4, '2'.$emittedEvent);
               }
               // read events sent to this socket from other sockets
-              $events = $this->receive($events, $this->session);
+              $events = $this->receive($events, $this->sessions[0]['session_data']);
               foreach ($events as $event) {
                 $packetsOut[] = $this->createPacket(4, '2'.json_encode($event));
               }
@@ -1071,7 +1191,7 @@ class XibbitHub {
       // parse the event
       $event = json_decode($event, true);
       $socket->handle('server', $event);
-      $events = $this->receive($events, $this->session);
+      $events = $this->receive($events, $this->sessions[0]['session_data']);
       for ($e=0; $e < count($events); ++$e) {
         $socket->emit($events[$e][0], $events[$e][1]);
       }
@@ -1115,7 +1235,7 @@ class XibbitHub {
     foreach ($fileEvents as $event=>$files) {
       if (count($files) > 0) {
         $event = array(
-          '_session'=>$this->session,
+          '_session'=>$this->sessions[0]['session_data'],
           'type'=>$event
         );
         $event = array_merge($event, $files);
@@ -1293,8 +1413,8 @@ class XibbitHub {
     }
     // determine authentication
     $authenticated = false;
-    if (isset($event['_session']) && isset($event['_session']['username'])
-        && ($event['_session']['username'] !== '')) {
+    if (isset($event['_session']) && isset($event['_session']['_username'])
+        && ($event['_session']['_username'] !== '')) {
       $authenticated = true;
     }
     // try to find event handler to invoke
@@ -1346,21 +1466,23 @@ class XibbitHub {
       }
     }
     // preserve the special "username" property
-    $username = isset($this->session['username'])? $this->session['username']: null;
+    $username = isset($this->sessions[0]['session_data']['_username'])? $this->sessions[0]['session_data']['_username']: null;
     // update the session since the user can change it
     if (isset($eventReply['_session'])) {
-      $this->session = $eventReply['_session'];
+      $this->sessions[0]['session_data'] = $eventReply['_session'];
       // restore the special "username" property, overwrite user changes
       if ($username !== null) {
-        $this->session['username'] = $username;
+        $this->sessions[0]['session_data']['_username'] = $username;
       }
-      if (($username === null) && isset($this->session['username'])) {
-        unset($this->session['username']);
+      if (($username === null) && isset($this->sessions[0]['session_data']['_username'])) {
+        unset($this->sessions[0]['session_data']['_username']);
       }
       // update $_SESSION array if it was modified
       if (isset($_REQUEST['instance'])) {
         $instance = $_REQUEST['instance'];
-        $_SESSION['instance_'.$instance] = $this->session;
+        $_SESSION['instance_'.$instance] = $this->sessions[0]['session_data'];
+        $_SESSION['instance_'.$instance]['instance'] = $this->sessions[0]['session_data']['instance_id'];
+        unset($_SESSION['instance_'.$instance]['instance_id']);
       }
       //TODO replace __receive _session ignore hack
       // For Socket.IO long polling, __receive() is called
@@ -1442,7 +1564,7 @@ class XibbitHub {
     if ($collectOnly) {
       $newEvents = array();
       $localSid = isset($_REQUEST['sid'])? $_REQUEST['sid']: '';
-      $username = isset($session['username'])? $session['username']: '';
+      $username = isset($session['_username'])? $session['_username']: '';
       $sid = $this->useSocketIO? $localSid: $username;
       if ($asRecipient !== '') {
         $sid = $asRecipient;
@@ -1511,14 +1633,14 @@ class XibbitHub {
     $instance = isset($_REQUEST['instance'])? $_REQUEST['instance']: null;
     if ($this->getSessionByInstance($instance) !== null) {
       if ($connect) {
-        $event['_session']['username'] = $username;
-        $this->session['username'] = $username;
+        $event['_session']['_username'] = $username;
+        $this->sessions[0]['session_data']['_username'] = $username;
       } else {
-        if (isset($event['_session']['username'])) {
-          unset($event['_session']['username']);
+        if (isset($event['_session']['_username'])) {
+          unset($event['_session']['_username']);
         }
-        if (isset($this->session['username'])) {
-          unset($this->session['username']);
+        if (isset($this->sessions[0]['session_data']['_username'])) {
+          unset($this->sessions[0]['session_data']['_username']);
         }
       }
     }
@@ -1530,9 +1652,9 @@ class XibbitHub {
    *
    * @author DanielWHoward
    **/
-  function touch($session) {
-    if (isset($session['username'])) {
-      $username = $session['username'];
+  function touch($sessionData) {
+    if (isset($sessionData['_username'])) {
+      $username = $sessionData['_username'];
       // update last ping for this user in the database
       $touched = date('Y-m-d H:i:s', time());
       $nullDateTime = '1970-01-01 00:00:00';

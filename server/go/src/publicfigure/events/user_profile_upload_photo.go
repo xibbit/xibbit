@@ -28,8 +28,8 @@ package events
 import (
 	"io"
 	"os"
+	"publicfigure/pfapp"
 )
-	//"publicfigure/pfapp"
 
 /**
  * Handle user_profile event.  Get this user's
@@ -38,9 +38,22 @@ import (
  * @author DanielWHoward
  **/
 func User_profile_upload_photo(event map[string]interface{}, vars map[string]interface{}) map[string]interface{} {
-	//pf := vars["pf"].(*pfapp.Pfapp)
+	pf := vars["pf"].(*pfapp.Pfapp)
 
-	username := event["_session"].(map[string]interface{})["username"].(string)
+	uid := event["_session"].(map[string]interface{})["uid"].(int)
+
+	// find user in the database
+	username := ""
+	mes, _ := pf.ReadRows(map[string]interface{}{
+		"table": "users",
+		"where": map[string]interface{}{
+			"uid": uid,
+		},
+	})
+	if (len(mes) == 1) {
+		username = mes[0]["username"].(string)
+	}
+
 	perm_fn, err := os.Create("./public/images/"+username+".png")
 	success := true
 	if err != nil {

@@ -59,7 +59,7 @@ self.on('api', '_instance', (event, {hub, pf, useInstances}, callback) => {
         connected: now,
         touched: now
       };
-      event._session.instance = instance;
+      event._session.instance_id = instance;
       pf.insertRow({
         'table': 'instances',
         values
@@ -83,7 +83,7 @@ self.on('api', '_instance', (event, {hub, pf, useInstances}, callback) => {
         table: 'instances',
         values,
         where: {
-          instance: event._session.instance
+          instance: event._session.instance_id
       }}, function() {
         callback(null, event);
       });

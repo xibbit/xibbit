@@ -38,7 +38,19 @@ const {array_merge} = require('../array');
 module.exports = on('user_profile_upload_photo', (event, {pf}) =>
   async (resolve, reject) => { try {
 
-  const username = event._session.username;
+  const {uid} = event._session;
+
+  // find user in the database
+  let username = '';
+  const mes = await pf.readRows({
+    table: 'users',
+    where: {
+      uid
+  }});
+  if (mes.length === 1) {
+    username = mes[0].username;
+  }
+
   const perm_fn = './public/images/'+username+'.png';
   let success = false;
   try {

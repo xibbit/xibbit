@@ -48,12 +48,13 @@ module.exports = function() {
     }
     config.vars.hub = this;
     this.config = config;
+    this.suppressCloneSession = false;
     this.handler_groups = {
       'api': {},
       'on': {},
       'int': {}
     };
-    this.sessions = {};
+    this.sessions = [];
     this.prefix = '';
     this.socketio = config.socketio;
     if (this.config['mysql'] && this.config['mysql']['SQL_PREFIX']) {
@@ -79,65 +80,100 @@ module.exports = function() {
 
   /**
    * Get the session associated with a socket which always
-   * has a data key and a _conn key.  The _conn key has a
-   * map that contains a sockets key with an array of
+   * has a session_data key and a _conn key.  The _conn key
+   * has a map that contains a sockets key with an array of
    * sockets.  A socket is globally unique in the sessions
-   * object.  The session may also have a username key and
-   * an instance key.
+   * object.
    *
-   * An instance is also globally unique.  A socket may
-   * have a non-instance session or may be combined with
-   * other sockets for an instanced session.
+   * There is an instance_id key in the session_data map
+   * which is globally unique or the empty string.
    *
-   * @param sock socketio.Conn A socket.
+   * Multiple sockets can be associated with the same
+   * session (browser reloads).
+   *
+   * A socket will not have an instance_id until it receives
+   * an _instance event.
+   *
+   * @param sock Object A socket.
+   * @return map The session object with session_data and _conn keys.
    *
    * @author DanielWHoward
    **/
   XibbitHub.prototype.getSession = function(sock) {
-    //TODO unimplemented getSession()
-    return {};
+    var self = this;
+    var session = null;
+    var i = self.getSessionIndex(sock);
+    if (i !== -1) {
+      session = self.cloneSession(self.sessions[i])
+    }
+    return session;
   };
 
   /**
    * This is an implementation helper.  It assumes that
    * the session store is an array.
    *
-   * @param sock socketio.Conn A socket.
+   * @param sock Object A socket.
    * @returns int The index into a session array.
    *
    * @author DanielWHoward
    **/
   XibbitHub.prototype.getSessionIndex = function(sock) {
-    //TODO unimplemented getSessionIndex()
-    return -1
+    var self = this;
+    for (var s=0; s < self.sessions.length; ++s) {
+      for (var ss=0; ss < self.sessions[s]._conn.sockets.length; ++ss) {
+        if (self.sessions[s]._conn.sockets[ss].id === sock.id) {
+          return s;
+        }
+      }
+    }
+    return -1;
   };
 
   /**
    * Get the session associated with an instance.
    *
-   * @param instance string An instance string.
+   * @param instance_id string An instance string.
    *
    * @author DanielWHoward
    **/
-  XibbitHub.prototype.getSessionByInstance = function(instance) {
+  XibbitHub.prototype.getSessionByInstance = function(instance_id) {
     var self = this;
-    if (self.sessions[instance]) {
-      return self.sessions[instance];
+    if ((typeof instance_id === 'string') && (instance_id !== '')) {
+      for (var s=0; s < self.sessions.length; ++s) {
+        var session = self.sessions[s];
+        if (session.session_data.instance_id == instance_id) {
+          return self.cloneSession(session);
+        }
+      }
     }
     return null;
   };
 
   /**
-   * Change the session associated with a socket.
+   * Get the session associated with a user (an
+   * addressable recepient of a send message).
    *
-   * @param sock socketio.Conn A socket.
-   * @param session Object The session values.
+   * The special &quot;all&quot; username refers
+   * to all sessions.
+   *
+   * @param username string The username.
    *
    * @author DanielWHoward
    **/
-  XibbitHub.prototype.setSession = function(sock, session) {
+  XibbitHub.prototype.getSessionsByUsername = function(username) {
     var self = this;
-    self.sessions[session.instance] = session;
+    var sessions = [];
+    if (username === 'all') {
+      sessions = self.sessions;
+    } else {
+      for (var s=0; s < self.sessions.length; ++s) {
+        if (self.sessions[s].session_data._username === username) {
+          sessions.push(self.sessions[s]);
+        }
+      }
+    }
+    return sessions;
   };
 
   /**
@@ -148,9 +184,23 @@ module.exports = function() {
    *
    * @author DanielWHoward
    **/
-  XibbitHub.prototype.setSessionByInstance = function(instance, session) {
+  XibbitHub.prototype.setSessionData = function(sock, sessionData) {
     var self = this;
-    self.sessions[instance]['session'] = session;
+    var i1 = self.getSessionIndex(sock);
+    if (i1 == -1) {
+    } else {
+      var clone = self.cloneSession(sessionData);
+      var ss = 0;
+      for (ss=0; ss < self.sessions[i1]._conn.sockets.length; ++ss) {
+        if (self.sessions[i1]._conn.sockets[ss].id === sock.id) {
+          break;
+        }
+      }
+      if (ss === self.sessions[i1]._conn.sockets.length) {
+        self.sessions[i1]._conn.sockets.push(sock);
+      }
+      self.sessions[i1].session_data = clone;
+    }
   };
 
   /**
@@ -161,7 +211,18 @@ module.exports = function() {
    * @author DanielWHoward
    **/
   XibbitHub.prototype.addSession = function(sock) {
-    //TODO unimplemented addSession()
+    var self = this;
+    var session = {
+      session_data: {
+        instance_id: ''
+      },
+      _conn: {
+        sockets: [
+          sock
+        ]
+      }
+    };
+    self.sessions.push(session);
   };
 
   /**
@@ -172,20 +233,87 @@ module.exports = function() {
    *
    * @author DanielWHoward
    **/
-  XibbitHub.prototype.removeSession = function(sock) {
-    //TODO unimplemented removeSession()
+  XibbitHub.prototype.removeSocketFromSession = function(sock) {
+    //TODO unimplemented removeSocketFromSession()
+    var self = this;
+    var i1 = self.getSessionIndex(sock);
+    if (i1 == -1) {
+    } else {
+      var ss = 0;
+      for (ss=0; ss < self.sessions[i1]._conn.sockets.length; ++ss) {
+        if (self.sessions[i1]._conn.sockets[ss].id === sock.id) {
+          break;
+        }
+      }
+      if (ss < self.sessions[i1]._conn.sockets.length) {
+        self.sessions[i1]._conn.sockets.splice(ss, 1);
+      }
+    }
   };
 
   /**
-   * Return a duplicate of the session, though the _conn is shared.  A
-   * clone prevents code from relying on shared pointers.
+   * Delete the session that contains a socket and
+   * add the socket to the session which represents
+   * an instance.
    *
-   * @param session Object The session values.
+   * When a socket connects, it is assigned to a new
+   * empty session but, when the _instance event
+   * arrives, that socket might need to be assigned
+   * to an existing session and the new session
+   * destroyed.
+   *
+   * @param instance_id string The instance to add the socket to.
+   * @param sock socketio.Conn The socket to be moved.
+   *
+   * @author DanielWHoward
+   **/
+  XibbitHub.prototype.combineSessions = function(instance_id, sock) {
+    var self = this;
+    var i = self.getSessionIndex(sock);
+    self.sessions.splice(i, 1);
+    for (var s=0; s < self.sessions.length; ++s) {
+      if (self.sessions[s].session_data.instance_id === instance_id) {
+        self.sessions[s]._conn.sockets.push(sock);
+        break;
+      }
+    }
+  };
+
+  /**
+   * Return a duplicate of the session with no shared
+   * pointers except for the special _conn key, if it
+   * exists.  This method works for the entire session
+   * or just the session_data in a session.
+   *
+   * A clone prevents a common coding error where the
+   * code relies on shared pointers rather than using
+   * the setSessionData() method.
+   *
+   * The usual implementation is to convert to JSON and
+   * then back again.  For some types, a workaround must
+   * be implemented.
+   *
+   * @param session map The session or session_data.
+   * @return map The clone.
    *
    * @author DanielWHoward
    **/
   XibbitHub.prototype.cloneSession = function(session) {
-    return JSON.parse(JSON.stringify(session));
+    var self = this;
+    if (self.suppressCloneSession) {
+      return session;
+    }
+    var conn = null;
+    if (session.hasOwnProperty('_conn')) {
+      conn = session._conn;
+      delete session._conn;
+    }
+    var clone = JSON.parse(JSON.stringify(session));
+    if (conn !== null) {
+      clone._conn = conn;
+      session._conn = conn;
+    }
+    return clone;
   };
 
   /**
@@ -286,21 +414,11 @@ module.exports = function() {
       if (session === null) {
         self.addSession(socket);
       }
-      // the connection values
-      session = {
-        instance: '',
-        username: null,
-        session_data: {
-        },
-        '_conn': {
-          'socket': socket 
-        }
-      };
       // decode the event
       socket.on('server', function(event) {
         var allowedKeys = ['_id'];
         var allowedTypes = ['_instance'];
-        var sess = self.getSession(socket);
+        var session = self.getSession(socket);
         // process the event
         var events = [];
         var handled = false;
@@ -342,14 +460,6 @@ module.exports = function() {
                 handled = true;
               }
             }
-            if (!handled) {
-              // add _session and _conn properties for convenience
-              event['_session'] = session.session_data;
-              event['_conn'] = {
-                socket: socket,
-                user: session
-              };
-            }
             // handle _instance event
             if (!handled && (event.type === '_instance')) {
               var created = 'retrieved';
@@ -371,29 +481,31 @@ module.exports = function() {
                 }
                 // create a new instance for every tab even though they share session cookie
                 event.instance = instance;
-                session.instance = instance;
-                self.setSession(socket, session);
+                // save new instance_id in session
+                session.session_data.instance_id = instance;
+                self.setSessionData(socket, session.session_data);
+              } else {
+                self.combineSessions(instance, socket);
               }
-              // update request with instance for convenience
               session = self.getSessionByInstance(instance);
-              self.setSession(socket, session);
-              session._conn.socket = socket;
-              event._session = session.session_data;
-//              event._session.instance = instance;
-//              event._conn = session._conn;
               event.i = 'instance '+created;
             }
             // handle the event
             if (!handled) {
+              event._session = session.session_data;
+              event._conn = {
+                socket: socket
+              };
               self.trigger(event, function(e, eventReply) {
-              self.setSession(socket, session);
+              // save session changes
+              self.setSessionData(socket, eventReply._session);
               // remove the session property
-              if (eventReply['_session']) {
-                delete eventReply['_session'];
+              if (eventReply._session) {
+                delete eventReply._session;
               }
               // remove the connection property
-              if (eventReply['_conn']) {
-                delete eventReply['_conn'];
+              if (eventReply._conn) {
+                delete eventReply._conn;
               }
               // _instance event does not require an implementation; it's optional
               if ((eventReply['type'] === '_instance') && eventReply['e']
@@ -423,24 +535,27 @@ module.exports = function() {
       });
       // socket disconnected
       socket.on('disconnect', function() {
-        var sess = self.getSession(socket);
-        self.removeSession(socket);
+        self.removeSocketFromSession(socket);
         self.checkClock(function() {});
-        delete session._conn.socket;
       });
       });
 
       // run the garbage collector
       setInterval(function() {
         self.checkClock(function() {});
-        for (var session in self.sessions) {
-          self.receive([], self.sessions[session].session_data, false, function(e, events) {
-            for (e=0; e < events.length; ++e) {
-              if (self.sessions[session]._conn.socket) {
-                self.sessions[session]._conn.socket.emit('client', events[e]);
+        for (var s=0; s < self.sessions.length; ++s) {
+          (function(s) {
+            self.receive([], self.sessions[s].session_data, false, function(e, events) {
+              for (e=0; e < events.length; ++e) {
+                for (var ss=0; ss < self.sessions[s]._conn.sockets.length; ++ss) {
+                  try {
+                    self.sessions[s]._conn.sockets[ss].emit('client', events[e]);
+                  } catch (e) {
+                  }
+                }
               }
-            }
-          });
+            });
+          })(s);
         }
       }, 1000);
     }
@@ -706,8 +821,8 @@ module.exports = function() {
     }
     // determine authentication
     var authenticated = false;
-    if (event.hasOwnProperty('_session') && event._session.hasOwnProperty('username')
-        && (event._session.username !== '')) {
+    if (event.hasOwnProperty('_session') && event._session.hasOwnProperty('_username')
+        && (event._session._username !== '')) {
       authenticated = true;
     }
     // try to find event handler to invoke
@@ -832,15 +947,7 @@ module.exports = function() {
         address = event.to;
       }
       if (address) {
-        var recipients = [];
-        if (address === 'all') {
-          recipients = self.getUsers();
-        } else {
-          var user = self.getUser(address);
-          if (user) {
-            recipients.push(user);
-          }
-        }
+        var recipients = self.getSessionsByUsername(address);
         for (var r=0; r < recipients.length; ++r) {
           var clone = self.cloneEvent(event, keysToSkip);
           try {
@@ -896,7 +1003,7 @@ module.exports = function() {
       });
     }
     if (collectOnly) {
-//    if (session.username === null) {
+//    if (session._username === null) {
 //      return events;
 //    }
       callback(null, events);
@@ -953,14 +1060,11 @@ module.exports = function() {
     var self = this;
     // update last connection time for user in the database
     var connected = 0;
-    var user = event._conn.user;
     // update username variables
     if (connect) {
-      user.username = username;
-      user.session_data['username'] = username;
+      event._session._username = username;
     } else {
-      user.session_data['username'] = null;
-      user.username = null;
+      delete event._session._username;
     }
     return event;
   };
@@ -973,8 +1077,8 @@ module.exports = function() {
   XibbitHub.prototype.touch = function(session, callback) {
     callback = callback || function() {};
     var self = this;
-    if (typeof(session.username) !== 'undefined') {
-      var username = session.username;
+    if (typeof(session._username) !== 'undefined') {
+      var username = session._username;
       // update last ping for this user in the database
       var touched = moment(new Date(new Date().getTime())).tz(self.config.time_zone).format('YYYY-MM-DD HH:mm:ss');
       var nullDateTime = '1970-01-01 00:00:00';
@@ -1038,45 +1142,6 @@ module.exports = function() {
         callback(e, !!locked);
       }
     });
-  };
-
-  /**
-   * Return user status, permissions, etc.
-   *
-   * @param username string The user name of the user to retrieve.
-   * @return array The user.
-   *
-   * @author DanielWHoward
-   **/
-  XibbitHub.prototype.getUser = function(username) {
-    var self = this;
-    var user = null;
-    if (self.sessions[username]) {
-      return self.sessions[username];
-    }
-    for (var instance in self.sessions) {
-      if (self.sessions[instance]['username'] === username) {
-        user = self.sessions[instance];
-        break;
-      }
-    }
-    return user;
-  };
-
-  /**
-   * Return all users' status, permissions, etc.
-   *
-   * @return array An array of users.
-   *
-   * @author DanielWHoward
-   **/
-  XibbitHub.prototype.getUsers = function() {
-    var self = this;
-    var users = [];
-    for (var user in self.sessions) {
-      users.push(self.sessions[user]);
-    }
-    return users;
   };
 
   /**

@@ -37,8 +37,19 @@ $self->on('on', 'logout', function($event, $vars) {
 
   noAsserte($event);
 
-  $username = $event['_session']['username'];
-  $instance = $event['_session']['instance'];
+  $uid = $event['_session']['uid'];
+  $instance = $event['_session']['instance_id'];
+
+  // find user in the database
+  $username = '';
+  $mes = $pf->readRows(array(
+    'table'=>'users',
+    'where'=>array(
+      'uid'=>$uid
+  )));
+  if (count($mes) === 1) {
+    $username = $mes[0]['username'];
+  }
 
   // broadcast this instance logged out
   $hub->send(array(
@@ -74,7 +85,9 @@ $self->on('on', 'logout', function($event, $vars) {
   // remove UID and user info from the session
   unset($event['_session']['uid']);
   unset($event['_session']['user']);
-  $event['i'] = 'logged out';
+  if (!isset($event['e'])) {
+    $event['i'] = 'logged out';
+  }
 
   return $event;
 });
