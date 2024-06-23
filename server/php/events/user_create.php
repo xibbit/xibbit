@@ -32,7 +32,7 @@ require_once('./pwd.php');
  * @author DanielWHoward
  **/
 $self = $this;
-$self->api('user_create', function($event, $vars) {
+$self->on('api', 'user_create', function($event, $vars) {
   $pf = $vars['pf'];
 
   asserte(isset($event['username']), 'missing:username');

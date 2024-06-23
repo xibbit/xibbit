@@ -34,7 +34,7 @@ const {api} = require('../xibbit_helpers');
  * @author DanielWHoward
  **/
 module.exports = self => {
-self.api('init', (event, {pf}, callback) => {
+self.on('api', 'init', (event, {pf}, callback) => {
 
   noAsserte(event);
 

@@ -35,7 +35,7 @@ var config = require('../config');
  * @author DanielWHoward
  **/
 module.exports = self => {
-self.api('_instance', (event, {hub, pf, useInstances}, callback) => {
+self.on('api', '_instance', (event, {hub, pf, useInstances}, callback) => {
 
   if (useInstances) {
     var now = moment(new Date()).tz(config.time_zone).format('YYYY-MM-DD HH:mm:ss');

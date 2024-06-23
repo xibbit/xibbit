@@ -40,7 +40,7 @@ var moment = require('moment-timezone');
  * @author DanielWHoward
  **/
 module.exports = self => {
-self.api('__send', function(event, vars, callback) {
+self.on('api', '__send', function(event, vars, callback) {
   var hub = vars.hub;
   var pf = vars.pf;
   var useInstances = vars.useInstances;

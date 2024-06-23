@@ -32,7 +32,7 @@ require_once('./asserte.php');
  * @author Daniel Howard
  **/
 $self = $this;
-$self->on('user_profile_upload_photo', function($event, $vars) {
+$self->on('on', 'user_profile_upload_photo', function($event, $vars) {
   $pf = $vars['pf'];
 
   $username = $event['_session']['username'];

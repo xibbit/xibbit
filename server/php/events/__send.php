@@ -33,7 +33,7 @@ require_once('./asserte.php');
  * @author DanielWHoward
  **/
 $self = $this;
-$self->api('__send', function($event, $vars) {
+$self->on('api', '__send', function($event, $vars) {
   $hub = $vars['hub'];
   $pf = $vars['pf'];
   $useInstances = isset($vars['useInstances']) && $vars['useInstances'];
