@@ -471,114 +471,29 @@ module.exports = function() {
   };
 
   /**
-   * Invoke callbacks for an event.
+   * Search, usually the file system, and dynamically
+   * load an event handler for this event, if supported
+   * by this language/platform.
    *
-   * @param event array The event to handle.
+   * Some languages/platforms do not support loading code
+   * on the fly so this method might do nothing.
+   *
+   * An error is returned if the handler cannot be loaded,
+   * the file is improperly named or other error that the
+   * loader may notice.
+   *
+   * @param event map The event to handle.
+   * @return error If the loader had an error.
    *
    * @author DanielWHoward
    **/
-  XibbitHub.prototype.trigger = function(event, callback) {
+  XibbitHub.prototype.loadHandler = function(event, skip, callback) {
     var self = this;
-    var keysToSkip = ['_conn', '_session'];
     var eventType = event['type'];
+    // get the plugins folder
     var pluginsFolder = null;
-    var handlerFile = null;
-    var handler = null;
-    var invoked = !!event.e;
-    // load event handler dynamically
-    if (invoked) {
-      callback(null, event);
-    } else if (self.handler_groups["on"][eventType] || self.handler_groups["api"][eventType]) {
-      // clone the event
-      var eventReply = self.cloneEvent(event, keysToSkip);
-      if (typeof event._conn !== 'undefined') {
-        eventReply._conn = event._conn;
-      }
-      if (typeof event._session !== 'undefined') {
-        eventReply._session = event._session;
-      }
-      if (typeof event._id !== 'undefined') {
-        eventReply._id = event._id;
-      }
-      // find the event handler to invoke
-      handler = ((handler === null) && self.handler_groups["on"][eventType])? self.handler_groups["on"][eventType]: handler;
-      handler = ((handler === null) && self.handler_groups["api"][eventType])? self.handler_groups["api"][eventType]: handler;
-      // authenticate
-      if (self.handler_groups["on"][eventType] && !event['from'] && !event._session && !event._session.username) {
-        if (self.handler_groups["api"][eventType]) {
-          handler = self.handler_groups["api"][eventType];
-        } else {
-          eventReply.e = 'unauthenticated';
-          callback(null, eventReply);
-          invoked = true;
-        }
-      }
-      // invoke the handler
-      if (!invoked) {
-        try {
-          var deferredFn = handler(eventReply, self.config.vars, function(err, eventReply) {
-            // handle asynchronous asserte() failure
-            if (!eventReply.type) {
-              let e = eventReply;
-              eventReply = self.cloneEvent(event, keysToSkip);
-              if (typeof event._conn !== 'undefined') {
-                eventReply._conn = event._conn;
-              }
-              if (typeof event._session !== 'undefined') {
-                eventReply._session = event._session;
-              }
-              if (typeof event._id !== 'undefined') {
-                eventReply._id = event._id;
-              }
-              eventReply.e = e;
-            }
-            callback(null, eventReply);
-          });
-          if (deferredFn) {
-            new Promise(deferredFn).then(eventReply => {
-              // handle asynchronous asserte() failure
-              if (!eventReply.type) {
-                let e = eventReply;
-                eventReply = self.cloneEvent(event, keysToSkip);
-                if (typeof event._conn !== 'undefined') {
-                  eventReply._conn = event._conn;
-                }
-                if (typeof event._session !== 'undefined') {
-                  eventReply._session = event._session;
-                }
-                if (typeof event._id !== 'undefined') {
-                  eventReply._id = event._id;
-                }
-                eventReply.e = e.message;
-                eventReply.e_stacktrace = e.stack;
-                console.error(e);
-              }
-              callback(null, eventReply);
-            }).catch(e => {
-              eventReply.e = e.message;
-              eventReply.e_stacktrace = e.stack;
-              console.error(e);
-              callback(null, eventReply);
-            });
-          }
-        } catch (e) {
-          // handle synchronous asserte() failure
-          if (e.stack) {
-            eventReply.e = 'Error';
-            eventReply.e_stacktrace = e.stack;
-          } else if ((e !== '') || (typeof e === 'string')) {
-            eventReply.e = e;
-          } else {
-            try {
-              eventReply.e = JSON.stringify(e);
-            } catch (ee) {
-              eventReply.e = 'nostringify:'+(typeof e);
-            }
-          }
-          console.error(e);
-          callback(null, eventReply);
-        }
-      }
+    if (skip) {
+      callback(null);
     } else {
       // get the plugins folder
       if (self.config['plugins']
@@ -768,6 +683,127 @@ module.exports = function() {
         });
       });
     }
+  };
+
+  /**
+   * Invoke callbacks for an event.
+   *
+   * @param event array The event to handle.
+   *
+   * @author DanielWHoward
+   **/
+  XibbitHub.prototype.trigger = function(event, callback) {
+    var self = this;
+    // clone the event
+    var keysToSkip = ['_conn', '_session', 'image'];
+    var eventType = event['type'];
+    var eventReply = self.cloneEvent(event, keysToSkip);
+    for (var k=0; k < keysToSkip.length; ++k) {
+      var key = keysToSkip[k];
+      if (event.hasOwnProperty(key)) {
+        eventReply[key] = event[key];
+      }
+    }
+    // determine authentication
+    var authenticated = false;
+    if (event.hasOwnProperty('_session') && event._session.hasOwnProperty('username')
+        && (event._session.username !== '')) {
+      authenticated = true;
+    }
+    // try to find event handler to invoke
+    var handler = null;
+    var onHandler = self.handler_groups['on'][eventType] || null;
+    var apiHandler = self.handler_groups['api'][eventType] || null;
+    // try to load event handler dynamically
+    var skipLoad = (onHandler !== null) || (apiHandler !== null);
+    self.loadHandler(event, skipLoad, function(e) {
+      if (e !== null) {
+        eventReply.e = e;
+      }
+      // try to find event handler to invoke again
+      var onHandler = self.handler_groups['on'][eventType] || null;
+      var apiHandler = self.handler_groups['api'][eventType] || null;
+      // determine event handler to invoke
+      if (eventReply.hasOwnProperty('e')) {
+        handler = null;
+      } else if ((onHandler !== null) && authenticated) {
+        handler = onHandler;
+      } else if (apiHandler !== null) {
+        handler = apiHandler;
+      } else if ((onHandler !== null) && !authenticated) {
+        handler = null;
+        eventReply.e = 'unauthenticated';
+      } else {
+        handler = null;
+        eventReply.e = 'unimplemented';
+      }
+      // invoke the handler
+      if (handler !== null) {
+        try {
+          var deferredFn = handler(eventReply, self.config.vars, function(err, eventReply) {
+            // handle asynchronous asserte() failure
+            if (!eventReply.type) {
+              let e = eventReply;
+              eventReply = self.cloneEvent(event, keysToSkip);
+              if (typeof event._conn !== 'undefined') {
+                eventReply._conn = event._conn;
+              }
+              if (typeof event._session !== 'undefined') {
+                eventReply._session = event._session;
+              }
+              if (typeof event._id !== 'undefined') {
+                eventReply._id = event._id;
+              }
+              eventReply.e = e;
+            }
+            callback(null, eventReply);
+          });
+          if (deferredFn) {
+            return new Promise(deferredFn).then(eventReply => {
+              // handle asynchronous asserte() failure
+              if (!eventReply.type) {
+                let e = eventReply;
+                eventReply = self.cloneEvent(event, keysToSkip);
+                if (typeof event._conn !== 'undefined') {
+                  eventReply._conn = event._conn;
+                }
+                if (typeof event._session !== 'undefined') {
+                  eventReply._session = event._session;
+                }
+                if (typeof event._id !== 'undefined') {
+                  eventReply._id = event._id;
+                }
+                eventReply.e = e.message;
+                eventReply.e_stacktrace = e.stack;
+                console.error(e);
+              }
+              callback(null, eventReply);
+            }).catch(e => {
+              eventReply.e = e.message;
+              eventReply.e_stacktrace = e.stack;
+              console.error(e);
+              callback(null, eventReply);
+            });
+          }
+        } catch (e) {
+          // handle synchronous asserte() failure
+          if (e.stack) {
+            eventReply.e = 'Error';
+            eventReply.e_stacktrace = e.stack;
+          } else if ((e !== '') || (typeof e === 'string')) {
+            eventReply.e = e;
+          } else {
+            try {
+              eventReply.e = JSON.stringify(e);
+            } catch (ee) {
+              eventReply.e = 'nostringify:'+(typeof e);
+            }
+          }
+          console.error(e);
+          callback(null, eventReply);
+        }
+      }
+    });
   };
 
   /**
