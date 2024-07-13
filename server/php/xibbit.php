@@ -1144,6 +1144,136 @@ class XibbitHub {
   }
 
   /**
+   * Search, usually the file system, and dynamically
+   * load an event handler for this event, if supported
+   * by this language/platform.
+   *
+   * Some languages/platforms do not support loading code
+   * on the fly so this method might do nothing.
+   *
+   * An error is returned if the handler cannot be loaded,
+   * the file is improperly named or other error that the
+   * loader may notice.
+   *
+   * @param $event map The event to handle.
+   * @return Exception If the loader had an error.
+   *
+   * @author DanielWHoward
+   **/
+  function loadHandler($event) {
+    $e = '';
+    $eventType = $event['type'];
+    $handlerFile = null;
+    // get the plugins folder
+    $pluginsFolder = null;
+    if (isset($this->config['plugins'])
+        && isset($this->config['plugins']['folder'])) {
+      $pluginsFolder = $this->config['plugins']['folder'];
+    }
+    // search for the event handler in the plugins folder
+    if ($pluginsFolder !== null) {
+      $dh = opendir($pluginsFolder);
+      if ($dh !== false) {
+        $file = readdir($dh);
+        while (($file !== false) && ($handlerFile === null)) {
+          if (($file !== '.') && ($file !== '..')) {
+            $file = $pluginsFolder.'/'.$file.'/server/php/events/'
+              .$eventType.'.php';
+            if (file_exists($file)) {
+              $handlerFile = $file;
+            }
+          }
+          $file = readdir($dh);
+        }
+      } else {
+        $e = 'plugins--missing:'.$pluginsFolder;
+        $invoked = true;
+      }
+    }
+    // search for the event handler in the events folder
+    if ($handlerFile === null) {
+      $file = 'events/'.$eventType.'.php';
+      if (file_exists($file)) {
+        $handlerFile = $file;
+      }
+    }
+    // try to load the event handler
+    if ($handlerFile !== null) {
+      $apifn = $this->handler_groups['api'];
+      $onfn = $this->handler_groups['on'];
+//       $handlerCode = file_get_contents($handlerFile);
+//       $handlerCode = str_replace('..', '.', $handlerCode);
+      include $handlerFile;
+      if (($apifn === $this->handler_groups['api']) && ($onfn === $this->handler_groups['on'])) {
+        // found the file but didn't get an event handler
+        $e = 'unhandled:'.$handlerFile;
+      } elseif (!isset($this->handler_groups['on'][$eventType])
+          && !isset($this->handler_groups['api'][$eventType])) {
+        // found the file but got an event handler with a different name
+        $e = 'mismatch:'.$handlerFile;
+      }
+    } elseif (!$invoked) {
+      // find all the folders that contain handlers
+      $handlerFolders = array();
+      if ($pluginsFolder !== null) {
+        $dh = opendir($pluginsFolder);
+        if ($dh !== false) {
+          $file = readdir($dh);
+          while ($file !== false) {
+            if (($file !== '.') && ($file !== '..')
+                && is_dir($pluginsFolder.'/'.$file.'/server/php/events')) {
+              $handlerFolders[] = $pluginsFolder.$file.'/server/php/events';
+            }
+            $file = readdir($dh);
+          }
+          closedir($dh);
+        }
+      }
+      if (is_dir('events')) {
+        $handlerFolders[] = 'events';
+      }
+      // find all the event handler files
+      $handlerFiles = array();
+      for ($p=0; $p < count($handlerFolders); ++$p) {
+        $handlerFolder = $handlerFolders[$p];
+        $dh = opendir($handlerFolder);
+        if ($dh !== false) {
+          $file = readdir($dh);
+          while ($file !== false) {
+            if (($file !== '.') && ($file !== '..')
+                && is_file($handlerFolder.'/'.$file)) {
+              $handlerFiles[] = $handlerFolder.'/'.$file;
+            }
+            $file = readdir($dh);
+          }
+          closedir($dh);
+        }
+      }
+      // see if some event handler files have similar names
+      $misnamed = null;
+      if (!in_array($eventType, array('__receive', '__send'))) {
+        for ($f=0; $f < count($handlerFiles); ++$f) {
+          $file = $handlerFiles[$f];
+          $pos = strrpos($file, '/');
+          if (is_int($pos) && ($pos >= 0)
+              && (substr($file, $pos+1, strlen($eventType.'.')) === $eventType.'.')) {
+            $misnamed = $file;
+            break;
+          }
+        }
+      }
+      if ($misnamed === null) {
+        // did not find a file with an event handler
+        $e = 'unimplemented';
+      } else {
+        // found a file with a similar but incorrect name
+        $e = 'misnamed:'.$misnamed;
+      }
+    }
+    return $e;
+  }
+
+  /**
    * Invoke callbacks for an event.
    *
    * @param $event array The event to handle.
@@ -1152,152 +1282,60 @@ class XibbitHub {
    * @author DanielWHoward
    **/
   function trigger($event, $useInternalHandlers=true) {
+    // clone the event
+    $keysToSkip = array('_conn', '_session', 'image');
     $eventType = $event['type'];
-    $handlerFile = null;
-    // load event handler dynamically
-    if (!isset($this->handler_groups['on'][$eventType])
-        && !isset($this->handler_groups['api'][$eventType])) {
-      // get the plugins folder
-      $pluginsFolder = null;
-      if (isset($this->config['plugins'])
-          && isset($this->config['plugins']['folder'])) {
-        $pluginsFolder = $this->config['plugins']['folder'];
-      }
-      // search for the event handler in the plugins folder
-      if ($pluginsFolder !== null) {
-        $dh = opendir($pluginsFolder);
-        if ($dh !== false) {
-          $file = readdir($dh);
-          while (($file !== false) && ($handlerFile === null)) {
-            if (($file !== '.') && ($file !== '..')) {
-              $file = $pluginsFolder.'/'.$file.'/server/php/events/'
-                .$eventType.'.php';
-              if (file_exists($file)) {
-                $handlerFile = $file;
-              }
-            }
-            $file = readdir($dh);
-          }
-        } else {
-          $event['e'] = 'plugins--missing:'.$pluginsFolder;
-          $invoked = true;
-        }
-      }
-      // search for the event handler in the events folder
-      if ($handlerFile === null) {
-        $file = 'events/'.$eventType.'.php';
-        if (file_exists($file)) {
-          $handlerFile = $file;
-        }
-      }
-      // try to load the event handler
-      if ($handlerFile !== null) {
-        $apifn = $this->handler_groups['api'];
-        $onfn = $this->handler_groups['on'];
-//         $handlerCode = file_get_contents($handlerFile);
-//         $handlerCode = str_replace('..', '.', $handlerCode);
-        include $handlerFile;
-        if (($apifn === $this->handler_groups['api']) && ($onfn === $this->handler_groups['on'])) {
-          // found the file but didn't get an event handler
-          $event['e'] = 'unhandled:'.$handlerFile;
-        } elseif (!isset($this->handler_groups['on'][$eventType])
-            && !isset($this->handler_groups['api'][$eventType])) {
-          // found the file but got an event handler with a different name
-          $event['e'] = 'mismatch:'.$handlerFile;
-        }
-      } elseif (!$invoked) {
-        // find all the folders that contain handlers
-        $handlerFolders = array();
-        if ($pluginsFolder !== null) {
-          $dh = opendir($pluginsFolder);
-          if ($dh !== false) {
-            $file = readdir($dh);
-            while ($file !== false) {
-              if (($file !== '.') && ($file !== '..')
-                  && is_dir($pluginsFolder.'/'.$file.'/server/php/events')) {
-                $handlerFolders[] = $pluginsFolder.$file.'/server/php/events';
-              }
-              $file = readdir($dh);
-            }
-            closedir($dh);
-          }
-        }
-        if (is_dir('events')) {
-          $handlerFolders[] = 'events';
-        }
-        // find all the event handler files
-        $handlerFiles = array();
-        for ($p=0; $p < count($handlerFolders); ++$p) {
-          $handlerFolder = $handlerFolders[$p];
-          $dh = opendir($handlerFolder);
-          if ($dh !== false) {
-            $file = readdir($dh);
-            while ($file !== false) {
-              if (($file !== '.') && ($file !== '..')
-                  && is_file($handlerFolder.'/'.$file)) {
-                $handlerFiles[] = $handlerFolder.'/'.$file;
-              }
-              $file = readdir($dh);
-            }
-            closedir($dh);
-          }
-        }
-        // see if some event handler files have similar names
-        $misnamed = null;
-        if (!in_array($eventType, array('__receive', '__send'))) {
-          for ($f=0; $f < count($handlerFiles); ++$f) {
-            $file = $handlerFiles[$f];
-            $pos = strrpos($file, '/');
-            if (is_int($pos) && ($pos >= 0)
-                && (substr($file, $pos+1, strlen($eventType.'.')) === $eventType.'.')) {
-              $misnamed = $file;
-              break;
-            }
-          }
-        }
-        if ($misnamed === null) {
-          // did not find a file with an event handler
-          $event['e'] = 'unimplemented';
-        } else {
-          // found a file with a similar but incorrect name
-          $event['e'] = 'misnamed:'.$misnamed;
-        }
+    $eventReply = $this->cloneEvent($event, $keysToSkip);
+    foreach ($keysToSkip as $key) {
+      if (isset($event[$key])) {
+        $eventReply[$key] = $event[$key];
       }
     }
-    $invoked = isset($event['e']);
-    $eventReply = $event;
-    // invoke an authenticated event handler
-    if (!$invoked && isset($this->handler_groups['on'][$eventType])) {
-      if (!isset($this->session['username'])) {
-        if (!isset($this->handler_groups['api'][$eventType])) {
-          $event['e'] = 'unauthenticated';
-          $eventReply = $event;
-          $invoked = true;
-        }
-      } else {
-        try {
-          if (is_string($this->handler_groups['on'][$eventType])) {
-            $eventReply = call_user_func($this->handler_groups['on'][$eventType], $event, $this->config['vars']);
-          } else {
-            $eventReply = $this->handler_groups['on'][$eventType]($event, $this->config['vars']);
-          }
-        } catch (Exception $e) {
-          if ($e->getMessage() === '') {
-            throw $e;
-          }
-          $eventReply['e'] = $e->getMessage();
-          $eventReply['e_stacktrace'] = $e->getTraceAsString();
-        }
-        $invoked = true;
+    // determine authentication
+    $authenticated = false;
+    if (isset($event['_session']) && isset($event['_session']['username'])
+        && ($event['_session']['username'] !== '')) {
+      $authenticated = true;
+    }
+    // try to find event handler to invoke
+    $handler = null;
+    $onHandler = isset($this->handler_groups['on'][$eventType])?
+        $this->handler_groups['on'][$eventType]: null;
+    $apiHandler = isset($this->handler_groups['api'][$eventType])?
+        $this->handler_groups['api'][$eventType]: null;
+    // try to load event handler dynamically
+    if (($onHandler === null) && ($apiHandler === null)) {
+      $e = $this->loadHandler($event);
+      if ($e !== '') {
+        $eventReply['e'] = $e;
       }
     }
-    // invoke an unauthenticated event handler
-    if (!$invoked && $eventType && isset($this->handler_groups['api'][$eventType])) {
+    // try to find event handler to invoke again
+    $onHandler = isset($this->handler_groups['on'][$eventType])?
+        $this->handler_groups['on'][$eventType]: null;
+    $apiHandler = isset($this->handler_groups['api'][$eventType])?
+        $this->handler_groups['api'][$eventType]: null;
+    // determine event handler to invoke
+    if (isset($eventReply['e'])) {
+      $handler = null;
+    } else if (($onHandler !== null) && $authenticated) {
+      $handler = $onHandler;
+    } else if ($apiHandler !== null) {
+      $handler = $apiHandler;
+    } else if (($onHandler !== null) && !$authenticated) {
+      $handler = null;
+      $eventReply['e'] = 'unauthenticated';
+    } else {
+      $handler = null;
+      $eventReply['e'] = 'unimplemented';
+    }
+    // invoke the handler
+    if ($handler !== null) {
       try {
-        if (is_string($this->handler_groups['api'][$eventType])) {
-          $eventReply = call_user_func($this->handler_groups['api'][$eventType], $event, $this->config['vars']);
+        if (is_string($handler)) {
+          $eventReply = call_user_func($handler, $event, $this->config['vars']);
         } else {
-          $eventReply = $this->handler_groups['api'][$eventType]($event, $this->config['vars']);
+          $eventReply = $handler($event, $this->config['vars']);
         }
       } catch (Exception $e) {
         if ($e->getMessage() === '') {
@@ -1306,7 +1344,6 @@ class XibbitHub {
         $eventReply['e'] = $e->getMessage();
         $eventReply['e_stacktrace'] = $e->getTraceAsString();
       }
-      $invoked = true;
     }
     // preserve the special "username" property
     $username = isset($this->session['username'])? $this->session['username']: null;

@@ -30,6 +30,7 @@ import (
 	"database/sql"
 	"encoding/hex"
 	"encoding/json"
+	"errors"
 	"fmt"
 	socketio "github.com/googollee/go-socket.io"
 	"log"
@@ -647,6 +648,27 @@ func (self *XibbitHub) On(group string, typ string, fn func(event map[string]int
 }
 
 /**
+ * Search, usually the file system, and dynamically
+ * load an event handler for this event, if supported
+ * by this language/platform.
+ *
+ * Some languages/platforms do not support loading code
+ * on the fly so this method might do nothing.
+ *
+ * An error is returned if the handler cannot be loaded,
+ * the file is improperly named or other error that the
+ * loader may notice.
+ *
+ * @param event map The event to handle.
+ * @return error If the loader had an error.
+ *
+ * @author DanielWHoward
+ **/
+func (self *XibbitHub) LoadHandler(event map[string]interface{}) error {
+	return errors.New("unimplemented")
+}
+
+/**
  * Invoke callbacks for an event.
  *
  * @param event array The event to handle.
@@ -654,76 +676,65 @@ func (self *XibbitHub) On(group string, typ string, fn func(event map[string]int
  * @author DanielWHoward
  **/
 func (self *XibbitHub) Trigger(event map[string]interface{}) (map[string]interface{}, error) {
+	// clone the event
 	keysToSkip := []string{"_conn", "_session", "image"}
-	var eventType = event["type"].(string)
-	//	var pluginsFolder = nil;
-	//	var handlerFile = nil;
-	//	var handler = nil;
-	_, invoked := event["e"]
+	eventType, _ := event["type"].(string)
+	var eventReply = self.CloneEvent(event, keysToSkip)
+	for _, key := range keysToSkip {
+		if _, exists := event[key]; exists {
+			eventReply[key] = event[key]
+		}
+	}
+	// determine authentication
+	authenticated := false
+	if session, ok := event["_session"].(map[string]interface{}); ok {
+		if username, ok := session["username"]; ok && (username != "") {
+			authenticated = true
+		}
+	}
+	// try to find event handler to invoke
 	var handler func(event map[string]interface{}, vars map[string]interface{}) map[string]interface{} = nil
-	var onHandler func(event map[string]interface{}, vars map[string]interface{}) map[string]interface{} = nil
-	var apiHandler func(event map[string]interface{}, vars map[string]interface{}) map[string]interface{} = nil
-	// find the event handler to invoke
+	onHandler, _ := self.Handler_groups["on"][eventType]
+	apiHandler, _ := self.Handler_groups["api"][eventType]
+	// try to load event handler dynamically
+	if (onHandler == nil) && (apiHandler == nil) {
+		e := self.LoadHandler(event)
+		if e != nil {
+			eventReply["e"] = e.Error()
+		}
+	}
+	// try to find event handler to invoke again
 	onHandler, _ = self.Handler_groups["on"][eventType]
 	apiHandler, _ = self.Handler_groups["api"][eventType]
-	if onHandler != nil {
+	// determine event handler to invoke
+	if _, ok := eventReply["e"]; ok {
+		handler = nil
+	} else if (onHandler != nil) && authenticated {
 		handler = onHandler
-	} else if apiHandler != nil {
+	} else if (apiHandler != nil)  {
 		handler = apiHandler
-	}
-	// load event handler dynamically
-	if invoked {
-		return event, nil
-	} else if handler != nil {
-		// clone the event
-
-		var eventReply = self.CloneEvent(event, keysToSkip)
-		for _, key := range keysToSkip {
-			if _, exists := event[key]; exists {
-				eventReply[key] = event[key]
-			}
-		}
-		// authenticate
-		if self.Handler_groups["on"][eventType] != nil && event["from"] == nil && event["_session"] == nil {
-			if _, ok := self.Handler_groups["api"][eventType]; ok {
-				handler = self.Handler_groups["api"][eventType]
-			} else {
-				eventReply["e"] = "unauthenticated"
-				invoked = true
-			}
-		}
-		// invoke the handler
-		if !invoked {
-			func() {
-				defer func() {
-					if e := recover(); e != nil {
-						eventReply["e"] = e
-						b := make([]byte, 2048) // adjust buffer size to be larger than expected stack
-						n := runtime.Stack(b, false)
-						eventReply["e_stacktrace"] = string(b[:n])
-					}
-				}()
-				eventReply = handler(eventReply, self.config["vars"].(map[string]interface{}))
-			}()
-			if _, ok := eventReply["type"]; !ok {
-				// handle asynchronous asserte() failure
-				e := eventReply
-				eventReply = self.CloneEvent(event, keysToSkip)
-				if _, ok := event["_conn"]; ok {
-					eventReply["_conn"] = event["_conn"]
-				}
-				if _, ok := event["_session"]; ok {
-					eventReply["_session"] = event["_session"]
-				}
-				eventReply["e"] = e
-				return eventReply, nil
-			}
-		}
-		event = eventReply
+	} else if (onHandler != nil) && !authenticated {
+		handler = nil
+		eventReply["e"] = "unauthenticated"
 	} else {
-		// get the plugins folder
+		handler = nil
+		eventReply["e"] = "unimplemented"
 	}
-	return event, nil
+	// invoke the handler
+	if handler != nil {
+		func() {
+			defer func() {
+				if e, _ := recover().(error); e != nil {
+					eventReply["e"] = e.Error()
+					b := make([]byte, 2048) // adjust buffer size to be larger than expected stack
+					n := runtime.Stack(b, false)
+					eventReply["e_stacktrace"] = string(b[:n])
+				}
+			}()
+			eventReply = handler(eventReply, self.config["vars"].(map[string]interface{}))
+		}()
+	}
+	return eventReply, nil
 }
 
 /**
