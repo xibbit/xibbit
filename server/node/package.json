@@ -6,15 +6,15 @@
   "repository": "github:xibbit/xibbit",
   "license": "MIT",
   "dependencies": {
-    "bluebird": "^3.0.1",
-    "express": "^4.5.0",
-    "moment-timezone": "^0.3.0",
-    "morgan": ">= 1.0.0",
+    "bluebird": "^3.7.2",
+    "express": "^4.19.2",
+    "moment-timezone": "^0.5.45",
+    "morgan": ">= 1.10.0",
     "multer": "^1.4.5-lts.1",
-    "mysql": "^2.3.0",
-    "nodemailer": ">= 6.0.0",
-    "socket.io": "^2.0.1",
-    "twin-bcrypt": "^2.0.0",
-    "url": "^0.4.9"
+    "mysql": "^2.18.1",
+    "nodemailer": ">= 6.9.14",
+    "socket.io": "^4.7.5",
+    "twin-bcrypt": "^2.1.1",
+    "url": "^0.11.4"
   }
 }

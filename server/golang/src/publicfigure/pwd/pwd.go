@@ -40,7 +40,7 @@ import (
 	"strings"
 	"time"
 
-	"publicfigure/config"
+	"github.com/xibbit/xibbit/server/golang/src/publicfigure/config"
 )
 
 /**

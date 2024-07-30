@@ -38,7 +38,7 @@ enum ActionTypes {
 /// An action for this app.
 ///
 class Action extends ReduxAction {
-  Action(Map<String, Object> initial) : super(initial);
+  Action(super.initial);
   ActionTypes get type => payload['type'];
   Map get event => payload['event'];
 }

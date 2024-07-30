@@ -32,7 +32,7 @@ import '../modules/services/xibbitservice.dart';
 class SignupPage extends StatefulWidget {
   final Store<dynamic> store;
 
-  SignupPage({Key? key, required this.store}) : super(key: key);
+  const SignupPage({super.key, required this.store});
 
   @override
   _SignupPage createState() => _SignupPage(store: store);
@@ -47,14 +47,14 @@ class _SignupPage extends State<SignupPage> {
 
   _SignupPage({required this.store});
 
-  TextEditingController userController = new TextEditingController();
-  FocusNode userFocus = new FocusNode();
+  TextEditingController userController = TextEditingController();
+  FocusNode userFocus = FocusNode();
 
-  TextEditingController emailController = new TextEditingController();
-  FocusNode emailFocus = new FocusNode();
+  TextEditingController emailController = TextEditingController();
+  FocusNode emailFocus = FocusNode();
 
-  TextEditingController pwdController = new TextEditingController();
-  FocusNode pwdFocus = new FocusNode();
+  TextEditingController pwdController = TextEditingController();
+  FocusNode pwdFocus = FocusNode();
 
   @override
   Widget build(BuildContext context) {
@@ -68,12 +68,12 @@ class _SignupPage extends State<SignupPage> {
       appBar: AppBar(
         // Here we take the value from the SignupPage object that was created by
         // the App.build method, and use it to set our appbar title.
-        title: Text('Sign Up'),
+        title: const Text('Sign Up'),
       ),
       body: Form(
         key: _formKey,
         child: Padding(
-          padding: EdgeInsets.all(24.0),
+          padding: const EdgeInsets.all(24.0),
           child: Column(
             children: <Widget>[
               TextFormField(
@@ -126,13 +126,13 @@ class _SignupPage extends State<SignupPage> {
               Padding(
                 padding: const EdgeInsets.symmetric(vertical: 16.0),
                 child: ElevatedButton(
-                  child: Text('Sign Up'),
+                  child: const Text('Sign Up'),
                   onPressed: () {
                     String username = userController.text;
                     String email = emailController.text;
                     String pwd = pwdController.text;
                     pwd = sha256
-                        .convert(utf8.encode(email + 'xibbit.github.io' + pwd))
+                        .convert(utf8.encode('${email}xibbit.github.io$pwd'))
                         .toString();
                     xibbitService.send({
                       'type': 'user_create',

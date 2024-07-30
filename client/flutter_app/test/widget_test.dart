@@ -5,10 +5,8 @@
 // gestures. You can also use WidgetTester to find child widgets in the widget
 // tree, read text, and verify that the values of widget properties are correct.
 
-import 'package:reselect/reselect.dart';
-import '../lib/modules/platform/reduce.dart' as reducers;
-import '../lib/modules/platform/select.dart';
-import '../lib/actions/action.dart' as actions;
+import 'package:flutter_public_figure/modules/platform/reduce.dart' as reducers;
+import 'package:flutter_public_figure/actions/action.dart' as actions;
 import 'package:redux/redux.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -30,9 +28,9 @@ Map remap(Map tgt, Map src, Object key) {
 // cast a base action class to a derived action class
 final downcast = (reducers.ReduxAction action) => action as Action;
 
-final reducerMap = remap(Map<String, Function>(), rootConfig, 'reducer');
+final reducerMap = remap(<String, Function>{}, rootConfig, 'reducer');
 
-final selectorMap = remap(Map<String, Function>(), rootConfig, 'selector');
+final selectorMap = remap(<String, Function>{}, rootConfig, 'selector');
 
 final initialState =
     reducers.getInitialState(reducerMap as Map<String, Function>, actions.Action({'type': actions.ActionTypes.Init}));

@@ -63,9 +63,7 @@ final ReducerMapper combineReducers =
           final Function castAction =
             castToAction == null ? (action) => action :
             castToAction as Function;
-      if (state == null) {
-        state = {};
-      }
+      state ??= {};
       var changed = false;
       var newState = {};
       reducerMap.forEach((key, valueReducer) {
@@ -81,7 +79,7 @@ final ReducerMapper combineReducers =
         }
         newState[key] = newValueState;
       });
-      return (changed ? newState : state) as Object;
+      return (changed ? newState : state);
     };
 
 final flutterReducer = (Reducer myReducer) =>

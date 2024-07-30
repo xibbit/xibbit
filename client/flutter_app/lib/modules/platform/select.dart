@@ -36,13 +36,13 @@ dynamic combineSelectors(
         Map initialSelectors, Selector<dynamic, Map> selector) =>
     (state) {
       Map selectors = selector(state);
-      if (state is Map && selectors is Map) {
-        initialSelectors.entries.forEach((entry) {
+      if (state is Map) {
+        for (var entry in initialSelectors.entries) {
           String capitalized =
               entry.key[0].toUpperCase() + entry.key.substring(1);
-          selectors['get' + capitalized + 'Selectors'] =
+          selectors['get${capitalized}Selectors'] =
               entry.value(state[entry.key]);
-        });
+        }
       }
       return selectors;
     };

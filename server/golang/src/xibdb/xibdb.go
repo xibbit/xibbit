@@ -1727,7 +1727,11 @@ func (that XibDb) Xibdb_flatten_query(query string, a map[string]interface{}) st
 				valueStr = "0"
 			}
 		} else if valueInt, ok := value.(int); ok {
-			valueStr = strconv.Itoa(valueInt)
+			valueStr = strconv.Itoa(int(valueInt))
+		} else if valueInt, ok := value.(int64); ok {
+			valueStr = strconv.Itoa(int(valueInt))
+		} else if valueInt, ok := value.(uint64); ok {
+			valueStr = strconv.Itoa(int(valueInt))
 		} else if is32 || is64 {
 			valueStr = fmt.Sprintf("%v", value)
 		} else if value == nil {
@@ -2233,12 +2237,15 @@ func is_numeric(value interface{}) bool {
  **/
 func is_int(value interface{}) bool {
 	_, ok := value.(int)
-	if !ok {
-		valStr := ""
-		if valStr, ok = value.(string); ok {
-			_, e := strconv.Atoi(valStr)
-			ok = e == nil
-		}
+	_, okInt64 := value.(int64)
+	_, okUint64 := value.(uint64)
+	if okInt64 {
+		ok = true
+	} else if okUint64 {
+		ok = true
+	} else if valStr, ok := value.(string); ok {
+		_, e := strconv.Atoi(valStr)
+		ok = (e == nil) && !strings.Contains(valStr, ".")
 	}
 	return ok
 }
@@ -2254,12 +2261,15 @@ func is_int(value interface{}) bool {
  * @author DanielWHoward
  **/
 func intval(value interface{}) int {
-	val, ok := value.(int)
-	if !ok {
-		valStr := ""
-		if valStr, ok = value.(string); ok {
-			val, _ = strconv.Atoi(valStr)
-		}
+	val, _ := value.(int)
+	valInt64, okInt64 := value.(int64)
+	valUint64, okUint64 := value.(uint64)
+	if okInt64 {
+		val = int(valInt64)
+	} else if okUint64 {
+		val = int(valUint64)
+	} else if valStr, ok := value.(string); ok {
+		val, _ = strconv.Atoi(valStr)
 	}
 	return val
 }

@@ -70,22 +70,22 @@ class AjaxStylePromise {
     String url = opts['url'] as String;
     late Future future;
     if (method == 'GET') {
-      url += '?' + data;
-      _logger.fine('AjaxStylePromise ${method} ${url}');
+      url += '?$data';
+      _logger.fine('AjaxStylePromise $method $url');
       future = http.get(Uri.parse(url), headers: headers);
     } else if (method == 'POST') {
-      _logger.fine('AjaxStylePromise ${method} ${url} ${data}');
+      _logger.fine('AjaxStylePromise $method $url $data');
       future = http.post(Uri.parse(url), headers: headers, body: data);
     }
     future.then((response) {
       int status = response.statusCode;
       String responseText = response.body;
       _logger
-          .fine('AjaxStylePromise ${method} ${status} ${url} ${responseText}');
+          .fine('AjaxStylePromise $method $status $url $responseText');
       if (response.headers['set-cookie'] != null) {
         persistentHeaders['cookie'] = response.headers['set-cookie'];
       }
-      successes.forEach((handler) {
+      for (var handler in successes) {
         if (response.statusCode == 200) {
           try {
             handler(json.decode(response.body));
@@ -93,11 +93,11 @@ class AjaxStylePromise {
             handler(response.body);
           }
         }
-      });
+      }
     }).catchError((e) {
-      failures.forEach((handler) {
+      for (var handler in failures) {
         handler(e);
-      });
+      }
     });
     return await future;
   }
@@ -121,9 +121,9 @@ class Xibbit {
   bool instanceSent = false;
   late Future<SharedPreferences> instance;
   var seqEvents = [];
-  var requestEvents = Map<int, Object>();
+  var requestEvents = <int, Object>{};
   var waitingEvents = [];
-  var recentEvents = Map<String, DateTime>();
+  var recentEvents = <String, DateTime>{};
   var connected = false;
   var socket;
   int eventId = 1;
@@ -141,11 +141,11 @@ class Xibbit {
     /* jshint validthis: true */
     var self = this;
     self.config = config;
-    if (!(self.config['log'] is bool)) {
+    if (self.config['log'] is! bool) {
       self.config['log'] = false;
     }
     // set defaults for socket.io
-    if (!(self.config['socketio'] is Map)) {
+    if (self.config['socketio'] is! Map) {
       self.config['socketio'] = {};
     }
     if (self.config['socketio']['start'] != false) {
@@ -158,7 +158,7 @@ class Xibbit {
           self.config['socketio']['transports'][0];
     }
     // set defaults for poll
-    if (!(self.config['poll'] is Map<String, Object>)) {
+    if (self.config['poll'] is! Map<String, Object>) {
       self.config['poll'] = {};
     }
     if (self.config['socketio']['transports'] == 'xio') {
@@ -177,10 +177,10 @@ class Xibbit {
         self.config['poll']['url'] is! Function) {
       self.config['poll']['url'] = '/events';
     }
-    if (!(self.config['poll']['min'] is int)) {
+    if (self.config['poll']['min'] is! int) {
       self.config['poll']['min'] = 1000;
     }
-    if (!(self.config['poll']['max'] is int)) {
+    if (self.config['poll']['max'] is! int) {
       self.config['poll']['max'] = 299000;
     }
     if (self.config['poll']['start'] != true) {
@@ -195,7 +195,7 @@ class Xibbit {
     WidgetsFlutterBinding.ensureInitialized();
     self.instance = SharedPreferences.getInstance();
     self.getInstanceValue().then((String? instance) {
-      self.log('xibbit.instance=' + (instance ?? 'null'));
+      self.log('xibbit.instance=${instance ?? 'null'}');
     });
     self.requestEvents = {};
     self.waitingEvents = [];
@@ -342,24 +342,22 @@ class Xibbit {
       self.waitingEvents.add({'event': event, 'callback': callback});
     } else if ((callback != null) &&
         self.config['seq'] &&
-        this.requestEvents.isNotEmpty) {
+        requestEvents.isNotEmpty) {
       self.seqEvents.add({'event': event, 'callback': callback});
     } else {
       event['_id'] = self.eventId++;
       if (self.config['log'] || event.containsKey('_log')) {
-        var msg = this.reorderJson(
+        var msg = reorderJson(
             jsonEncode(event), ['type', 'to', 'from', '_id'], ['i', 'e']);
         self.log(msg, self.logColors['request']);
       }
-      if (callback != null) {
-        // shallow clone
-        final evt = Map<String, Object>.from(event);
-        evt['_response'] = {'callback': callback};
-        this.requestEvents[event['_id'] as int] = evt;
-      }
-      if (this.socket != null) {
+      // shallow clone
+      final evt = Map<String, Object>.from(event);
+      evt['_response'] = {'callback': callback};
+      requestEvents[event['_id'] as int] = evt;
+          if (socket != null) {
         var marshalledEvent = event; //JSON.stringify(event); //golang
-        this.socket.emit('server', marshalledEvent);
+        socket.emit('server', marshalledEvent);
       } else {
         self.xioPoll(event);
       }
@@ -424,7 +422,7 @@ class Xibbit {
               }
             }
           : {
-              'url': host + '/',
+              'url': '$host/',
 //              'path': '/ws',
               'transports': transports
             };
@@ -456,7 +454,7 @@ class Xibbit {
       self.initInstance(method);
     }
     if ((method == 'poll') && !self.config['poll']['start']) {
-      Future.delayed(Duration(milliseconds: 0), () {
+      Future.delayed(const Duration(milliseconds: 0), () {
         if (!self.config['poll']['start'] && (self.socket == null)) {
           self.connected = true;
           self.config['poll']['start'] = true;
@@ -522,50 +520,50 @@ class Xibbit {
   ///
   dispatchEvent(Map event) {
     if ((event != null) && (event['_id'] != null)) {
-      final _id = event['_id'];
+      final id = event['_id'];
       // show the response on the console
-      this.log(event);
+      log(event);
       // send the response event to the callback
-      if (this.requestEvents[_id] != null) {
+      if (requestEvents[id] != null) {
         Map<String, Object> request =
-            this.requestEvents[_id] as Map<String, Object>;
+            requestEvents[id] as Map<String, Object>;
         Map<String, Object> response =
             request['_response'] as Map<String, Object>;
         Function callback = response['callback'] as Function;
-        this.requestEvents.remove(_id);
+        requestEvents.remove(id);
         callback(event);
       }
       // send next seq event
-      if (this.config['seq'] && (this.seqEvents.length > 0)) {
-        var seqEvent = this.seqEvents[0];
-        this.seqEvents.removeAt(0);
-        this.send(seqEvent.event, seqEvent.callback);
+      if (config['seq'] && (seqEvents.isNotEmpty)) {
+        var seqEvent = seqEvents[0];
+        seqEvents.removeAt(0);
+        send(seqEvent.event, seqEvent.callback);
       }
-    } else if (event != null && event['type'] != null) {
+    } else if (event['type'] != null) {
       // debounce
       var debounceMs = 2 * 1000;
       var now = DateTime.now();
       var eventStr = jsonEncode(event);
-      var keys = new List<String>.from(this.recentEvents.keys);
-      keys.forEach((key) {
-        if ((this.recentEvents[key]!.millisecondsSinceEpoch + debounceMs) <
+      var keys = List<String>.from(recentEvents.keys);
+      for (var key in keys) {
+        if ((recentEvents[key]!.millisecondsSinceEpoch + debounceMs) <
             now.millisecondsSinceEpoch) {
-          this.recentEvents.remove(key);
+          recentEvents.remove(key);
         }
-      });
+      }
       // only trigger event if it hasn't been sent recently
-      if (!this.recentEvents.containsKey(eventStr)) {
+      if (!recentEvents.containsKey(eventStr)) {
         // show the response on the console
-        this.log(
+        log(
             jsonEncode(event),
-            this.logColors[
+            logColors[
                 event['__id'] != null ? 'notification' : 'response']);
-        this.trigger(event['type'], event);
-        this.recentEvents[eventStr] = now;
+        trigger(event['type'], event);
+        recentEvents[eventStr] = now;
       }
     } else {
-      this.log('malformed event -- ' + jsonEncode(event),
-          this.logColors['malformed']);
+      log('malformed event -- ${jsonEncode(event)}',
+          logColors['malformed']);
     }
   }
 
@@ -578,11 +576,11 @@ class Xibbit {
     String query = '';
     String? instanceValue = await self.getInstanceValue();
     if (instanceValue != null) {
-      query += 'instance=' + instanceValue + '&';
+      query += 'instance=$instanceValue&';
     }
     String strEvents = events is Map ? jsonEncode(events) : '{}';
     String uriEncodedEvents = Uri.encodeComponent(strEvents);
-    query += '&XIO=' + uriEncodedEvents;
+    query += '&XIO=$uriEncodedEvents';
 
     var url = self.config['poll']['url'] is Function
         ? self.config['poll']['url']()
@@ -619,16 +617,16 @@ class Xibbit {
         var evt = {'type': 'connection', 'on': 'poll'};
         self.trigger(evt['type'], evt);
         // send any waiting events
-        self.waitingEvents.forEach((event) {
+        for (var event in self.waitingEvents) {
           self.send(event['event'], event['callback']);
-        });
+        }
         self.waitingEvents = [];
       }
       // send events to listeners
       if (event is List) {
-        event.forEach((event) {
+        for (var event in event) {
           self.dispatchEvent(event);
-        });
+        }
       } else if (event is Map<String, Object>) {
         self.dispatchEvent(event);
       }
@@ -649,46 +647,22 @@ class Xibbit {
         });
       }
     }).fail((jqXHR) {
-      var responseText = new String.fromCharCodes(jqXHR.bodyBytes);
+      var responseText = String.fromCharCodes(jqXHR.bodyBytes);
       if (pollEvent) {
         self.log(
-            '{"type":"_poll","i":"' +
-                jqXHR.status +
-                ':' +
-                jqXHR.statusText +
-                '"}',
+            '${'${'{"type":"_poll","i":"' +
+                jqXHR.status}:' +
+                jqXHR.statusText}"}',
             self.logColors['response']);
         self.xioPoll({'type': '_poll'});
       } else {
         // clean up error data and write to the console
-        if (responseText != null) {
-          responseText = self.getStringFromDirtyHtml(responseText);
-          self.log(
-              '' +
-                  jqXHR.statusCode.toString() +
-                  ' ' +
-                  jqXHR.reasonPhrase +
-                  ' ' +
-                  responseText,
-              self.logColors['outofband_error']);
-        } else if (jqXHR.responseText == '') {
-          self.log(
-              '' +
-                  jqXHR.status +
-                  ' ' +
-                  jqXHR.statusText +
-                  ': server returned empty string',
-              self.logColors['outofband_error']);
-        } else {
-          self.log(
-              '' +
-                  jqXHR.status +
-                  ' ' +
-                  jqXHR.statusText +
-                  ': unknown client or server error',
-              self.logColors['outofband_error']);
-        }
-        // send disconnected event, if needed
+        responseText = self.getStringFromDirtyHtml(responseText);
+        self.log(
+            '${'${jqXHR.statusCode} ' +
+                jqXHR.reasonPhrase} $responseText',
+            self.logColors['outofband_error']);
+              // send disconnected event, if needed
         if (self.connected && (self.socket == null)) {
           self.connected = false;
           var evt = {'type': 'connection', 'on': false};
@@ -850,12 +824,12 @@ class Xibbit {
   /// @author DanielWHoward
   ///
   String getStringFromDirtyHtml(String data) {
-    data = data.replaceAll(new RegExp(r"(<([^>]+)>)"), ''); // HTML tags
-    data = data.replaceAll(new RegExp(r"\n+"), ' '); // newline -> space
-    data = data.replaceAll(new RegExp(r"\:\s+"), ': '); // extra spaces
-    data = data.replaceAll(new RegExp(r"\#"), '\n#'); // PHP stack trace
-    data = data.replaceAll(new RegExp(r"&quot;"), '"'); // real quotes
-    data = data.replaceAll(new RegExp(r"&gt;"), '>'); // greater than
+    data = data.replaceAll(RegExp(r"(<([^>]+)>)"), ''); // HTML tags
+    data = data.replaceAll(RegExp(r"\n+"), ' '); // newline -> space
+    data = data.replaceAll(RegExp(r"\:\s+"), ': '); // extra spaces
+    data = data.replaceAll(RegExp(r"\#"), '\n#'); // PHP stack trace
+    data = data.replaceAll(RegExp(r"&quot;"), '"'); // real quotes
+    data = data.replaceAll(RegExp(r"&gt;"), '>'); // greater than
     return data;
   }
 
@@ -924,10 +898,10 @@ class Xibbit {
         ? event['e_stacktrace']
         : null;
     // use color enum or standard color name
-    color = color != null && this.logColors[color] != null
-        ? this.logColors[color]
+    color = color != null && logColors[color] != null
+        ? logColors[color]
         : color;
-    if (this.config['log'] ||
+    if (config['log'] ||
         ((event != null) && (event['_log'] is bool) && event['_log'] as bool)) {
       if (obj is String) {
         // log colored text to the console
@@ -936,12 +910,12 @@ class Xibbit {
         if (event!.containsKey('e')) {
           // response errors are pink; notification errors are brown
           color = event['_id'] != null
-              ? this.logColors['response_error']
-              : this.logColors['notification_error'];
+              ? logColors['response_error']
+              : logColors['notification_error'];
           // log the stack trace separately
           if (stacktrace != null) {
             event.remove('e_stacktrace');
-            this.log(stacktrace, color);
+            log(stacktrace, color);
           }
           // log the event without the stack trace
           msg = jsonEncode(event);
@@ -952,12 +926,12 @@ class Xibbit {
         } else {
           // response events are in green; notifications are in blue
           color = event['_id'] != null
-              ? this.logColors['response']
-              : this.logColors['notification'];
+              ? logColors['response']
+              : logColors['notification'];
           msg = jsonEncode(event);
         }
-        msg = this.reorderJson(msg, ['type', 'to', 'from', '_id'], ['i', 'e']);
-        this.log(msg, color);
+        msg = reorderJson(msg, ['type', 'to', 'from', '_id'], ['i', 'e']);
+        log(msg, color);
       }
     }
   }

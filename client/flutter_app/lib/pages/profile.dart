@@ -23,7 +23,6 @@
 // @version 1.5.3
 // @copyright xibbit 1.5.3 Copyright (c) © 2021 Daniel W. Howard and Sanjana A. Joshi Partnership
 // @license http://opensource.org/licenses/MIT
-import 'dart:io';
 import 'dart:math';
 import 'package:flutter/material.dart';
 import 'package:image_picker/image_picker.dart';
@@ -38,8 +37,7 @@ import '../reducers/index.dart';
 class ProfilePage extends StatefulWidget {
   final Store<dynamic> store;
 
-  const ProfilePage({Key? key, required this.store})
-      : super(key: key);
+  const ProfilePage({super.key, required this.store});
 
   @override
   _ProfilePage createState() => _ProfilePage(store: store);
@@ -58,7 +56,7 @@ class _ProfilePage extends State<ProfilePage> {
 
   XFile? _fileToUpload;
 
-  Random _rnd = Random();
+  final Random _rnd = Random();
 
   String _error = '';
 
@@ -101,22 +99,22 @@ class _ProfilePage extends State<ProfilePage> {
   }
 
   late TextEditingController nameController;
-  FocusNode nameFocus = new FocusNode();
+  FocusNode nameFocus = FocusNode();
 
-  TextEditingController addressController = new TextEditingController();
-  FocusNode addressFocus = new FocusNode();
+  TextEditingController addressController = TextEditingController();
+  FocusNode addressFocus = FocusNode();
 
-  TextEditingController address2Controller = new TextEditingController();
-  FocusNode address2Focus = new FocusNode();
+  TextEditingController address2Controller = TextEditingController();
+  FocusNode address2Focus = FocusNode();
 
-  TextEditingController cityController = new TextEditingController();
-  FocusNode cityFocus = new FocusNode();
+  TextEditingController cityController = TextEditingController();
+  FocusNode cityFocus = FocusNode();
 
-  TextEditingController stateController = new TextEditingController();
-  FocusNode stateFocus = new FocusNode();
+  TextEditingController stateController = TextEditingController();
+  FocusNode stateFocus = FocusNode();
 
-  TextEditingController postalController = new TextEditingController();
-  FocusNode postalFocus = new FocusNode();
+  TextEditingController postalController = TextEditingController();
+  FocusNode postalFocus = FocusNode();
 
   @override
   Widget build(BuildContext context) {

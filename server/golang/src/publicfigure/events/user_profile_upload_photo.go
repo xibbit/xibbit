@@ -28,7 +28,7 @@ package events
 import (
 	"io"
 	"os"
-	"publicfigure/pfapp"
+	"github.com/xibbit/xibbit/server/golang/src/publicfigure/pfapp"
 )
 
 /**

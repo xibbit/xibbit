@@ -44,13 +44,11 @@ Session mySession = Session();
 final difference = (a, b) => a;
 final resolve = (a) => a;
 
-/**
- * @name XibbitService
- * @description
- * # XibbitService
- * Service to send and receive events from the
- * backend.
- */
+/// @name XibbitService
+/// @description
+/// # XibbitService
+/// Service to send and receive events from the
+/// backend.
 class XibbitService {
   late Xibbit xibbit;
   // load the session
@@ -73,7 +71,7 @@ class XibbitService {
     };
     if (preserveSession) {
       loadSession = () {
-        var session;
+        Map<String, Object>? session;
         try {
           session = mySession.load();
           if (session != null) {
@@ -94,7 +92,7 @@ class XibbitService {
       };
     }
     loadSession();
-    if (!(self.session['collectUserFields'] is List)) {
+    if (self.session['collectUserFields'] is! List) {
       self.setSessionValue('collectUserFields', []);
     }
     // create events bus
@@ -102,21 +100,21 @@ class XibbitService {
     //    var d = window.location.hostname;
     //    var p = window.location.port;
     //    var u = h + '//' + d + (p? ':' + p: '');
-    self.xibbit = new Xibbit({
+    self.xibbit = Xibbit({
       'preserveSession': preserveSession,
       'seq': true,
       'socketio': {
         'eio_protocol': server_eio_protocol[server_platform],
         'start': true,
         'transports': client_transports,
-        'min': (client_transports.indexOf('xio') != -1) ? 3000 : null,
+        'min': (client_transports.contains('xio')) ? 3000 : null,
         'url': server_platform == 'php'
             ? () {
-                const String app_path_mod = '';
+                const String appPathMod = '';
                 //   Map hacks = self.session['hacks'];
                 //   int mod_security_1 = hacks['mod_security_1'];
                 //   app_path_mod = (mod_security_1 is int? Random(0).nextInt(mod_security_1): '');
-                return server_base[server_platform] + '/app' + app_path_mod + '.php';
+                return server_base[server_platform] + '/app' + appPathMod + '.php';
               }
             : server_base[server_platform]
       },
@@ -138,22 +136,18 @@ class XibbitService {
       store.dispatch(notify(event));
     });
   }
-  /**
-   * Return true if the user is signed in.
-   */
+  /// Return true if the user is signed in.
   bool isLoggedIn() {
     var self = this;
     return self.session['loggedIn'] as bool;
   }
 
-  /**
-   * Return true if the user is signed in but the
-   * user profile is incomplete.
-   */
+  /// Return true if the user is signed in but the
+  /// user profile is incomplete.
   bool isCollectingMoreInfo() {
     var self = this;
     List collectUserFields = self.session['collectUserFields'] as List;
-    return collectUserFields.length > 0;
+    return collectUserFields.isNotEmpty;
   }
 
   ///
@@ -162,7 +156,7 @@ class XibbitService {
   collectedUserFields([fields]) {
     var self = this;
     List collectUserFields = self.session['collectUserFields'] as List;
-    if (collectUserFields.length > 0) {
+    if (collectUserFields.isNotEmpty) {
       // convert to an array of collected values
       if (!fields || (fields == true)) {
         fields = self.session['collectUserFields'];
@@ -171,15 +165,13 @@ class XibbitService {
       fields = difference(self.session['collectUserFields'], fields);
       self.setSessionValue('collectUserFields', fields);
       collectUserFields = self.session['collectUserFields'] as List;
-      if (collectUserFields.length == 0) {
+      if (collectUserFields.isEmpty) {
         self.setSessionValue('loggedIn', true);
       }
     }
   }
 
-  /**
-   * Send an event to the backend.
-   */
+  /// Send an event to the backend.
   send(Map event, Function callback) {
     var self = this;
     var retVal = self.xibbit.send(event, (Map evt) {
@@ -213,10 +205,8 @@ class XibbitService {
           }
         }
       }
-      if (callback is Function) {
-        callback(evt);
-      }
-      resolve(evt);
+      callback(evt);
+          resolve(evt);
     });
     return retVal;
   }
@@ -248,10 +238,8 @@ class XibbitService {
     });
   }
 
-  /**
-   * Create a new XibbitService service that encapsulates the
-   * $scope and uses it sensibly.
-   */
+  /// Create a new XibbitService service that encapsulates the
+  /// $scope and uses it sensibly.
   scope(scope, collectUserFields) {
     var self = this;
     var p = this;

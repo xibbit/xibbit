@@ -33,17 +33,17 @@ import './profile.dart';
 class HomePage extends StatelessWidget {
   final Store<dynamic> store;
 
-  HomePage({Key? key, required this.store}) : super(key: key);
+  const HomePage({super.key, required this.store});
 
   @override
   Widget build(BuildContext context) {
-    return new StoreProvider<dynamic>(
+    return StoreProvider<dynamic>(
       store: store,
       child: Scaffold(
         appBar: AppBar(
-          title: Text('Public Figure'),
+          title: const Text('Public Figure'),
         ),
-        body: new StoreConnector<dynamic, bool>(
+        body: StoreConnector<dynamic, bool>(
           converter: (store) =>
               rootSelectors(store.state).getLoginSelectors().isLoggedIn(),
           builder: (context, loggedIn) => loggedIn

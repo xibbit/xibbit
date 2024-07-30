@@ -38,7 +38,7 @@ import (
 	_ "github.com/go-sql-driver/mysql"
 	socketio "github.com/googollee/go-socket.io"
 
-	"xibbit"
+	"github.com/xibbit/xibbit/server/golang/src/xibbit"
 )
 
 var sql_prefix = "test_"
@@ -556,7 +556,7 @@ func TestFullXibbit() {
 	// #12
 	//
 
-	socketioServer, _ := socketio.NewServer(nil)
+	socketioServer := socketio.NewServer(nil)
 	hub = xibbit.NewXibbitHub(map[string]interface{}{
 		"socketio": socketioServer,
 	})
