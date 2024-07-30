@@ -17,9 +17,12 @@
     "redux": "^4.0.0",
     "redux-thunk": "^2.0.1"
   },
+  "devDependencies": {
+    "fsevents": "1.2.11"
+  },
   "scripts": {
     "start": "inferno-scripts --openssl-legacy-provider start",
-    "build": "inferno-scripts build",
+    "build": "inferno-scripts --openssl-legacy-provider build",
     "test": "inferno-scripts test",
     "eject": "inferno-scripts eject"
   },

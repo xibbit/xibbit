@@ -28,10 +28,10 @@ package pfapp
 import (
 	"database/sql"
 	"encoding/json"
-	"publicfigure/array"
+	"github.com/xibbit/xibbit/server/golang/src/publicfigure/array"
 	"regexp"
 	"strings"
-	"xibdb"
+	"github.com/xibbit/xibbit/server/golang/src/xibdb"
 )
 
 /**

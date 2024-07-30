@@ -27,7 +27,7 @@ package events
 
 import (
 	"time"
-	"xibbit"
+	"github.com/xibbit/xibbit/server/golang/src/xibbit"
 )
 
 /**

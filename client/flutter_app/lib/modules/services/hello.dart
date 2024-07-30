@@ -25,25 +25,23 @@
 // @license http://opensource.org/licenses/MIT
 import './xibbitservice.dart';
 
-/**
- * @ngdoc service
- * @name Hello
- * @description
- * # Hello
- * Service to send a hello event to the backend
- * and make it available to the app.
- */
+/// @ngdoc service
+/// @name Hello
+/// @description
+/// # Hello
+/// Service to send a hello event to the backend
+/// and make it available to the app.
 class Hello {
   late Future<Object> event;
 
-  Hello() {}
+  Hello();
 
   void send() {
     Map<String, Object> evt = {'type': 'init'};
-    xibbitService.send(evt, (event) => this.apply(event));
+    xibbitService.send(evt, (event) => apply(event));
   }
 
   apply(Map event) {
-    print('init event returned ' + (event['i'] as String));
+    print('init event returned ${event['i'] as String}');
   }
 }

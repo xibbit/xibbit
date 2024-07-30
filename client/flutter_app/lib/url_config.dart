@@ -33,14 +33,14 @@ const String server_platform = 'php';
 const String server_host =
     client_platform == 'android' ? '10.0.2.2' : 'localhost';
 const Map server_base = {
-  'golang': 'http://${server_host}:8080',
-  'node': 'http://${server_host}:8000',
-  'php': 'http://${server_host}/xibbit/server/php',
-  'django': 'http://${server_host}:8000'
+  'golang': 'http://$server_host:8080',
+  'node': 'http://$server_host:8000',
+  'php': 'http://$server_host/xibbit/server/php',
+  'django': 'http://$server_host:8000'
 };
 const Map server_eio_protocol = {
   'golang': 3,
-  'node': 3,
+  'node': 4,
   'php': 3,
   'django': 4
 };

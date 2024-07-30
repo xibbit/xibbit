@@ -26,11 +26,11 @@
 package events
 
 import (
-	"publicfigure/asserte"
-	"publicfigure/pfapp"
-	"publicfigure/pwd"
+	"github.com/xibbit/xibbit/server/golang/src/publicfigure/asserte"
+	"github.com/xibbit/xibbit/server/golang/src/publicfigure/pfapp"
+	"github.com/xibbit/xibbit/server/golang/src/publicfigure/pwd"
 	"regexp"
-	"xibbit"
+	"github.com/xibbit/xibbit/server/golang/src/xibbit"
 )
 
 /**

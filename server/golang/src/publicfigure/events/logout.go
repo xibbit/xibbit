@@ -26,9 +26,9 @@
 package events
 
 import (
-	"publicfigure/asserte"
-	"publicfigure/pfapp"
-	"xibbit"
+	"github.com/xibbit/xibbit/server/golang/src/publicfigure/asserte"
+	"github.com/xibbit/xibbit/server/golang/src/publicfigure/pfapp"
+	"github.com/xibbit/xibbit/server/golang/src/xibbit"
 )
 
 /**

@@ -33,13 +33,13 @@ import './signin.dart';
 class IntroPage extends StatelessWidget {
   final Store<dynamic> store;
 
-  IntroPage({Key? key, required this.store}) : super(key: key);
+  const IntroPage({super.key, required this.store});
 
   @override
   Widget build(BuildContext context) {
-    return new StoreProvider<dynamic>(
+    return StoreProvider<dynamic>(
       store: store,
-      child: new StoreConnector<dynamic, String>(
+      child: StoreConnector<dynamic, String>(
         converter: (store) =>
             rootSelectors(store.state).getEventsSelectors().getMessage(),
         builder: (context, lastEvent) => Center(
@@ -48,7 +48,7 @@ class IntroPage extends StatelessWidget {
           child: Column(
             mainAxisAlignment: MainAxisAlignment.spaceEvenly,
             children: <Widget>[
-              Text('$lastEvent'),
+              Text(lastEvent),
               Row(
                 mainAxisAlignment: MainAxisAlignment.center,
                 children: <Widget>[
@@ -58,7 +58,7 @@ class IntroPage extends StatelessWidget {
                       onPressed: () {
                         signUp(store, context);
                       },
-                      child: Text('Sign Up'),
+                      child: const Text('Sign Up'),
                     ),
                   ),
                   Padding(
@@ -67,7 +67,7 @@ class IntroPage extends StatelessWidget {
                       onPressed: () {
                         signIn(store, context);
                       },
-                      child: Text('Sign In'),
+                      child: const Text('Sign In'),
                     ),
                   ),
                 ],
@@ -80,12 +80,12 @@ class IntroPage extends StatelessWidget {
   }
 
   signUp(store, context) {
-    Navigator.of(context).push(new MaterialPageRoute(
-        builder: (context) => new SignupPage(store: store)));
+    Navigator.of(context).push(MaterialPageRoute(
+        builder: (context) => SignupPage(store: store)));
   }
 
   signIn(store, context) {
-    Navigator.of(context).push(new MaterialPageRoute(
-        builder: (context) => new SigninPage(store: store)));
+    Navigator.of(context).push(MaterialPageRoute(
+        builder: (context) => SigninPage(store: store)));
   }
 }

@@ -28,7 +28,7 @@
 import os
 import re
 import math
-import imp
+#import imp
 import json
 import time
 import datetime
@@ -712,11 +712,11 @@ class XibbitHub(object):
           module = __import__(handlerFile, globals=globals())
           module = sys.modules[handlerFile]
           module(self)
-          fp, path, desc = imp.find_module('events')
+          #fp, path, desc = imp.find_module('events')
           print(desc)
-          module_package = imp.load_module('events.init', fp, path, desc)
+          #module_package = imp.load_module('events.init', fp, path, desc)
           print(module_package)
-          HandlerClass = imp.load_module("% s.% s" % ('events.init', 'handler'), fp, path, desc)
+          #HandlerClass = imp.load_module("% s.% s" % ('events.init', 'handler'), fp, path, desc)
           print(HandlerClass)
           # HandlerClass = getattr(HandlerClass, 'HandlerClass')
           # print(HandlerClass)
@@ -1313,7 +1313,7 @@ class XibbitHub(object):
   # @author DanielWHoward
   #
   def mysql_real_escape_string(self, unescaped_string):
-    return str(self.config['mysql']['link']._cmysql.escape_string(str(unescaped_string)), 'utf8')
+    return self.config['mysql']['link'].converter.escape(str(unescaped_string))
 
   #
   # Flexible mysql_errno() function.

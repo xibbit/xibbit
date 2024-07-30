@@ -37,7 +37,7 @@ var server_base = {
 };
 var server_eio_protocol = {
   golang: 3,
-  node: 3,
+  node: 4,
   php: 3,
   django: 4
 };

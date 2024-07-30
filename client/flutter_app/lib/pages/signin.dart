@@ -34,7 +34,7 @@ import '../actions/login.dart';
 class SigninPage extends StatefulWidget {
   final Store<dynamic> store;
 
-  SigninPage({Key? key, required this.store}) : super(key: key);
+  const SigninPage({super.key, required this.store});
 
   @override
   _SigninPage createState() => _SigninPage(store: store);
@@ -49,11 +49,11 @@ class _SigninPage extends State<SigninPage> {
 
   String _msg = '';
 
-  TextEditingController emailController = new TextEditingController();
-  FocusNode emailFocus = new FocusNode();
+  TextEditingController emailController = TextEditingController();
+  FocusNode emailFocus = FocusNode();
 
-  TextEditingController pwdController = new TextEditingController();
-  FocusNode pwdFocus = new FocusNode();
+  TextEditingController pwdController = TextEditingController();
+  FocusNode pwdFocus = FocusNode();
 
   @override
   Widget build(BuildContext context) {
@@ -63,18 +63,18 @@ class _SigninPage extends State<SigninPage> {
     // The Flutter framework has been optimized to make rerunning build methods
     // fast, so that you can just rebuild anything that needs updating rather
     // than having to individually change instances of widgets.
-    return new StoreProvider<dynamic>(
+    return StoreProvider<dynamic>(
       store: store,
       child: Scaffold(
         appBar: AppBar(
           // Here we take the value from the SigninPage object that was created by
           // the App.build method, and use it to set our appbar title.
-          title: Text('Sign In'),
+          title: const Text('Sign In'),
         ),
         body: Form(
           key: _formKey,
           child: Padding(
-            padding: EdgeInsets.all(24.0),
+            padding: const EdgeInsets.all(24.0),
             child: Column(
               children: <Widget>[
                 TextFormField(
@@ -121,7 +121,7 @@ class _SigninPage extends State<SigninPage> {
                         'to': email,
                         'pwd': sha256
                             .convert(
-                                utf8.encode(email + 'xibbit.github.io' + pwd))
+                                utf8.encode('${email}xibbit.github.io$pwd'))
                             .toString()
                       }, (event) {
                         if (event['loggedIn']) {
@@ -135,10 +135,10 @@ class _SigninPage extends State<SigninPage> {
                         }
                       });
                     },
-                    child: Text('Sign In'),
+                    child: const Text('Sign In'),
                   ),
                 ),
-                Text('$_msg'),
+                Text(_msg),
               ],
             ),
           ),

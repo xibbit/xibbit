@@ -28,6 +28,7 @@ package main
 import (
 	"fmt"
 	"log"
+	"math"
 	"sort"
 	"strconv"
 	"strings"
@@ -36,12 +37,21 @@ import (
 	"database/sql"
 	_ "github.com/go-sql-driver/mysql"
 
-	"xibdb"
+	"github.com/xibbit/xibbit/server/golang/src/xibdb"
 )
 
+func round(num float64) int {
+	return int(num + math.Copysign(0.5, num))
+}
+
+func toFixed(num float64, precision int) float64 {
+	output := math.Pow(10, float64(precision))
+	return float64(round(num*output)) / output
+}
+
 func sortJsonNativeXibdb(o interface{}) (s string) {
-	_, ok32 := o.(float32)
-	_, ok64 := o.(float64)
+	oFloat32, ok32 := o.(float32)
+	oFloat64, ok64 := o.(float64)
 	if oArr, ok := o.([]map[string]interface{}); ok {
 		s += "["
 		for _, value := range oArr {
@@ -84,8 +94,17 @@ func sortJsonNativeXibdb(o interface{}) (s string) {
 		}
 	} else if oInt, ok := o.(int); ok {
 		s = strconv.Itoa(oInt)
-	} else if ok32 || ok64 {
-		s = fmt.Sprintf("%v", o)
+	} else if oInt64, ok := o.(int64); ok {
+		s = strconv.Itoa(int(oInt64))
+	} else if oUint64, ok := o.(uint64); ok {
+		s = strconv.Itoa(int(oUint64))
+	} else if ok32 {
+		s = fmt.Sprintf("%v", toFixed(float64(oFloat32), 2))
+		if !strings.Contains(s, ".") {
+			s += ".0"
+		}
+	} else if ok64 {
+		s = fmt.Sprintf("%v", toFixed(oFloat64, 2))
 		if !strings.Contains(s, ".") {
 			s += ".0"
 		}

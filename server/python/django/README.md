@@ -1,1 +1,1 @@
-Last known working on Python 3.10.2 using Django 4.0.2.
+Last known working on Python 3.12.4 using Django 5.0.7.

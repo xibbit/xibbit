@@ -242,7 +242,7 @@ class XibDb(object):
         else:
           val = value
           try:
-            if value[0] in ['{', '[']:
+            if isinstance(value, str) and (value[0] in ['{', '[']):
               val = json.loads(value)
             obj[key] = val
           except ValueError as e:
@@ -1296,7 +1296,7 @@ class XibDb(object):
   #
   def mysql_real_escape_string(self, unescaped_string):
     if 'mysql' in self.config and 'link' in self.config['mysql']:
-      return str(self.config['mysql']['link']._cmysql.escape_string(str(unescaped_string)), 'utf8')
+      return self.config['mysql']['link'].converter.escape(str(unescaped_string))
     if 'sqlite3' in self.config and 'link' in self.config['sqlite3']:
       return str(unescaped_string).replace('\'', '\'\'')
     return unescaped_string

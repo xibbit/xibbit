@@ -43,7 +43,7 @@ class MyApp extends StatelessWidget {
   // This widget is the root of your application.
   final Store<dynamic> store;
 
-  MyApp({Key? key, required this.store}) {
+  MyApp({super.key, required this.store}) {
     Hello hello = Hello();
 
     hello.send();

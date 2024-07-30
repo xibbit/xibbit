@@ -23,7 +23,6 @@
 // @version 1.5.3
 // @copyright xibbit 1.5.3 Copyright (c) © 2021 Daniel W. Howard and Sanjana A. Joshi Partnership
 // @license http://opensource.org/licenses/MIT
-import 'package:reselect/reselect.dart';
 import '../modules/platform/reduce.dart';
 import '../modules/platform/select.dart';
 import '../actions/action.dart';
@@ -77,20 +76,20 @@ final eventsSelectors = combineSelectors(
                 msg = 'Somebody arrived.';
                 break;
               case 'notify_login':
-                String from = (state as Map)['from'];
-                msg = from + ' signed in.';
+                String from = (state)['from'];
+                msg = '$from signed in.';
                 break;
               case 'notify_logout':
-                String from = (state as Map)['from'];
-                msg = from + ' signed out.';
+                String from = (state)['from'];
+                msg = '$from signed out.';
                 break;
               case 'notify_laughs':
-                String user = (state as Map)['from'];
-                msg = user + ' laughs out loud';
+                String user = (state)['from'];
+                msg = '$user laughs out loud';
                 break;
               case 'notify_jumps':
-                String user = (state as Map)['from'];
-                msg = user + ' jumps up and down';
+                String user = (state)['from'];
+                msg = '$user jumps up and down';
                 break;
               default:
                 break;
@@ -166,9 +165,9 @@ Map remap(Map tgt, Map src, Object key) {
 // cast a base action class to a derived action class
 final downcast = (ReduxAction action) => action as Action;
 
-final reducerMap = remap(Map<String, Function>(), rootConfig, 'reducer');
+final reducerMap = remap(<String, Function>{}, rootConfig, 'reducer');
 
-final selectorMap = remap(Map<String, Function>(), rootConfig, 'selector');
+final selectorMap = remap(<String, Function>{}, rootConfig, 'selector');
 
 final initialState =
     getInitialState(reducerMap as Map<String, Function>, Action({'type': ActionTypes.Init}));
@@ -176,19 +175,19 @@ final initialState =
 final rootReducer = flutterReducer(combineReducers(reducerMap as Map<String, Function>, downcast));
 
 class _getLoginSelectors {
-  dynamic _selectors;
+  final dynamic _selectors;
   _getLoginSelectors(this._selectors);
   isLoggedIn() => _selectors['isLoggedIn']();
 }
 
 class _getEventsSelectors {
-  dynamic _selectors;
+  final dynamic _selectors;
   _getEventsSelectors(this._selectors);
   getMessage() => _selectors['getMessage']();
 }
 
 class _getProfileSelectors {
-  dynamic _selectors;
+  final dynamic _selectors;
   _getProfileSelectors(this._selectors);
   getProfile() => _selectors['getProfile']();
   getName() => _selectors['getName']();
@@ -200,7 +199,7 @@ class _getProfileSelectors {
 }
 
 class _RootSelector {
-  dynamic _selectors;
+  final dynamic _selectors;
   _RootSelector(this._selectors);
   getLoginSelectors() => _getLoginSelectors(_selectors['getLoginSelectors']);
   getEventsSelectors() => _getEventsSelectors(_selectors['getEventsSelectors']);

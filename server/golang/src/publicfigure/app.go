@@ -39,20 +39,17 @@ import (
 	"github.com/gin-gonic/gin"
 	socketio "github.com/googollee/go-socket.io"
 
-	"publicfigure/config"
-	"publicfigure/events"
-	"publicfigure/pfapp"
-	"xibbit"
-	"xibdb"
+	"github.com/xibbit/xibbit/server/golang/src/publicfigure/config"
+	"github.com/xibbit/xibbit/server/golang/src/publicfigure/events"
+	"github.com/xibbit/xibbit/server/golang/src/publicfigure/pfapp"
+	"github.com/xibbit/xibbit/server/golang/src/xibbit"
+	"github.com/xibbit/xibbit/server/golang/src/xibdb"
 )
 
 func main() {
 	ginServer := gin.New() //gin.Default()
 
-	socketioServer, e := socketio.NewServer(nil)
-	if e != nil {
-		log.Fatal(e)
-	}
+	socketioServer := socketio.NewServer(nil)
 
 	const APP_HOST = "localhost"
 	const APP_PORT = 8000

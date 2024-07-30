@@ -27,7 +27,7 @@ package events
 
 import (
 	"encoding/json"
-	"publicfigure/pfapp"
+	"github.com/xibbit/xibbit/server/golang/src/publicfigure/pfapp"
 )
 
 /**
