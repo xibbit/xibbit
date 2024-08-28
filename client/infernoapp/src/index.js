@@ -31,12 +31,15 @@ import './index.css';
 import App from './App';
 import * as serviceWorker from './serviceWorker';
 import url_config from './modules/url_config';
+import xibbitObject from './modules/xibbitobject';
 
 // the 'basename' attribute on BrowserRouter doesn't seem to work
 // but do it anyway
 const basename = url_config.server_platform === 'django'? '/static': '';
 
-const store = configureStore(/* provide initial state if any */)
+const reduxState = xibbitObject.getSessionValue('reduxState') || undefined
+const preloadedState = reduxState? {app: reduxState}: undefined
+const store = configureStore(preloadedState)
 
 render(
   <Provider store={store}>

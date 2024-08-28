@@ -49,6 +49,7 @@ class App extends Component {
     }, event => {
       if (event.i) {
         this.props.model('loggedIn', false)
+        xibbitObject.removeSessionValue('reduxState')
       }
     });
   }
