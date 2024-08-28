@@ -70,6 +70,7 @@ class SignIn extends React.Component {
           path = '/'+path[0];
         }
         this.props.history.push(path);
+        xibbitObject.addSessionValue('reduxState', {'loggedIn': true});
       } else {
         this.setState({
           error: event.i || event.e

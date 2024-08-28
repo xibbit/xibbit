@@ -31,8 +31,11 @@ import configureStore, { history } from './store'
 import './index.css';
 import App from './App';
 import * as serviceWorker from './serviceWorker';
+import xibbitObject from './modules/xibbitobject';
 
-const store = configureStore(/* provide initial state if any */)
+const reduxState = xibbitObject.getSessionValue('reduxState') || undefined
+const preloadedState = reduxState? {app: reduxState}: undefined
+const store = configureStore(preloadedState)
 
 ReactDOM.render(
   <Provider store={store}>

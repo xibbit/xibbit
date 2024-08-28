@@ -74,6 +74,7 @@ class SignIn extends Component {
           path = '/'+path[0];
         }
         this.context.router.history.push(path);
+        xibbitObject.addSessionValue('reduxState', {'loggedIn': true});
       } else {
         this.setState({
           error: event.i || event.e
