@@ -83,7 +83,7 @@ class _ProfilePage extends State<ProfilePage> {
   //
   void uploadProfileImage() {
     Map urls = {
-      'go': '/user/profile/upload_photo',
+      'golang': '/user/profile/upload_photo',
       'node': '/user/profile/upload_photo',
       'php': '/app.php', // /user_profile_upload_photo.php
       'django': '/upload_photo/image_upload'

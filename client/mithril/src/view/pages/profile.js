@@ -69,7 +69,7 @@ export default function() {
     };
     const uploadProfileImage = event => {
         const urls = {
-            go: '/user/profile/upload_photo',
+            golang: '/user/profile/upload_photo',
             node: '/user/profile/upload_photo',
             php: url_config.server_base[url_config.server_platform]+'/app.php', // /user_profile_upload_photo.php
             django: '/upload_photo/image_upload',
