@@ -76,7 +76,7 @@ angular.module('myApp.views')
     ProfileView.profile_image = profile_image + '?r=' + Math.floor(Math.random() * 1000);
     ProfileView.uploadProfileImage = function(element) {
       var urls = {
-        go: '/user/profile/upload_photo',
+        golang: '/user/profile/upload_photo',
         node: '/user/profile/upload_photo',
         php: server_base[server_platform]+'/app.php', // /user_profile_upload_photo.php
         django: '/upload_photo/image_upload'

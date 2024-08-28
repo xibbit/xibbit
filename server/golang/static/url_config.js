@@ -28,15 +28,15 @@ var client_debug = true;
 var client_transports = [
   'websocket'
 ]; //'websocket','polling','short','rest','xio'
-var server_platform = 'go';
+var server_platform = 'golang';
 var server_base = {
-  go: '',
+  golang: '',
   node: '',
   php: '/php',
   django: '/static'
 };
 var server_eio_protocol = {
-  go: 3,
+  golang: 3,
   node: 3,
   php: 3,
   django: 4
